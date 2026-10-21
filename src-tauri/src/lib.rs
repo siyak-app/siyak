@@ -5,6 +5,10 @@
 
 /// Builds and runs the Tauri application. Blocks until the app exits.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[expect(
+    clippy::expect_used,
+    reason = "the event loop failing to start is unrecoverable"
+)]
 pub fn run() {
     tauri::Builder::default()
         .run(tauri::generate_context!())

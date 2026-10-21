@@ -1,0 +1,17 @@
+# Generated
+pnpm-lock.yaml
+src/lib/bindings.ts
+CHANGELOG.md
+src-tauri/gen/
+
+# Build output
+dist/
+coverage/
+target/
+website/dist/
+website/.astro/
+
+# Copied verbatim from upstream sources; must stay unchanged
+docs/spec/
+dev-data/fixtures/
+src/assets/fonts/

@@ -18,3 +18,16 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "warn"
+
+[workspace.lints.clippy]
+# Errors must become `AppError` with a stable code; only unrecoverable startup
+# code may opt out, with an explicit `#[expect(..., reason = "...")]`.
+unwrap_used = "warn"
+expect_used = "warn"
