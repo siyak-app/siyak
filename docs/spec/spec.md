@@ -436,7 +436,7 @@ CREATE INDEX collection_items_order ON collection_items(collection_id, position)
 CREATE TABLE tafsir_translations (
   pack_id        TEXT NOT NULL,
   tafsir_id      INTEGER NOT NULL,
-  paragraph_idx  INTEGER,                      -- NULL: summary of the whole passage
+  paragraph_idx  INTEGER NOT NULL DEFAULT -1,  -- -1: summary of the whole passage
   mode           TEXT NOT NULL CHECK (mode IN ('summary','full')),
   target_lang    TEXT NOT NULL,
   pack_version   TEXT NOT NULL,                -- cache is stale if the source changes
@@ -484,6 +484,8 @@ CREATE TABLE settings (
 ```
 
 Verse references in `user.db` cannot be foreign keys into `content.db` (separate databases). Integrity is enforced in the application layer.
+
+`tafsir_translations.paragraph_idx` uses `-1` rather than `NULL` for a whole-passage summary: SQLite allows `NULL` in primary-key columns of rowid tables and treats every `NULL` as distinct, so a nullable key column would let duplicate summaries accumulate and `ON CONFLICT` upserts would never fire.
 
 ### 5.6 Migrations
 Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.db` is backed up to `user.db.bak` before it is migrated.
