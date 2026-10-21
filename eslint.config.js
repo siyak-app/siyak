@@ -12,6 +12,13 @@ import tseslint from "typescript-eslint";
 // (ms-/me-/ps-/pe-/start-/end-/text-start/…) instead. See spec §13.4.
 const PHYSICAL_UTILITY =
   "/(^|[\\s:])-?(ml|mr|pl|pr|left|right|border-l|border-r|rounded-l|rounded-r|rounded-tl|rounded-tr|rounded-bl|rounded-br|text-left|text-right|float-left|float-right|scroll-ml|scroll-mr|scroll-pl|scroll-pr)(-|\\s|$)/";
+// Where class names appear: JSX `className`, `className` object properties and
+// the `cn()` / `cva()` helpers. Limiting the rule to these avoids flagging prose.
+const CLASS_CONTEXTS = [
+  "JSXAttribute[name.name='className']",
+  "Property[key.name='className']",
+  "CallExpression[callee.name=/^(cn|cva)$/]",
+].join(", ");
 const PHYSICAL_UTILITY_MESSAGE =
   "Use logical Tailwind utilities (ms-, me-, ps-, pe-, start-, end-, text-start, text-end) so the layout works right-to-left.";
 
@@ -46,9 +53,12 @@ export default defineConfig([
     rules: {
       "no-restricted-syntax": [
         "error",
-        { selector: `Literal[value=${PHYSICAL_UTILITY}]`, message: PHYSICAL_UTILITY_MESSAGE },
         {
-          selector: `TemplateElement[value.raw=${PHYSICAL_UTILITY}]`,
+          selector: `:matches(${CLASS_CONTEXTS}) Literal[value=${PHYSICAL_UTILITY}]`,
+          message: PHYSICAL_UTILITY_MESSAGE,
+        },
+        {
+          selector: `:matches(${CLASS_CONTEXTS}) TemplateElement[value.raw=${PHYSICAL_UTILITY}]`,
           message: PHYSICAL_UTILITY_MESSAGE,
         },
       ],
@@ -95,6 +105,11 @@ export default defineConfig([
         },
       ],
     },
+  },
+  {
+    // shadcn/ui components export their variant helpers next to the component.
+    files: ["src/components/ui/**/*.tsx"],
+    rules: { "react-refresh/only-export-components": "off" },
   },
   {
     files: ["**/*.js"],

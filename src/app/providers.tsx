@@ -1,0 +1,36 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useUiStore } from "@/stores/ui";
+
+import { useApplyLanguage, useApplyTheme, usePreferencesSync } from "./preferences";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    // Queries read local SQLite; retrying a failure only delays the error message.
+    queries: { retry: false, refetchOnWindowFocus: false },
+  },
+});
+
+function PreferencesGate({ children }: { children: ReactNode }) {
+  usePreferencesSync();
+  const hydrated = useUiStore((state) => state.hydrated);
+  const language = useUiStore((state) => state.preferences["ui.language"]);
+  const theme = useUiStore((state) => state.preferences["ui.theme"]);
+  useApplyLanguage(language);
+  useApplyTheme(theme);
+  // Pane sizes are only read on mount, so wait for the stored layout.
+  return hydrated ? children : null;
+}
+
+/** Application-wide providers: data cache, tooltips and UI preferences. */
+export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <PreferencesGate>{children}</PreferencesGate>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/lib/queries.ts"],
+  "tsconfig": "tsconfig.app.json",
+  "emit": "none",
+  "treatWarningsAsErrors": true,
+  "validation": {
+    "notExported": false,
+    "invalidLink": true,
+    "notDocumented": true
+  },
+  "excludeExternals": true,
+  "disableSources": true
+}

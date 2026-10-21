@@ -1,0 +1,61 @@
+{
+  "app": {
+    "name": "Siyak"
+  },
+  "common": {
+    "close": "Kapat",
+    "loading": "Yükleniyor…"
+  },
+  "layout": {
+    "toggle_navigation": "Gezinme panelini göster veya gizle",
+    "toggle_context_panel": "Bağlam panelini göster veya gizle",
+    "open_settings": "Ayarlar"
+  },
+  "navigation": {
+    "surahs": "Sureler"
+  },
+  "reader": {
+    "meccan": "Mekkî",
+    "medinan": "Medenî",
+    "ayah_count_one": "{{count}} ayet",
+    "ayah_count_other": "{{count}} ayet",
+    "verse_label": "Ayet {{surah}}:{{ayah}}",
+    "no_verses": "Bu surenin metni bu sürümde henüz yok.",
+    "surah_not_found": "Böyle bir sure yok."
+  },
+  "context_panel": {
+    "label": "Bağlam paneli",
+    "tabs": {
+      "tafsir": "Tefsir",
+      "word": "Kelime",
+      "related": "İlgili",
+      "notes": "Notlar",
+      "chat": "Sohbet"
+    },
+    "coming_soon": "Sonraki bir sürümde gelecek."
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "description": "Bu tercihler bu bilgisayarda saklanır.",
+    "language": "Arayüz dili",
+    "theme": "Tema",
+    "follow_system": "Sistemle aynı",
+    "language_tr": "Türkçe",
+    "language_en": "English",
+    "theme_light": "Açık",
+    "theme_dark": "Koyu"
+  },
+  "errors": {
+    "title": "Bir sorun oluştu",
+    "unknown": "Beklenmeyen bir hata oluştu.",
+    "db_open_failed": "Veritabanı açılamadı.",
+    "migration_failed": "Veritabanı yeni sürüme güncellenemedi. Verileriniz değiştirilmedi.",
+    "db_version_unsupported": "Veriler Siyak'ın daha yeni bir sürümüyle oluşturulmuş. Lütfen uygulamayı güncelleyin.",
+    "seed_missing": "Uygulamayla gelen Kur'an metni bulunamadı. Lütfen uygulamayı yeniden kurun.",
+    "io_failed": "Bir dosya okunamadı ya da yazılamadı.",
+    "query_failed": "Veriler yüklenemedi.",
+    "not_found": "İstenen öğe bulunamadı.",
+    "invalid_setting_key": "Ayar kaydedilemedi.",
+    "invalid_setting_value": "Ayar kaydedilemedi."
+  }
+}

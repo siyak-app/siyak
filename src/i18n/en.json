@@ -1,0 +1,61 @@
+{
+  "app": {
+    "name": "Siyak"
+  },
+  "common": {
+    "close": "Close",
+    "loading": "Loading…"
+  },
+  "layout": {
+    "toggle_navigation": "Show or hide the navigation pane",
+    "toggle_context_panel": "Show or hide the context panel",
+    "open_settings": "Settings"
+  },
+  "navigation": {
+    "surahs": "Surahs"
+  },
+  "reader": {
+    "meccan": "Meccan",
+    "medinan": "Medinan",
+    "ayah_count_one": "{{count}} verse",
+    "ayah_count_other": "{{count}} verses",
+    "verse_label": "Verse {{surah}}:{{ayah}}",
+    "no_verses": "The text of this surah is not available in this build yet.",
+    "surah_not_found": "There is no such surah."
+  },
+  "context_panel": {
+    "label": "Context panel",
+    "tabs": {
+      "tafsir": "Tafsir",
+      "word": "Word",
+      "related": "Related",
+      "notes": "Notes",
+      "chat": "Chat"
+    },
+    "coming_soon": "Coming in a later version."
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "These preferences are saved on this computer.",
+    "language": "Interface language",
+    "theme": "Theme",
+    "follow_system": "Same as the system",
+    "language_tr": "Türkçe",
+    "language_en": "English",
+    "theme_light": "Light",
+    "theme_dark": "Dark"
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "unknown": "An unexpected error occurred.",
+    "db_open_failed": "The database could not be opened.",
+    "migration_failed": "The database could not be updated to the new version. Your data was not changed.",
+    "db_version_unsupported": "The data was created by a newer version of Siyak. Please update the app.",
+    "seed_missing": "The built-in Quran text is missing. Please reinstall the app.",
+    "io_failed": "A file could not be read or written.",
+    "query_failed": "The data could not be loaded.",
+    "not_found": "The requested item was not found.",
+    "invalid_setting_key": "The setting could not be saved.",
+    "invalid_setting_value": "The setting could not be saved."
+  }
+}
