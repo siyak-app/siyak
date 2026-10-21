@@ -31,6 +31,9 @@ pub enum AppErrorCode {
     InvalidSettingKey,
     /// A setting value is not valid JSON.
     InvalidSettingValue,
+    /// Updating the Quran text and bundled translations from the newer bundled
+    /// `core.db` failed; the previous data is still in use (spec §6.2).
+    CoreRefreshFailed,
 }
 
 /// Error returned by every command: `{ code, message }` on the frontend.

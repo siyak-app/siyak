@@ -4,12 +4,14 @@
   },
   "common": {
     "close": "Close",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "dismiss": "Dismiss"
   },
   "layout": {
     "toggle_navigation": "Show or hide the navigation pane",
     "toggle_context_panel": "Show or hide the context panel",
-    "open_settings": "Settings"
+    "open_settings": "Settings",
+    "dev_badge": "Development build · {{seed}} data · core {{version}}"
   },
   "navigation": {
     "surahs": "Surahs"
@@ -56,6 +58,7 @@
     "query_failed": "The data could not be loaded.",
     "not_found": "The requested item was not found.",
     "invalid_setting_key": "The setting could not be saved.",
-    "invalid_setting_value": "The setting could not be saved."
+    "invalid_setting_value": "The setting could not be saved.",
+    "core_refresh_failed": "The Quran text and built-in translations could not be updated to this version's data. The previous data is still in use."
   }
 }

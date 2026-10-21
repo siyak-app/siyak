@@ -12,6 +12,8 @@ export const commands = {
 	 *  requested order. Unknown translation ids are ignored.
 	 */
 	getVerses: (surah: number, translationIds: string[]) => typedError<VerseWithTranslations[], AppError>(__TAURI_INVOKE("get_verses", { surah, translationIds })),
+	/**  Reports the core data version and any core refresh error. */
+	getCoreStatus: () => typedError<CoreStatus, AppError>(__TAURI_INVOKE("get_core_status")),
 	/**  Returns all stored settings as `key → JSON text`. */
 	getSettings: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("get_settings")),
 	/**  Stores a setting. `value` must be JSON text, e.g. `"\"tr\""` or `"{\"size\":20}"`. */
@@ -49,7 +51,22 @@ export type AppErrorCode =
 /**  A setting key does not match the allowed key format. */
 "invalid_setting_key" | 
 /**  A setting value is not valid JSON. */
-"invalid_setting_value";
+"invalid_setting_value" | 
+/**
+ *  Updating the Quran text and bundled translations from the newer bundled
+ *  `core.db` failed; the previous data is still in use (spec §6.2).
+ */
+"core_refresh_failed";
+
+/**  The core data in use and whether refreshing it failed at startup (spec §6.2). */
+export type CoreStatus = {
+	/**  `content_meta.core_version` of the content database. */
+	core_version: number,
+	/**  Which dataset a debug build loaded (`dev` or `full`); `None` in release builds. */
+	seed: string | null,
+	/**  Why the core refresh failed, if it did; the previous data is still in use. */
+	refresh_error: AppError | null,
+};
 
 /**  Where a surah was revealed. */
 export type RevelationType = 

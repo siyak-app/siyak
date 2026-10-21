@@ -6,6 +6,7 @@
   "permissions": [
     "allow-list-surahs",
     "allow-get-verses",
+    "allow-get-core-status",
     "allow-get-settings",
     "allow-set-setting"
   ]

@@ -1,18 +1,19 @@
 //! `content.db`: the Quran text and installed pack content.
 //!
 //! On first launch the bundled seed database is copied into place (spec §5);
-//! afterwards only the app writes to this file.
+//! afterwards only the app writes to this file. When the app ships a newer
+//! `core.db`, the core tables are refreshed in place (spec §6.2, ADR 0011).
 //! TODO(M3): pack installation writes translation/tafsir/morphology rows here.
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde::Serialize;
 use specta::Type;
 
-use super::{Migration, connect, migrate};
+use super::{Migration, backup, connect, migrate, schema_version};
 use crate::error::{AppError, AppErrorCode, AppResult};
 
 /// File name of the content database inside the app data directory.
@@ -57,9 +58,20 @@ pub const MIGRATIONS: &[Migration] = &[
     },
 ];
 
+/// The opened content database.
+#[derive(Debug)]
+pub struct Opened {
+    /// Connection to the content database.
+    pub conn: Connection,
+    /// Why the core refresh failed, if it did. The database is still usable:
+    /// it keeps the previous core data (spec §6.2).
+    pub core_refresh_error: Option<AppError>,
+}
+
 /// Opens the content database in `data_dir`, copying the seed there first if
-/// the file does not exist yet, then applies pending migrations.
-pub fn open(data_dir: &Path, seed: &Seed) -> AppResult<Connection> {
+/// the file does not exist yet, applies pending migrations and refreshes the
+/// core data if the seed's is newer.
+pub fn open(data_dir: &Path, seed: &Seed) -> AppResult<Opened> {
     let path = data_dir.join(seed.file_name);
     if !path.exists() {
         copy_seed(&seed.path, &path)?;
@@ -73,7 +85,136 @@ pub fn open(data_dir: &Path, seed: &Seed) -> AppResult<Connection> {
             [marker],
         )?;
     }
-    Ok(conn)
+    // `content.db` → `content.db.bak`, `content.full.db` → `content.full.db.bak`.
+    let backup_path = path.with_extension("db.bak");
+    let core_refresh_error = refresh_core(&mut conn, &seed.path, &backup_path).err();
+    if let Some(err) = &core_refresh_error {
+        eprintln!("core refresh failed: {err}");
+    }
+    Ok(Opened {
+        conn,
+        core_refresh_error,
+    })
+}
+
+/// Reads `content_meta.core_version`; a database without one (created before
+/// schema 2) counts as version 0.
+pub fn core_version(conn: &Connection, schema: &str) -> AppResult<u32> {
+    let value: Option<String> = conn
+        .query_row(
+            &format!("SELECT value FROM {schema}.content_meta WHERE key = 'core_version'"),
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(value.and_then(|v| v.parse().ok()).unwrap_or(0))
+}
+
+/// Reads `content_meta.seed`: which dataset a debug build loaded.
+pub fn seed_marker(conn: &Connection) -> AppResult<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT value FROM content_meta WHERE key = 'seed'",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?)
+}
+
+/// Replaces the core data of `conn` with that of the bundled `core` database
+/// if the bundled `core_version` is higher (spec §6.2, ADR 0011). Returns
+/// whether a refresh happened.
+///
+/// The core data is `surahs`, `verses`, `verses_fts`, `notices` and the
+/// bundled packs (`packs.bundled = 1` with their `translations` and
+/// `translations_fts` rows). Packs the user installed are left untouched; this
+/// is safe because verse ids (1..6236) never change. The database is backed up
+/// to `backup_path` first and the replacement runs in one transaction, so a
+/// failure leaves the previous data in place (and the backup on disk).
+pub fn refresh_core(conn: &mut Connection, core: &Path, backup_path: &Path) -> AppResult<bool> {
+    let failed = |err: AppError| {
+        AppError::new(
+            AppErrorCode::CoreRefreshFailed,
+            format!("{}: {}", core.display(), err.message),
+        )
+    };
+    let bundled = Connection::open_with_flags(core, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|err| failed(err.into()))?;
+    let (new, current) = (
+        core_version(&bundled, "main").map_err(failed)?,
+        core_version(conn, "main").map_err(failed)?,
+    );
+    if new <= current {
+        return Ok(false);
+    }
+    let (core_schema, content_schema) = (
+        schema_version(&bundled).map_err(failed)?,
+        schema_version(conn).map_err(failed)?,
+    );
+    if core_schema != content_schema {
+        return Err(failed(AppError::new(
+            AppErrorCode::DbVersionUnsupported,
+            format!("core.db has schema {core_schema}, content.db has {content_schema}"),
+        )));
+    }
+    drop(bundled);
+
+    backup(conn, backup_path).map_err(failed)?;
+    conn.execute(
+        "ATTACH DATABASE ?1 AS core",
+        [core.to_string_lossy().as_ref()],
+    )
+    .map_err(|err| failed(err.into()))?;
+    let result = replace_core_tables(conn);
+    // Detaching fails only while a statement is still running; there is none.
+    let _ = conn.execute("DETACH DATABASE core", []);
+    result.map_err(failed)?;
+    Ok(true)
+}
+
+/// The replacement itself, in one transaction with `core` attached.
+fn replace_core_tables(conn: &mut Connection) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    // Verses are deleted and inserted again with the same ids; checking
+    // foreign keys at commit lets rows of installed packs keep pointing at them.
+    tx.execute_batch(
+        "PRAGMA defer_foreign_keys = ON;
+
+         DELETE FROM main.translations_fts WHERE pack_id IN
+           (SELECT id FROM main.packs WHERE bundled = 1 OR id IN (SELECT id FROM core.packs));
+         DELETE FROM main.packs WHERE bundled = 1 OR id IN (SELECT id FROM core.packs);
+         DELETE FROM main.verses_fts;
+         DELETE FROM main.verses;
+         DELETE FROM main.surahs;
+         DELETE FROM main.notices;
+
+         INSERT INTO main.surahs
+           (number, name_ar, name_tr, name_en, revelation_type, ayah_count, bismillah)
+           SELECT number, name_ar, name_tr, name_en, revelation_type, ayah_count, bismillah
+           FROM core.surahs;
+         INSERT INTO main.verses (id, surah, ayah, juz, text_uthmani, text_clean)
+           SELECT id, surah, ayah, juz, text_uthmani, text_clean FROM core.verses;
+         INSERT INTO main.verses_fts (rowid, text_norm)
+           SELECT rowid, text_norm FROM core.verses_fts;
+         INSERT INTO main.notices (id, source, title, body, url)
+           SELECT id, source, title, body, url FROM core.notices;
+         INSERT INTO main.packs
+           (id, type, lang, title, author, version, license, attribution, citation_json,
+            meta_json, installed_at, bundled)
+           SELECT id, type, lang, title, author, version, license, attribution, citation_json,
+                  meta_json, installed_at, bundled
+           FROM core.packs;
+         INSERT INTO main.translations (pack_id, verse_id, text)
+           SELECT pack_id, verse_id, text FROM core.translations;
+         INSERT INTO main.translations_fts (text, pack_id, verse_id)
+           SELECT text, pack_id, verse_id FROM core.translations_fts;
+         -- Keys only this database has (the debug `seed` marker) are kept.
+         INSERT INTO main.content_meta (key, value)
+           SELECT key, value FROM core.content_meta WHERE true
+           ON CONFLICT (key) DO UPDATE SET value = excluded.value;",
+    )?;
+    tx.commit()?;
+    Ok(())
 }
 
 /// Where a surah was revealed.
@@ -379,7 +520,7 @@ mod tests {
             .unwrap();
         }
         let path = dir.path().join(FILE_NAME);
-        let conn = open(dir.path(), &Seed::bundled(seed)).unwrap();
+        let conn = open(dir.path(), &Seed::bundled(seed)).unwrap().conn;
         let count: i64 = conn
             .query_row("SELECT count(*) FROM surahs", [], |r| r.get(0))
             .unwrap();
@@ -479,7 +620,7 @@ mod tests {
             file_name: "content.full.db",
             marker: Some("full"),
         };
-        let conn = open(dir.path(), &seed).unwrap();
+        let conn = open(dir.path(), &seed).unwrap().conn;
         let marker: String = conn
             .query_row(
                 "SELECT value FROM content_meta WHERE key = 'seed'",
@@ -490,6 +631,174 @@ mod tests {
         assert_eq!(marker, "full");
         assert!(dir.path().join("content.full.db").is_file());
         assert!(!dir.path().join(FILE_NAME).exists());
+    }
+
+    /// Writes a small core database: two surahs, three verses, the bundled
+    /// pack `en.core` and `core_version`. `text` marks this build's rows.
+    fn write_core(path: &Path, version: u32, text: &str) {
+        let mut conn = Connection::open(path).unwrap();
+        migrate(&mut conn, MIGRATIONS).unwrap();
+        conn.execute_batch(&format!(
+            "INSERT INTO surahs VALUES
+               (1, 'الفاتحة', 'Fâtiha', 'Al-Faatiha', 'meccan', 7, NULL),
+               (2, 'البقرة', 'Bakara', 'Al-Baqara', 'medinan', 286, 'بسم');
+             INSERT INTO verses VALUES (1, 1, 1, 1, '{text} 1', 'c1'), (8, 2, 1, 1, '{text} 8', 'c8'),
+               (9, 2, 2, 1, '{text} 9', 'c9');
+             INSERT INTO verses_fts (rowid, text_norm) VALUES (1, 'n1'), (8, 'n8'), (9, 'n9');
+             INSERT INTO notices VALUES ('tanzil.text.uthmani', 'tanzil', 'Tanzil', '{text}', NULL);
+             INSERT INTO packs (id, type, lang, title, version, license, installed_at, bundled)
+               VALUES ('en.core', 'translation', 'en', 'Core', '1.0.0', 'PD', 'build', 1);
+             INSERT INTO translations VALUES ('en.core', 1, '{text} en 1'), ('en.core', 8, '{text} en 8');
+             INSERT INTO translations_fts (text, pack_id, verse_id)
+               VALUES ('{text} en 1', 'en.core', 1), ('{text} en 8', 'en.core', 8);
+             INSERT INTO content_meta VALUES ('core_version', '{version}'), ('tanzil_version', '1.1');"
+        ))
+        .unwrap();
+    }
+
+    /// A content database seeded from a version 1 core, with a pack the user
+    /// installed (`bundled = 0`) and the debug seed marker.
+    fn content_with_user_pack(dir: &Path) -> (Connection, std::path::PathBuf) {
+        let core = dir.join("core-v1.db");
+        write_core(&core, 1, "old");
+        let seed = Seed {
+            path: core,
+            file_name: FILE_NAME,
+            marker: Some("dev"),
+        };
+        let conn = open(dir, &seed).unwrap().conn;
+        conn.execute_batch(
+            "INSERT INTO packs (id, type, lang, title, version, license, installed_at, bundled)
+               VALUES ('tr.user', 'translation', 'tr', 'User', '1.0.0', 'PD', 'later', 0);
+             INSERT INTO translations VALUES ('tr.user', 1, 'kullanıcı 1'), ('tr.user', 9, 'kullanıcı 9');
+             INSERT INTO translations_fts (text, pack_id, verse_id)
+               VALUES ('kullanıcı 1', 'tr.user', 1), ('kullanıcı 9', 'tr.user', 9);",
+        )
+        .unwrap();
+        (conn, dir.join("content.db.bak"))
+    }
+
+    fn query<T: rusqlite::types::FromSql>(conn: &Connection, sql: &str) -> Vec<T> {
+        conn.prepare(sql)
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn refresh_replaces_core_and_keeps_installed_packs() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut conn, bak) = content_with_user_pack(dir.path());
+        let core = dir.path().join("core-v2.db");
+        write_core(&core, 2, "new");
+
+        assert!(refresh_core(&mut conn, &core, &bak).unwrap());
+
+        let verses: Vec<String> = query(&conn, "SELECT text_uthmani FROM verses ORDER BY id");
+        assert_eq!(verses, ["new 1", "new 8", "new 9"]);
+        let bundled: Vec<String> = query(
+            &conn,
+            "SELECT text FROM translations WHERE pack_id = 'en.core' ORDER BY verse_id",
+        );
+        assert_eq!(bundled, ["new en 1", "new en 8"]);
+        let fts: Vec<String> = query(&conn, "SELECT text FROM translations_fts ORDER BY text");
+        assert_eq!(fts, ["kullanıcı 1", "kullanıcı 9", "new en 1", "new en 8"]);
+        let user: Vec<String> = query(
+            &conn,
+            "SELECT text FROM translations WHERE pack_id = 'tr.user' ORDER BY verse_id",
+        );
+        assert_eq!(user, ["kullanıcı 1", "kullanıcı 9"]);
+        let packs: Vec<String> = query(&conn, "SELECT id FROM packs ORDER BY id");
+        assert_eq!(packs, ["en.core", "tr.user"]);
+        let notices: Vec<String> = query(&conn, "SELECT body FROM notices");
+        assert_eq!(notices, ["new"]);
+        assert_eq!(core_version(&conn, "main").unwrap(), 2);
+        assert_eq!(seed_marker(&conn).unwrap().as_deref(), Some("dev"));
+        assert!(
+            conn.query_row("PRAGMA foreign_key_check", [], |_| Ok(()))
+                .optional()
+                .unwrap()
+                .is_none()
+        );
+        let databases: Vec<String> = query(&conn, "SELECT name FROM pragma_database_list");
+        assert_eq!(databases, ["main"], "core stays attached");
+
+        // The backup holds the data from before the refresh.
+        let backup = Connection::open(&bak).unwrap();
+        assert_eq!(core_version(&backup, "main").unwrap(), 1);
+    }
+
+    #[test]
+    fn failed_refresh_rolls_back_and_keeps_the_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut conn, bak) = content_with_user_pack(dir.path());
+        let core = dir.path().join("core-broken.db");
+        write_core(&core, 2, "new");
+        {
+            // Inserted last, so the foreign key fails only when committing.
+            let broken = Connection::open(&core).unwrap();
+            broken
+                .execute_batch(
+                    "PRAGMA foreign_keys = OFF;
+                     INSERT INTO translations VALUES ('en.core', 9999, 'orphan');",
+                )
+                .unwrap();
+        }
+
+        let err = refresh_core(&mut conn, &core, &bak).unwrap_err();
+        assert_eq!(err.code, AppErrorCode::CoreRefreshFailed);
+
+        let verses: Vec<String> = query(&conn, "SELECT text_uthmani FROM verses ORDER BY id");
+        assert_eq!(verses, ["old 1", "old 8", "old 9"]);
+        let count: Vec<i64> = query(&conn, "SELECT count(*) FROM translations");
+        assert_eq!(count, [4]);
+        assert_eq!(core_version(&conn, "main").unwrap(), 1);
+        assert!(bak.is_file());
+        // Nothing is left half-done: a later refresh still works.
+        let fixed = dir.path().join("core-v2.db");
+        write_core(&fixed, 2, "new");
+        assert!(refresh_core(&mut conn, &fixed, &bak).unwrap());
+    }
+
+    #[test]
+    fn equal_core_version_is_a_no_op() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut conn, bak) = content_with_user_pack(dir.path());
+        let core = dir.path().join("core-v1-again.db");
+        write_core(&core, 1, "other");
+
+        assert!(!refresh_core(&mut conn, &core, &bak).unwrap());
+        assert!(!bak.exists());
+        let verses: Vec<String> = query(&conn, "SELECT text_uthmani FROM verses ORDER BY id");
+        assert_eq!(verses, ["old 1", "old 8", "old 9"]);
+    }
+
+    /// A content.db from M0 has no `content_meta` row, so any bundled core
+    /// counts as newer and is applied when the database is opened.
+    #[test]
+    fn database_without_core_version_is_refreshed_on_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(FILE_NAME);
+        {
+            let mut conn = Connection::open(&path).unwrap();
+            migrate(&mut conn, &MIGRATIONS[..1]).unwrap();
+            conn.execute_batch(
+                "INSERT INTO surahs VALUES (1, 'الفاتحة', 'Fâtiha', 'Al-Fatihah', 'meccan', 7);
+                 INSERT INTO verses VALUES (1, 1, 1, 1, 'm0', 'm0');",
+            )
+            .unwrap();
+        }
+        let core = dir.path().join("core.db");
+        write_core(&core, 1, "new");
+
+        let opened = open(dir.path(), &Seed::bundled(core)).unwrap();
+        assert!(opened.core_refresh_error.is_none());
+        let verses: Vec<String> =
+            query(&opened.conn, "SELECT text_uthmani FROM verses ORDER BY id");
+        assert_eq!(verses, ["new 1", "new 8", "new 9"]);
+        assert!(dir.path().join("content.db.bak").is_file());
     }
 
     #[test]

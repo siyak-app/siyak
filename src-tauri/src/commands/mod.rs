@@ -18,6 +18,7 @@ pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
         content::list_surahs,
         content::get_verses,
+        content::get_core_status,
         settings::get_settings,
         settings::set_setting,
     ])

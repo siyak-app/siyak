@@ -6,6 +6,7 @@ import { type PanelSize, usePanelRef } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ContextPanel } from "@/features/context-panel/ContextPanel";
+import { CoreRefreshBanner, DevDataBadge } from "@/features/core-status/CoreStatus";
 import { SurahList } from "@/features/reader/SurahList";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { type PaneState, useUiStore } from "@/stores/ui";
@@ -64,6 +65,7 @@ export function AppShell() {
           <PanelLeftIcon />
         </Button>
         <span className="ms-1 flex-1 text-sm font-semibold">{t("app.name")}</span>
+        <DevDataBadge />
         <SettingsDialog />
         <Button
           variant="ghost"
@@ -76,6 +78,7 @@ export function AppShell() {
           <PanelRightIcon />
         </Button>
       </header>
+      <CoreRefreshBanner />
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel
           id="navigation"

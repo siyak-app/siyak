@@ -16,3 +16,4 @@ architectural change, open a pull request that adds `NNNN-short-title.md` based 
 | [0008](0008-classical-tafsirs-from-quranpedia.md) | Take classical tafsirs from the Quranpedia dumps; no contemporary works in v1 |
 | [0009](0009-english-code-bilingual-docs.md)       | Write code in English; keep documentation bilingual                           |
 | [0010](0010-rust-xtask.md)                        | Automate repository tasks with a Rust xtask                                   |
+| [0011](0011-core-refresh-strategy.md)             | Refresh the core data in place, in one transaction                            |

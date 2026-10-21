@@ -4,12 +4,14 @@
   },
   "common": {
     "close": "Kapat",
-    "loading": "Yükleniyor…"
+    "loading": "Yükleniyor…",
+    "dismiss": "Kapat"
   },
   "layout": {
     "toggle_navigation": "Gezinme panelini göster veya gizle",
     "toggle_context_panel": "Bağlam panelini göster veya gizle",
-    "open_settings": "Ayarlar"
+    "open_settings": "Ayarlar",
+    "dev_badge": "Geliştirme derlemesi · {{seed}} veri · çekirdek {{version}}"
   },
   "navigation": {
     "surahs": "Sureler"
@@ -56,6 +58,7 @@
     "query_failed": "Veriler yüklenemedi.",
     "not_found": "İstenen öğe bulunamadı.",
     "invalid_setting_key": "Ayar kaydedilemedi.",
-    "invalid_setting_value": "Ayar kaydedilemedi."
+    "invalid_setting_value": "Ayar kaydedilemedi.",
+    "core_refresh_failed": "Kur'an metni ve uygulamayla gelen mealler bu sürümün verisine güncellenemedi. Önceki veriler kullanılmaya devam ediyor."
   }
 }

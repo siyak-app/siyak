@@ -23,6 +23,8 @@ pub struct Databases {
     pub content: Mutex<Connection>,
     /// `user.db`: the user's own data.
     pub user: Mutex<Connection>,
+    /// Why refreshing the core data failed at startup, if it did (spec §6.2).
+    pub core_refresh_error: Option<AppError>,
 }
 
 impl Databases {
@@ -32,8 +34,9 @@ impl Databases {
         let content = content::open(data_dir, seed)?;
         let user = user::open(&data_dir.join(user::FILE_NAME))?;
         Ok(Self {
-            content: Mutex::new(content),
+            content: Mutex::new(content.conn),
             user: Mutex::new(user),
+            core_refresh_error: content.core_refresh_error,
         })
     }
 }

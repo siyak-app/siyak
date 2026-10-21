@@ -12,6 +12,7 @@ import {
   commands,
   type AppError,
   type AppErrorCode,
+  type CoreStatus,
   type Surah,
   type VerseWithTranslations,
 } from "./bindings";
@@ -58,6 +59,8 @@ export const queryKeys = {
     ["verses", surah, [...translationIds]] as const,
   /** Key of {@link useSettings}. */
   settings: ["settings"] as const,
+  /** Key of {@link useCoreStatus}. */
+  coreStatus: ["core-status"] as const,
 };
 
 /** All 114 surahs. Content changes only when packs change, so it never goes stale. */
@@ -77,6 +80,18 @@ export function useVerses(surah: number, translationIds: readonly string[]) {
   return useQuery<VerseWithTranslations[]>({
     queryKey: queryKeys.verses(surah, translationIds),
     queryFn: () => unwrap(commands.getVerses(surah, [...translationIds])),
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * The core data version, the debug dataset (`dev`/`full`) and any error from
+ * refreshing the core data at startup. Fixed for the lifetime of the app.
+ */
+export function useCoreStatus() {
+  return useQuery<CoreStatus>({
+    queryKey: queryKeys.coreStatus,
+    queryFn: () => unwrap(commands.getCoreStatus()),
     staleTime: Infinity,
   });
 }
