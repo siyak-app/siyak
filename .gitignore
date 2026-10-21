@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+target/
+website/dist/
+website/.astro/
+
+# Tauri generated schemas
+src-tauri/gen/
+
+# Test and coverage output
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local databases created while running tools (the committed seed lives in dev-data/)
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Environment
+.env
+.env.*

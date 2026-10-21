@@ -1,0 +1,22 @@
+{
+  "name": "Siyak",
+  "build": { "dockerfile": "Dockerfile" },
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" }
+  },
+  // rust-toolchain.toml makes rustup install the pinned toolchain on first use.
+  "postCreateCommand": "npm install -g pnpm@12.14.0 && pnpm install && rustup show active-toolchain",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tauri-apps.tauri-vscode",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "EditorConfig.EditorConfig"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}

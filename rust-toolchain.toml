@@ -1,0 +1,6 @@
+# Pinned so that a new stable release (and its new clippy lints) cannot turn CI red
+# unannounced. Bump deliberately in its own PR.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
