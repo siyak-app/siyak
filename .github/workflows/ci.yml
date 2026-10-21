@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # `edited` re-checks the title after a rename; the other jobs skip it.
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep in sync with .devcontainer/Dockerfile and CONTRIBUTING.md.
+  LINUX_PACKAGES: >-
+    build-essential curl wget file libwebkit2gtk-4.1-dev libxdo-dev libssl-dev
+    libayatana-appindicator3-dev librsvg2-dev
+
+jobs:
+  rust:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $LINUX_PACKAGES
+      # rust-toolchain.toml selects the toolchain; rustup installs it on first use.
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  frontend:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm docs:ts
+
+  bindings:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $LINUX_PACKAGES
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo xtask bindings
+      - name: Fail if the committed bindings are out of date
+        run: git diff --exit-code -- src/lib/bindings.ts
+
+  build:
+    if: github.event.action != 'edited'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            bundle: deb
+          - os: macos-latest
+            bundle: app
+          - os: windows-latest
+            bundle: nsis
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $LINUX_PACKAGES
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Debug build with one bundle per OS: proves the app and its bundle
+      # configuration build everywhere without the cost of a release build.
+      - run: pnpm tauri build --debug --bundles ${{ matrix.bundle }}
+
+  website:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir website build
+
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      # PRs are squash-merged, so the title becomes the commit message.
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
