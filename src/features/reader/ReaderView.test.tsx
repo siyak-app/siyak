@@ -7,6 +7,7 @@ import { DEFAULT_PREFERENCES, useUiStore } from "@/stores/ui";
 import { stubLayout } from "@/test/layout";
 
 import { ReaderView } from "./ReaderView";
+import { recallTopAyah } from "./scrollMemory";
 
 const BASMALA = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ";
 
@@ -23,8 +24,13 @@ const surah = (number: number, ayahCount: number, bismillah: string | null): Sur
 const SURAHS: Record<number, Surah> = {
   1: { ...surah(1, 7, null), name_tr: "Fâtiha", name_en: "Al-Faatiha", revelation_type: "meccan" },
   2: { ...surah(2, 286, BASMALA), name_tr: "Bakara", name_en: "Al-Baqara" },
+  // Present in every surah list, but without verses in the development data.
+  3: { ...surah(3, 200, BASMALA), name_tr: "Âl-i İmrân", name_en: "Aal-i-Imraan" },
   9: { ...surah(9, 129, null), name_tr: "Tevbe", name_en: "At-Tawba" },
 };
+
+/** Surahs whose text the (development) data has. */
+const WITH_TEXT = new Set([1, 2, 9]);
 
 const PACKS: TranslationInfo[] = [
   {
@@ -59,25 +65,38 @@ const versesOf = (number: number, count: number, ids: readonly string[]): VerseW
     })),
   }));
 
-let current = 1;
+let current: { surah: number; ayah?: number } = { surah: 1 };
 
 vi.mock("@tanstack/react-router", () => ({
-  useParams: () => ({ surah: current }),
+  useParams: () => current,
 }));
+
+// Query data is referentially stable between renders, as with TanStack Query.
+const verseCache = new Map<string, VerseWithTranslations[]>();
+function cachedVerses(number: number, ids: readonly string[]) {
+  const key = `${String(number)}|${ids.join(",")}`;
+  let verses = verseCache.get(key);
+  if (!verses) {
+    const count = WITH_TEXT.has(number) ? (SURAHS[number]?.ayah_count ?? 0) : 0;
+    verses = versesOf(number, count, ids);
+    verseCache.set(key, verses);
+  }
+  return verses;
+}
 
 vi.mock("@/lib/queries", () => ({
   useSurah: (number: number) => ({ data: SURAHS[number], isError: false }),
   useTranslations: () => ({ data: PACKS }),
   useVerses: (number: number, ids: readonly string[]) => ({
-    data: versesOf(number, SURAHS[number]?.ayah_count ?? 0, ids),
+    data: cachedVerses(number, ids),
     isPending: false,
     isError: false,
   }),
   appErrorCode: () => undefined,
 }));
 
-function show(number: number, translations: string[] = ["en.pickthall"]) {
-  current = number;
+function show(number: number, translations: string[] = ["en.pickthall"], ayah?: number) {
+  current = { surah: number, ayah };
   useUiStore.getState().setPreference("reader.translations", translations);
   return render(<ReaderView />);
 }
@@ -158,5 +177,49 @@ describe("ReaderView", () => {
     show(1);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("1. Fâtiha");
     expect(screen.getByText("Meal: Pickthall İngilizce Meali")).toBeInTheDocument();
+  });
+
+  it("opens a deep link at its verse and highlights it", async () => {
+    show(2, ["en.pickthall"], 255);
+    const verse = await screen.findByRole("article", { name: "Verse 2:255" });
+    expect(verse).toHaveAttribute("data-highlighted", "true");
+    expect(screen.queryByRole("article", { name: "Verse 2:1" })).not.toBeInTheDocument();
+  });
+
+  it("reports a verse beyond the end of the surah", () => {
+    show(1, ["en.pickthall"], 9);
+    expect(screen.getByRole("status")).toHaveTextContent("There is no verse 1:9.");
+    expect(screen.getByRole("article", { name: "Verse 1:1" })).toBeInTheDocument();
+  });
+
+  it("does not break on a verse the data does not contain", () => {
+    // e.g. a last position or user data pointing at 3:10 with the development data
+    show(3, ["en.pickthall"], 10);
+    expect(screen.getByText(/not available in this build/)).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("stores the verse at the top as the last read position", async () => {
+    show(2, ["en.pickthall"], 100);
+    await vi.waitFor(
+      () => {
+        expect(useUiStore.getState().preferences["reader.last_position"]).toEqual({
+          surah: 2,
+          ayah: 100,
+        });
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("returns to where a surah was left when switching back", async () => {
+    const first = show(2, ["en.pickthall"], 200);
+    await vi.waitFor(() => {
+      expect(recallTopAyah(2)).toBe(200);
+    });
+    first.unmount();
+    show(2);
+    expect(await screen.findByRole("article", { name: "Verse 2:200" })).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Verse 2:1" })).not.toBeInTheDocument();
   });
 });

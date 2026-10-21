@@ -26,11 +26,12 @@
     "ayah_count_other": "{{count}} ayet",
     "verse_label": "Ayet {{surah}}:{{ayah}}",
     "no_verses": "Bu surenin metni bu sürümde henüz yok.",
-    "surah_not_found": "Böyle bir sure yok.",
+    "surah_not_found": "Böyle bir sure ya da ayet yok.",
     "verse_list_label": "{{name}} suresinin ayetleri",
     "translation_titles_one": "Meal: {{titles}}",
     "translation_titles_other": "Mealler: {{titles}}",
-    "arabic_only": "Yalnızca Arapça metin"
+    "arabic_only": "Yalnızca Arapça metin",
+    "verse_not_found": "{{surah}}:{{ayah}} diye bir ayet yok."
   },
   "context_panel": {
     "label": "Bağlam paneli",

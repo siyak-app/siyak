@@ -125,6 +125,26 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* A verse opened by a deep link fades from a tint to its normal background. */
+@theme {
+  --animate-verse-highlight: verse-highlight 2.5s ease-out;
+  @keyframes verse-highlight {
+    from {
+      background-color: color-mix(in oklch, var(--primary) 18%, transparent);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-highlighted] {
+    animation: none;
+    background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  }
+}
+
 /* Reader typography; the values come from the typography settings (spec §13.4). */
 :root {
   --arabic-size: 28px;

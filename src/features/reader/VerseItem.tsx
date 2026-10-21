@@ -11,16 +11,20 @@ import type { TextDirection, VerseWithTranslations } from "@/lib/bindings";
 export const VerseItem = memo(function VerseItem({
   verse,
   directions,
+  highlighted = false,
 }: {
   verse: VerseWithTranslations;
   /** Writing direction per translation pack id. */
   directions: Readonly<Record<string, TextDirection>>;
+  /** Briefly marks the verse a deep link opened. */
+  highlighted?: boolean;
 }) {
   const { t } = useTranslation();
   return (
     <article
       aria-label={t("reader.verse_label", { surah: verse.surah, ayah: verse.ayah })}
-      className="flex gap-4 border-b border-border py-6"
+      data-highlighted={highlighted || undefined}
+      className="flex gap-4 rounded-lg border-b border-border px-2 py-6 data-highlighted:animate-verse-highlight"
     >
       <span
         aria-hidden

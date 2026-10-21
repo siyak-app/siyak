@@ -26,11 +26,12 @@
     "ayah_count_other": "{{count}} verses",
     "verse_label": "Verse {{surah}}:{{ayah}}",
     "no_verses": "The text of this surah is not available in this build yet.",
-    "surah_not_found": "There is no such surah.",
+    "surah_not_found": "There is no such surah or verse.",
     "verse_list_label": "Verses of {{name}}",
     "translation_titles_one": "Translation: {{titles}}",
     "translation_titles_other": "Translations: {{titles}}",
-    "arabic_only": "Arabic text only"
+    "arabic_only": "Arabic text only",
+    "verse_not_found": "There is no verse {{surah}}:{{ayah}}."
   },
   "context_panel": {
     "label": "Context panel",
