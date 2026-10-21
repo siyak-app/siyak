@@ -1,0 +1,17 @@
+{
+  "name": "siyak-website",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "license": "MIT OR Apache-2.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "^7.4.1"
+  }
+}
