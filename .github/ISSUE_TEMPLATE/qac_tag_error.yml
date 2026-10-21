@@ -1,0 +1,35 @@
+name: QAC tag error report
+description: Report a suspected error in the Quranic Arabic Corpus morphology.
+labels: ["data", "qac-errata"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Siyak shows the Quranic Arabic Corpus (QAC) v0.4 unmodified, as its terms require (ADR 0007). Reports are collected in the errata file of siyak-data and forwarded to QAC; the data itself is not changed.
+  - type: input
+    id: location
+    attributes:
+      label: Word location
+      description: surah:ayah:word, optionally :segment
+      placeholder: e.g. 2:255:3
+    validations:
+      required: true
+  - type: input
+    id: current
+    attributes:
+      label: Current tag or analysis
+    validations:
+      required: true
+  - type: input
+    id: suggested
+    attributes:
+      label: Suggested correction
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Grammatical reasoning, references (i'rab works, dictionaries).
+    validations:
+      required: true

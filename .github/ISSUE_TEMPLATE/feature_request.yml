@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement or a new feature.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the need or problem, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: disclosure
+    attributes:
+      label: How should it look for a casual reader?
+      description: Siyak has one interface with progressive disclosure (spec §13.2). Should this be visible by default, or appear only on request?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

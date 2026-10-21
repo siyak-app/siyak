@@ -1,0 +1,45 @@
+name: New source proposal
+description: Propose a translation, tafsir or other dataset for Siyak.
+labels: ["data", "needs-license-check"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Content is only distributed when its redistribution rights are confirmed (spec §1). Sources are built into packs in the [siyak-data](https://github.com/siyak/siyak-data) repository.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of source
+      options: [Translation, Tafsir, Morphology, Other]
+    validations:
+      required: true
+  - type: input
+    id: work
+    attributes:
+      label: Work, author and edition
+      placeholder: e.g. Tafsir al-Jalalayn, al-Mahalli & al-Suyuti, edition …
+    validations:
+      required: true
+  - type: input
+    id: language
+    attributes:
+      label: Language
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Where can the digital text be obtained?
+    validations:
+      required: true
+  - type: textarea
+    id: license
+    attributes:
+      label: License or permission
+      description: Quote the license or terms of use and link to them. If there is no stated license, say so and what you know about the rights holder.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this source valuable?

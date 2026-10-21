@@ -20,7 +20,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "docs:ts": "typedoc"
+    "docs:ts": "typedoc",
+    "changelog": "git-cliff --output CHANGELOG.md"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.5",
