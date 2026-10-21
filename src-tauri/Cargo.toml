@@ -1,0 +1,25 @@
+[package]
+name = "siyak"
+description = "Offline-first desktop app for reading and researching the Quran"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[lib]
+# The `_lib` suffix keeps the library name distinct from the binary name,
+# see https://github.com/rust-lang/cargo/issues/8519
+name = "siyak_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.12.4", features = [] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
