@@ -9,7 +9,8 @@ import { ContextPanel } from "@/features/context-panel/ContextPanel";
 import { CoreRefreshBanner, DevDataBadge } from "@/features/core-status/CoreStatus";
 import { SurahList } from "@/features/reader/SurahList";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
-import { type PaneState, useUiStore } from "@/stores/ui";
+import type { PaneState } from "@/lib/settings";
+import { useUiStore } from "@/stores/ui";
 
 type PaneKey = "layout.left_pane" | "layout.right_panel";
 

@@ -60,5 +60,38 @@
     "invalid_setting_key": "The setting could not be saved.",
     "invalid_setting_value": "The setting could not be saved.",
     "core_refresh_failed": "The Quran text and built-in translations could not be updated to this version's data. The previous data is still in use."
+  },
+  "term": {
+    "lemma": {
+      "plain": "dictionary form",
+      "technical": "lemma"
+    },
+    "root": {
+      "plain": "root",
+      "technical": "root"
+    },
+    "concordance": {
+      "plain": "where it occurs",
+      "technical": "concordance"
+    },
+    "semantic_search": {
+      "plain": "search by meaning",
+      "technical": "semantic search"
+    },
+    "segment": {
+      "plain": "word part",
+      "technical": "segment"
+    },
+    "morphology": {
+      "plain": "word analysis",
+      "technical": "morphology"
+    },
+    "part_of_speech": {
+      "plain": "word type",
+      "technical": "part of speech"
+    }
+  },
+  "term_format": {
+    "inline": "{{plain}} ({{technical}})"
   }
 }

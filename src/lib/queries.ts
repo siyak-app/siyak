@@ -8,12 +8,15 @@
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { serializeSetting, type SettingKey, type Settings } from "./settings";
+
 import {
   commands,
   type AppError,
   type AppErrorCode,
   type CoreStatus,
   type Surah,
+  type TranslationInfo,
   type VerseWithTranslations,
 } from "./bindings";
 
@@ -54,6 +57,10 @@ async function unwrap<T>(result: Promise<CommandResult<T>>): Promise<T> {
 export const queryKeys = {
   /** Key of {@link useSurahs}. */
   surahs: ["surahs"] as const,
+  /** Key of {@link useSurah}. */
+  surah: (number: number) => ["surah", number] as const,
+  /** Key of {@link useTranslations}. */
+  translations: ["translations"] as const,
   /** Key of {@link useVerses} for one surah and translation selection. */
   verses: (surah: number, translationIds: readonly string[]) =>
     ["verses", surah, [...translationIds]] as const,
@@ -68,6 +75,24 @@ export function useSurahs() {
   return useQuery<Surah[]>({
     queryKey: queryKeys.surahs,
     queryFn: () => unwrap(commands.listSurahs()),
+    staleTime: Infinity,
+  });
+}
+
+/** One surah, including its basmala header (`null` for surahs 1 and 9). */
+export function useSurah(number: number) {
+  return useQuery<Surah>({
+    queryKey: queryKeys.surah(number),
+    queryFn: () => unwrap(commands.getSurah(number)),
+    staleTime: Infinity,
+  });
+}
+
+/** The installed translation packs, bundled ones first. */
+export function useTranslations() {
+  return useQuery<TranslationInfo[]>({
+    queryKey: queryKeys.translations,
+    queryFn: () => unwrap(commands.listTranslations()),
     staleTime: Infinity,
   });
 }
@@ -106,22 +131,49 @@ export function useSettings() {
 }
 
 /** Variables of {@link useSetSetting}. */
-export interface SetSettingVariables {
+export interface SetSettingVariables<K extends SettingKey = SettingKey> {
   /** Dotted setting key, e.g. `ui.language`. */
-  key: string;
-  /** Any JSON-serializable value. */
-  value: unknown;
+  key: K;
+  /** The typed value, serialized with `serializeSetting`. */
+  value: Settings[K];
 }
 
 /** Stores one setting and updates the cached settings. */
 export function useSetSetting() {
   const queryClient = useQueryClient();
   return useMutation<null, Error, SetSettingVariables>({
-    mutationFn: ({ key, value }) => unwrap(commands.setSetting(key, JSON.stringify(value))),
+    mutationFn: ({ key, value }) => unwrap(commands.setSetting(key, serializeSetting(key, value))),
     onSuccess: (_data, { key, value }) => {
       queryClient.setQueryData<Partial<Record<string, string>>>(queryKeys.settings, (old) => ({
         ...old,
-        [key]: JSON.stringify(value),
+        [key]: serializeSetting(key, value),
+      }));
+    },
+  });
+}
+
+/** Serializes typed settings to the `key → JSON text` form `user.db` stores. */
+export function serializeSettings(values: Partial<Settings>): Record<string, string> {
+  return Object.fromEntries(
+    (Object.keys(values) as SettingKey[]).map((key) => [
+      key,
+      serializeSetting(key, values[key] as Settings[typeof key]),
+    ]),
+  );
+}
+
+/**
+ * Stores several settings in one transaction (all or none) and updates the
+ * cached settings, e.g. every default of an experience profile.
+ */
+export function useSetSettings() {
+  const queryClient = useQueryClient();
+  return useMutation<null, Error, Partial<Settings>>({
+    mutationFn: (values) => unwrap(commands.setSettings(serializeSettings(values))),
+    onSuccess: (_data, values) => {
+      queryClient.setQueryData<Partial<Record<string, string>>>(queryKeys.settings, (old) => ({
+        ...old,
+        ...serializeSettings(values),
       }));
     },
   });

@@ -17,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type LanguagePreference, type ThemePreference, useUiStore } from "@/stores/ui";
+import type { LanguagePreference, ThemePreference } from "@/lib/settings";
+import { useUiStore } from "@/stores/ui";
 
 const LANGUAGES: readonly LanguagePreference[] = ["system", "tr", "en"];
 const THEMES: readonly ThemePreference[] = ["system", "light", "dark"];

@@ -9,7 +9,8 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CONTEXT_TABS, type ContextTab, useUiStore } from "@/stores/ui";
+import { CONTEXT_TABS, type ContextTab } from "@/lib/settings";
+import { useUiStore } from "@/stores/ui";
 
 const TAB_ICONS: Record<ContextTab, LucideIcon> = {
   tafsir: BookOpenTextIcon,

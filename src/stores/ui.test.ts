@@ -21,7 +21,7 @@ describe("preferencesFromSettings", () => {
   it("falls back to defaults for malformed or unexpected values", () => {
     const preferences = preferencesFromSettings({
       "ui.language": "not json",
-      "ui.theme": '"sepia"',
+      "ui.theme": '"purple"',
       "layout.left_pane": '{"size":-5,"collapsed":false}',
       "layout.right_panel": '{"size":300,"collapsed":false,"tab":"unknown"}',
     });

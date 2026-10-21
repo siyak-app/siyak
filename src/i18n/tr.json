@@ -60,5 +60,38 @@
     "invalid_setting_key": "Ayar kaydedilemedi.",
     "invalid_setting_value": "Ayar kaydedilemedi.",
     "core_refresh_failed": "Kur'an metni ve uygulamayla gelen mealler bu sürümün verisine güncellenemedi. Önceki veriler kullanılmaya devam ediyor."
+  },
+  "term": {
+    "lemma": {
+      "plain": "sözlük biçimi",
+      "technical": "lemma"
+    },
+    "root": {
+      "plain": "kök",
+      "technical": "kök"
+    },
+    "concordance": {
+      "plain": "geçtiği yerler",
+      "technical": "konkordans"
+    },
+    "semantic_search": {
+      "plain": "anlamına göre ara",
+      "technical": "semantik arama"
+    },
+    "segment": {
+      "plain": "kelime parçası",
+      "technical": "segment"
+    },
+    "morphology": {
+      "plain": "kelime tahlili",
+      "technical": "morfoloji"
+    },
+    "part_of_speech": {
+      "plain": "kelime türü",
+      "technical": "sözcük türü etiketi"
+    }
+  },
+  "term_format": {
+    "inline": "{{plain}} ({{technical}})"
   }
 }

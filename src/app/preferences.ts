@@ -1,8 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { systemLanguage } from "@/i18n";
-import { useSetSetting, useSettings } from "@/lib/queries";
+import { queryKeys, useSetSetting, useSettings } from "@/lib/queries";
+import { serializeSetting } from "@/lib/settings";
 import {
   preferencesFromSettings,
   useUiStore,
@@ -16,6 +18,8 @@ const SAVE_DELAY_MS = 400;
 /**
  * Loads stored preferences into the UI store once, then saves every change
  * back to `user.db` (spec §13.2: the layout is persisted in `settings`).
+ * A value that is already stored (e.g. written by `set_settings`) is not
+ * written again.
  *
  * If settings cannot be loaded the defaults are used, so the interface still
  * appears and the failing feature reports its own error.
@@ -25,6 +29,7 @@ export function usePreferencesSync(): void {
   const hydrated = useUiStore((state) => state.hydrated);
   const hydrate = useUiStore((state) => state.hydrate);
   const { mutate: saveSetting } = useSetSetting();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (hydrated) return;
@@ -44,7 +49,12 @@ export function usePreferencesSync(): void {
           key,
           setTimeout(() => {
             pending.delete(key);
-            saveSetting({ key, value: useUiStore.getState().preferences[key] });
+            const value = useUiStore.getState().preferences[key];
+            const stored = queryClient.getQueryData<Partial<Record<string, string>>>(
+              queryKeys.settings,
+            )?.[key];
+            if (stored === serializeSetting(key, value)) return;
+            saveSetting({ key, value });
           }, SAVE_DELAY_MS),
         );
       }
@@ -53,7 +63,7 @@ export function usePreferencesSync(): void {
       unsubscribe();
       for (const timer of pending.values()) clearTimeout(timer);
     };
-  }, [saveSetting]);
+  }, [saveSetting, queryClient]);
 }
 
 /** Keeps i18next and `<html lang>` in line with the language preference. */
@@ -66,13 +76,17 @@ export function useApplyLanguage(preference: UiPreferences["ui.language"]): void
   }, [preference, i18n]);
 }
 
-/** Toggles the `dark` class on `<html>`, following the OS unless overridden. */
+/**
+ * Sets the theme class on `<html>` (`dark` or `sepia`; none for light),
+ * following the OS unless overridden.
+ */
 export function useApplyTheme(preference: UiPreferences["ui.theme"]): void {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
       const dark = preference === "dark" || (preference === "system" && media.matches);
       document.documentElement.classList.toggle("dark", dark);
+      document.documentElement.classList.toggle("sepia", preference === "sepia");
     };
     apply();
     media.addEventListener("change", apply);
