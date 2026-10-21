@@ -17,9 +17,12 @@ use tauri_specta::{Builder, collect_commands};
 pub fn builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new().commands(collect_commands![
         content::list_surahs,
+        content::get_surah,
         content::get_verses,
+        content::list_translations,
         content::get_core_status,
         settings::get_settings,
         settings::set_setting,
+        settings::set_settings,
     ])
 }

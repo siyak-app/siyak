@@ -5,7 +5,7 @@ use specta::Type;
 use tauri::State;
 
 use crate::AppState;
-use crate::db::content::{self, Surah, VerseWithTranslations};
+use crate::db::content::{self, Surah, TranslationInfo, VerseWithTranslations};
 use crate::error::{AppError, AppResult};
 
 /// The core data in use and whether refreshing it failed at startup (spec §6.2).
@@ -37,6 +37,20 @@ pub async fn get_core_status(state: State<'_, AppState>) -> AppResult<CoreStatus
 #[specta::specta]
 pub async fn list_surahs(state: State<'_, AppState>) -> AppResult<Vec<Surah>> {
     content::list_surahs(&*state.content()?)
+}
+
+/// Returns one surah, including its basmala header (`None` for surahs 1 and 9).
+#[tauri::command]
+#[specta::specta]
+pub async fn get_surah(state: State<'_, AppState>, number: u16) -> AppResult<Surah> {
+    content::get_surah(&*state.content()?, number)
+}
+
+/// Lists the installed translation packs, bundled ones first.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_translations(state: State<'_, AppState>) -> AppResult<Vec<TranslationInfo>> {
+    content::list_translations(&*state.content()?)
 }
 
 /// Returns the verses of a surah with the requested translations, in the

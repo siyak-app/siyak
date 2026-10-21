@@ -7,17 +7,26 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	/**  Lists all 114 surahs in Mushaf order. */
 	listSurahs: () => typedError<Surah[], AppError>(__TAURI_INVOKE("list_surahs")),
+	/**  Returns one surah, including its basmala header (`None` for surahs 1 and 9). */
+	getSurah: (number: number) => typedError<Surah, AppError>(__TAURI_INVOKE("get_surah", { number })),
 	/**
 	 *  Returns the verses of a surah with the requested translations, in the
 	 *  requested order. Unknown translation ids are ignored.
 	 */
 	getVerses: (surah: number, translationIds: string[]) => typedError<VerseWithTranslations[], AppError>(__TAURI_INVOKE("get_verses", { surah, translationIds })),
+	/**  Lists the installed translation packs, bundled ones first. */
+	listTranslations: () => typedError<TranslationInfo[], AppError>(__TAURI_INVOKE("list_translations")),
 	/**  Reports the core data version and any core refresh error. */
 	getCoreStatus: () => typedError<CoreStatus, AppError>(__TAURI_INVOKE("get_core_status")),
 	/**  Returns all stored settings as `key → JSON text`. */
 	getSettings: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("get_settings")),
 	/**  Stores a setting. `value` must be JSON text, e.g. `"\"tr\""` or `"{\"size\":20}"`. */
 	setSetting: (key: string, value: string) => typedError<null, AppError>(__TAURI_INVOKE("set_setting", { key, value })),
+	/**
+	 *  Stores several settings at once (`key → JSON text`): all of them or, if
+	 *  any key or value is invalid, none.
+	 */
+	setSettings: (values: { [key in string]: string }) => typedError<null, AppError>(__TAURI_INVOKE("set_settings", { values })),
 };
 
 /* Types */
@@ -68,6 +77,14 @@ export type CoreStatus = {
 	refresh_error: AppError | null,
 };
 
+/**  The title of a pack in the interface languages, where the pack provides one. */
+export type LocalizedTitle = {
+	/**  Turkish title. */
+	tr: string | null,
+	/**  English title. */
+	en: string | null,
+};
+
 /**  Where a surah was revealed. */
 export type RevelationType = 
 /**  Revealed in Mecca. */
@@ -89,6 +106,34 @@ export type Surah = {
 	revelation_type: RevelationType,
 	/**  Number of verses in the surah. */
 	ayah_count: number,
+	/**
+	 *  Tanzil's basmala, shown as the surah header; `None` for surah 1 (where
+	 *  it is verse 1) and surah 9 (spec §5.1).
+	 */
+	bismillah: string | null,
+};
+
+/**  Writing direction of a text block. */
+export type TextDirection = 
+/**  Left to right. */
+"ltr" | 
+/**  Right to left. */
+"rtl";
+
+/**  An installed translation pack. */
+export type TranslationInfo = {
+	/**  Pack id, e.g. `en.pickthall`. */
+	id: string,
+	/**  Title as published (`packs.title`). */
+	title: string,
+	/**  Title in the interface languages, from the pack's metadata. */
+	titles: LocalizedTitle,
+	/**  BCP 47 language of the translation, used for the `lang` attribute. */
+	lang: string | null,
+	/**  Writing direction of the translation's language, used for the `dir` attribute. */
+	dir: TextDirection,
+	/**  Whether the pack ships with the app (`core.db`). */
+	bundled: boolean,
 };
 
 /**  One translation of a verse. */

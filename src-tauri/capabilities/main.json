@@ -5,9 +5,12 @@
   "windows": ["main"],
   "permissions": [
     "allow-list-surahs",
+    "allow-get-surah",
     "allow-get-verses",
+    "allow-list-translations",
     "allow-get-core-status",
     "allow-get-settings",
-    "allow-set-setting"
+    "allow-set-setting",
+    "allow-set-settings"
   ]
 }

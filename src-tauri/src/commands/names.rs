@@ -5,8 +5,11 @@
 /// exists exactly once. Add new commands here and to `capabilities/main.json`.
 pub const COMMAND_NAMES: &[&str] = &[
     "list_surahs",
+    "get_surah",
     "get_verses",
+    "list_translations",
     "get_core_status",
     "get_settings",
     "set_setting",
+    "set_settings",
 ];

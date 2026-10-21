@@ -78,6 +78,17 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Stores every `key → value` pair in one transaction: either all are
+/// written or, if any is invalid, none (used to write a profile's defaults).
+pub fn set_settings(conn: &mut Connection, values: &Settings) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    for (key, value) in values {
+        set_setting(&tx, key, value)?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
 /// `^[a-z0-9_]+(\.[a-z0-9_]+)*$`, at most [`MAX_KEY_LEN`] bytes.
 fn is_valid_key(key: &str) -> bool {
     key.len() <= MAX_KEY_LEN
@@ -181,6 +192,23 @@ mod tests {
         }
         let long = "a".repeat(MAX_KEY_LEN + 1);
         assert!(set_setting(&conn, &long, "1").is_err());
+    }
+
+    #[test]
+    fn set_settings_writes_all_or_nothing() {
+        let mut conn = migrated();
+        let mut values = Settings::new();
+        values.insert("experience_profile".into(), r#""reader""#.into());
+        values.insert("reader.translations".into(), r#"["en.pickthall"]"#.into());
+        set_settings(&mut conn, &values).unwrap();
+        assert_eq!(get_settings(&conn).unwrap(), values);
+
+        let mut bad = Settings::new();
+        bad.insert("experience_profile".into(), r#""researcher""#.into());
+        bad.insert("reader.actions".into(), "not json".into());
+        let err = set_settings(&mut conn, &bad).unwrap_err();
+        assert_eq!(err.code, AppErrorCode::InvalidSettingValue);
+        assert_eq!(get_settings(&conn).unwrap(), values);
     }
 
     #[test]

@@ -13,6 +13,7 @@ const FATIHA: Surah = {
   name_en: "Al-Fatihah",
   revelation_type: "meccan",
   ayah_count: 7,
+  bismillah: null,
 };
 
 const VERSES: VerseWithTranslations[] = [

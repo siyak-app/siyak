@@ -242,6 +242,45 @@ pub struct Surah {
     pub revelation_type: RevelationType,
     /// Number of verses in the surah.
     pub ayah_count: u16,
+    /// Tanzil's basmala, shown as the surah header; `None` for surah 1 (where
+    /// it is verse 1) and surah 9 (spec §5.1).
+    pub bismillah: Option<String>,
+}
+
+/// Writing direction of a text block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TextDirection {
+    /// Left to right.
+    Ltr,
+    /// Right to left.
+    Rtl,
+}
+
+/// The title of a pack in the interface languages, where the pack provides one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Type)]
+pub struct LocalizedTitle {
+    /// Turkish title.
+    pub tr: Option<String>,
+    /// English title.
+    pub en: Option<String>,
+}
+
+/// An installed translation pack.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct TranslationInfo {
+    /// Pack id, e.g. `en.pickthall`.
+    pub id: String,
+    /// Title as published (`packs.title`).
+    pub title: String,
+    /// Title in the interface languages, from the pack's metadata.
+    pub titles: LocalizedTitle,
+    /// BCP 47 language of the translation, used for the `lang` attribute.
+    pub lang: Option<String>,
+    /// Writing direction of the translation's language, used for the `dir` attribute.
+    pub dir: TextDirection,
+    /// Whether the pack ships with the app (`core.db`).
+    pub bundled: bool,
 }
 
 /// One translation of a verse.
@@ -273,34 +312,104 @@ pub struct VerseWithTranslations {
     pub translations: Vec<VerseTranslation>,
 }
 
+const SURAH_COLUMNS: &str =
+    "number, name_ar, name_tr, name_en, revelation_type, ayah_count, bismillah";
+
+fn surah_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Surah> {
+    let revelation_type = match row.get_ref(4)?.as_str()? {
+        "meccan" => RevelationType::Meccan,
+        "medinan" => RevelationType::Medinan,
+        other => {
+            return Err(rusqlite::Error::FromSqlConversionFailure(
+                4,
+                rusqlite::types::Type::Text,
+                format!("unknown revelation_type {other:?}").into(),
+            ));
+        }
+    };
+    Ok(Surah {
+        number: row.get(0)?,
+        name_ar: row.get(1)?,
+        name_tr: row.get(2)?,
+        name_en: row.get(3)?,
+        revelation_type,
+        ayah_count: row.get(5)?,
+        bismillah: row.get(6)?,
+    })
+}
+
 /// Lists all surahs in Mushaf order.
 pub fn list_surahs(conn: &Connection) -> AppResult<Vec<Surah>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SURAH_COLUMNS} FROM surahs ORDER BY number"
+    ))?;
+    let rows = stmt.query_map([], surah_from_row)?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Returns one surah. Fails with [`AppErrorCode::NotFound`] if it does not exist.
+pub fn get_surah(conn: &Connection, number: u16) -> AppResult<Surah> {
+    conn.query_row(
+        &format!("SELECT {SURAH_COLUMNS} FROM surahs WHERE number = ?1"),
+        [number],
+        surah_from_row,
+    )
+    .optional()?
+    .ok_or_else(|| AppError::new(AppErrorCode::NotFound, format!("surah {number}")))
+}
+
+/// Lists the installed translation packs: bundled first, then by id.
+pub fn list_translations(conn: &Connection) -> AppResult<Vec<TranslationInfo>> {
     let mut stmt = conn.prepare(
-        "SELECT number, name_ar, name_tr, name_en, revelation_type, ayah_count
-         FROM surahs ORDER BY number",
+        "SELECT id, title, meta_json, lang, bundled FROM packs
+         WHERE type = 'translation' ORDER BY bundled DESC, id",
     )?;
     let rows = stmt.query_map([], |row| {
-        let revelation_type = match row.get_ref(4)?.as_str()? {
-            "meccan" => RevelationType::Meccan,
-            "medinan" => RevelationType::Medinan,
-            other => {
-                return Err(rusqlite::Error::FromSqlConversionFailure(
-                    4,
-                    rusqlite::types::Type::Text,
-                    format!("unknown revelation_type {other:?}").into(),
-                ));
-            }
-        };
-        Ok(Surah {
-            number: row.get(0)?,
-            name_ar: row.get(1)?,
-            name_tr: row.get(2)?,
-            name_en: row.get(3)?,
-            revelation_type,
-            ayah_count: row.get(5)?,
+        let lang: Option<String> = row.get(3)?;
+        Ok(TranslationInfo {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            titles: localized_title(row.get::<_, Option<String>>(2)?.as_deref()),
+            dir: text_direction(lang.as_deref()),
+            lang,
+            bundled: row.get(4)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Reads `title.tr` / `title.en` from a pack's `meta_json`. Missing or
+/// malformed metadata only loses the localized title, never the pack.
+fn localized_title(meta_json: Option<&str>) -> LocalizedTitle {
+    let meta: serde_json::Value = meta_json
+        .and_then(|json| serde_json::from_str(json).ok())
+        .unwrap_or_default();
+    let title = |lang: &str| meta["title"][lang].as_str().map(str::to_owned);
+    LocalizedTitle {
+        tr: title("tr"),
+        en: title("en"),
+    }
+}
+
+/// Languages written right to left, by primary subtag.
+const RTL_LANGUAGES: &[&str] = &[
+    "ar", "arc", "ckb", "dv", "fa", "he", "ks", "ps", "sd", "ug", "ur", "yi",
+];
+
+/// The writing direction of a BCP 47 language tag: right to left for the
+/// languages above and for any tag with an Arabic or Hebrew script subtag
+/// (e.g. `az-Arab`), otherwise left to right.
+pub fn text_direction(lang: Option<&str>) -> TextDirection {
+    let Some(lang) = lang else {
+        return TextDirection::Ltr;
+    };
+    let mut subtags = lang.split(['-', '_']).map(str::to_ascii_lowercase);
+    let primary = subtags.next().unwrap_or_default();
+    if RTL_LANGUAGES.contains(&primary.as_str()) || subtags.any(|s| s == "arab" || s == "hebr") {
+        TextDirection::Rtl
+    } else {
+        TextDirection::Ltr
+    }
 }
 
 /// Returns the verses of `surah` with the translations in `translation_ids`.
@@ -587,6 +696,75 @@ mod tests {
         assert!(bismillah(2).is_some_and(|b| b.starts_with("بِسْمِ")));
         assert_eq!(get_verses(&dev, 2, &[]).unwrap().len(), 286);
         assert_eq!(get_verses(&dev, 9, &[]).unwrap().len(), 129);
+    }
+
+    fn bundled_core() -> Connection {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/core.db");
+        Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
+    }
+
+    #[test]
+    fn get_surah_follows_the_basmala_rules() {
+        let dev = dev_db();
+        assert_eq!(get_surah(&dev, 1).unwrap().bismillah, None);
+        assert_eq!(get_surah(&dev, 9).unwrap().bismillah, None);
+        let baqarah = get_surah(&dev, 2).unwrap();
+        assert_eq!(baqarah.ayah_count, 286);
+        assert!(baqarah.bismillah.is_some());
+        let err = get_surah(&dev, 115).unwrap_err();
+        assert_eq!(err.code, AppErrorCode::NotFound);
+    }
+
+    #[test]
+    fn list_translations_reads_metadata() {
+        let translations = list_translations(&bundled_core()).unwrap();
+        let pickthall = translations
+            .iter()
+            .find(|t| t.id == "en.pickthall")
+            .unwrap();
+        assert_eq!(pickthall.lang.as_deref(), Some("en"));
+        assert_eq!(pickthall.dir, TextDirection::Ltr);
+        assert!(pickthall.bundled);
+        assert_eq!(
+            pickthall.titles.en.as_deref(),
+            Some("The Meaning of the Glorious Koran")
+        );
+        assert!(pickthall.titles.tr.is_some());
+        // The dev seed has no metadata; the published title still works.
+        let dev = list_translations(&dev_db()).unwrap();
+        assert_eq!(dev.len(), 1);
+        assert_eq!(dev[0].titles, LocalizedTitle::default());
+    }
+
+    #[test]
+    fn text_direction_from_language_tags() {
+        for lang in ["ar", "fa", "ur", "he", "ckb", "az-Arab", "ku_arab", "AR"] {
+            assert_eq!(text_direction(Some(lang)), TextDirection::Rtl, "{lang}");
+        }
+        for lang in ["en", "tr", "az", "ms-Latn", "ku"] {
+            assert_eq!(text_direction(Some(lang)), TextDirection::Ltr, "{lang}");
+        }
+        assert_eq!(text_direction(None), TextDirection::Ltr);
+    }
+
+    /// The reader loads a whole surah in one call. Run with
+    /// `cargo test -- --ignored --nocapture al_baqarah_load_time` to see how
+    /// long the longest surah takes with the full data.
+    #[test]
+    #[ignore = "timing report, not a check"]
+    fn al_baqarah_load_time() {
+        let core = bundled_core();
+        let ids = ["en.pickthall".to_owned()];
+        let start = std::time::Instant::now();
+        let verses = get_verses(&core, 2, &ids).unwrap();
+        let query = start.elapsed();
+        let json = serde_json::to_string(&verses).unwrap();
+        println!(
+            "al-Baqarah: {} verses, query {query:?}, total with JSON {:?}, {} bytes of JSON",
+            verses.len(),
+            start.elapsed(),
+            json.len()
+        );
     }
 
     #[test]
