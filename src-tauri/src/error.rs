@@ -6,10 +6,11 @@
 //! developer diagnostic for logs and bug reports only.
 
 use serde::Serialize;
+use specta::Type;
 
 /// Stable, machine-readable error codes. Renaming a variant is a breaking
 /// change for the frontend's i18n keys.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum AppErrorCode {
     /// A database file could not be opened or configured.
@@ -28,10 +29,12 @@ pub enum AppErrorCode {
     NotFound,
     /// A setting key does not match the allowed key format.
     InvalidSettingKey,
+    /// A setting value is not valid JSON.
+    InvalidSettingValue,
 }
 
 /// Error returned by every command: `{ code, message }` on the frontend.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type, thiserror::Error)]
 #[error("{code:?}: {message}")]
 pub struct AppError {
     /// Stable code the frontend maps to a translated message.

@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Main window. Grants no plugin permissions (no fs, http or shell): the webview may only call the app's own commands (spec §14.3).",
+  "description": "Main window. Grants only the app's own commands and no plugin permissions (no fs, http or shell), see spec §14.3.",
   "windows": ["main"],
-  "permissions": []
+  "permissions": [
+    "allow-list-surahs",
+    "allow-get-verses",
+    "allow-get-settings",
+    "allow-set-setting"
+  ]
 }

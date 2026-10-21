@@ -4,6 +4,7 @@
 //! access live entirely in this crate (spec §3). See `ARCHITECTURE.md` for the
 //! module map.
 
+pub mod commands;
 pub mod db;
 pub mod embed;
 pub mod error;
@@ -18,12 +19,19 @@ pub mod secrets;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 
+use rusqlite::Connection;
+use specta_typescript::Typescript;
 use tauri::Manager;
 use tauri::path::BaseDirectory;
 
 use crate::db::Databases;
 use crate::error::{AppError, AppErrorCode, AppResult};
+
+/// First line of the generated bindings file.
+const BINDINGS_HEADER: &str =
+    "// Regenerate with `cargo xtask bindings`; CI fails if this file is out of date.";
 
 /// State managed by Tauri and shared by all commands.
 ///
@@ -39,6 +47,29 @@ impl AppState {
     pub fn databases(&self) -> AppResult<&Databases> {
         self.databases.as_ref().map_err(Clone::clone)
     }
+
+    /// Locks the `content.db` connection.
+    pub fn content(&self) -> AppResult<MutexGuard<'_, Connection>> {
+        lock(&self.databases()?.content)
+    }
+
+    /// Locks the `user.db` connection.
+    pub fn user(&self) -> AppResult<MutexGuard<'_, Connection>> {
+        lock(&self.databases()?.user)
+    }
+}
+
+/// A poisoned lock means a command panicked mid-query; SQLite has already
+/// rolled back any open transaction, so the connection is still usable.
+fn lock(conn: &Mutex<Connection>) -> AppResult<MutexGuard<'_, Connection>> {
+    Ok(conn
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner))
+}
+
+/// Writes the TypeScript bindings for all commands and their types to `path`.
+pub fn export_bindings(path: &Path) -> Result<(), specta_typescript::Error> {
+    commands::builder().export(Typescript::default().header(BINDINGS_HEADER), path)
 }
 
 /// Builds and runs the Tauri application. Blocks until the app exits.
@@ -48,7 +79,18 @@ impl AppState {
     reason = "the event loop failing to start is unrecoverable"
 )]
 pub fn run() {
+    // Keep `src/lib/bindings.ts` current while developing; CI checks it with
+    // `cargo xtask bindings` and `git diff`.
+    if cfg!(debug_assertions) {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/lib/bindings.ts");
+        if let Err(err) = export_bindings(&path) {
+            eprintln!("exporting TypeScript bindings failed: {err}");
+        }
+    }
+
+    let builder = commands::builder();
     tauri::Builder::default()
+        .invoke_handler(builder.invoke_handler())
         .setup(|app| {
             let databases = open_databases(app);
             if let Err(err) = &databases {
@@ -89,4 +131,30 @@ fn seed_path(app: &tauri::App) -> AppResult<PathBuf> {
     app.path()
         .resolve("resources/core.db", BaseDirectory::Resource)
         .map_err(|err| AppError::new(AppErrorCode::SeedMissing, err.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `COMMAND_NAMES` (used by `build.rs` for permissions) must list exactly
+    /// the registered commands, or the webview would be denied a command.
+    #[test]
+    fn command_names_match_registered_commands() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bindings.ts");
+        export_bindings(&path).unwrap();
+        let bindings = fs::read_to_string(path).unwrap();
+
+        assert_eq!(
+            bindings.matches("TAURI_INVOKE(").count(),
+            commands::COMMAND_NAMES.len()
+        );
+        for name in commands::COMMAND_NAMES {
+            assert!(
+                bindings.contains(&format!("TAURI_INVOKE(\"{name}\"")),
+                "{name} is not registered"
+            );
+        }
+    }
 }

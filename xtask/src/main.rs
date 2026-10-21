@@ -6,6 +6,7 @@
 //!
 //! Tasks:
 //! - `build-dev-db`: regenerate `dev-data/dev-content.db` from `dev-data/fixtures/`.
+//! - `bindings`: regenerate `src/lib/bindings.ts` from the registered commands.
 
 mod dev_db;
 
@@ -16,8 +17,14 @@ fn main() -> ExitCode {
     let task = std::env::args().nth(1);
     let result = match task.as_deref() {
         Some("build-dev-db") => repo_root().and_then(|root| dev_db::build(&root)),
+        Some("bindings") => repo_root().and_then(|root| {
+            let path = root.join("src/lib/bindings.ts");
+            siyak_lib::export_bindings(&path)?;
+            println!("wrote {}", path.display());
+            Ok(())
+        }),
         _ => {
-            eprintln!("usage: cargo xtask <build-dev-db>");
+            eprintln!("usage: cargo xtask <build-dev-db|bindings>");
             return ExitCode::FAILURE;
         }
     };

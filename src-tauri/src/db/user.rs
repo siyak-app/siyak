@@ -3,6 +3,7 @@
 //! This file is the only place user data lives, so it is backed up to
 //! `user.db.bak` before any migration touches it (spec §5.6).
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use rusqlite::{Connection, MAIN_DB};
@@ -33,6 +34,59 @@ pub fn open(path: &Path) -> AppResult<Connection> {
     }
     migrate(&mut conn, MIGRATIONS)?;
     Ok(conn)
+}
+
+/// All settings as `key → JSON text`.
+///
+/// Values cross the IPC boundary as JSON text rather than as a JSON value type
+/// because the bindings generator refuses types that may contain 64-bit
+/// integers; the frontend parses them with its own typed defaults.
+pub type Settings = BTreeMap<String, String>;
+
+/// Longest accepted setting key.
+const MAX_KEY_LEN: usize = 128;
+
+/// Returns every stored setting.
+pub fn get_settings(conn: &Connection) -> AppResult<Settings> {
+    let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
+    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Stores `value` (JSON text) under `key`, replacing any previous value.
+///
+/// Keys are dotted lowercase paths such as `layout.left_pane` (spec §13.2);
+/// values must be valid JSON because `settings.value` is a JSON column (spec §5.5).
+pub fn set_setting(conn: &Connection, key: &str, value: &str) -> AppResult<()> {
+    if !is_valid_key(key) {
+        return Err(AppError::new(
+            AppErrorCode::InvalidSettingKey,
+            format!("invalid setting key {key:?}"),
+        ));
+    }
+    if let Err(err) = serde_json::from_str::<serde::de::IgnoredAny>(value) {
+        return Err(AppError::new(
+            AppErrorCode::InvalidSettingValue,
+            format!("setting {key}: {err}"),
+        ));
+    }
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )?;
+    Ok(())
+}
+
+/// `^[a-z0-9_]+(\.[a-z0-9_]+)*$`, at most [`MAX_KEY_LEN`] bytes.
+fn is_valid_key(key: &str) -> bool {
+    key.len() <= MAX_KEY_LEN
+        && key.split('.').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+        })
 }
 
 /// Uses SQLite's online backup API rather than a file copy, so the backup also
@@ -97,6 +151,54 @@ mod tests {
         open(&path).unwrap();
         open(&path).unwrap();
         assert!(!dir.path().join(BACKUP_FILE_NAME).exists());
+    }
+
+    fn migrated() -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&mut conn, MIGRATIONS).unwrap();
+        conn
+    }
+
+    #[test]
+    fn settings_round_trip_and_overwrite() {
+        let conn = migrated();
+        assert!(get_settings(&conn).unwrap().is_empty());
+        set_setting(&conn, "ui.language", r#""tr""#).unwrap();
+        set_setting(
+            &conn,
+            "layout.left_pane",
+            r#"{"size":20,"collapsed":false}"#,
+        )
+        .unwrap();
+        set_setting(&conn, "ui.language", r#""en""#).unwrap();
+        let settings = get_settings(&conn).unwrap();
+        assert_eq!(settings.len(), 2);
+        assert_eq!(settings["ui.language"], r#""en""#);
+    }
+
+    #[test]
+    fn invalid_setting_keys_are_rejected() {
+        let conn = migrated();
+        for key in [
+            "",
+            "UI.language",
+            "ui..language",
+            "ui.language.",
+            "ui language",
+            "ü",
+        ] {
+            let err = set_setting(&conn, key, "1").unwrap_err();
+            assert_eq!(err.code, AppErrorCode::InvalidSettingKey, "key {key:?}");
+        }
+        let long = "a".repeat(MAX_KEY_LEN + 1);
+        assert!(set_setting(&conn, &long, "1").is_err());
+    }
+
+    #[test]
+    fn invalid_setting_values_are_rejected() {
+        let conn = migrated();
+        let err = set_setting(&conn, "ui.theme", "dark").unwrap_err();
+        assert_eq!(err.code, AppErrorCode::InvalidSettingValue);
     }
 
     /// Regression test for the spec §5.5 fix: a whole-passage summary uses
