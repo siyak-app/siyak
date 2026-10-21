@@ -18,7 +18,7 @@ pub mod search;
 pub mod secrets;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::Connection;
@@ -27,6 +27,7 @@ use tauri::Manager;
 use tauri::path::BaseDirectory;
 
 use crate::db::Databases;
+use crate::db::content::Seed;
 use crate::error::{AppError, AppErrorCode, AppResult};
 
 /// First line of the generated bindings file.
@@ -116,21 +117,48 @@ fn open_databases(app: &tauri::App) -> AppResult<Databases> {
             format!("creating {}: {err}", data_dir.display()),
         )
     })?;
-    Databases::open(&data_dir, &seed_path(app)?)
+    Databases::open(&data_dir, &seed(app)?)
 }
 
-/// The database copied to `content.db` on first launch. Debug builds use the
-/// small committed development database so contributors never need the data
-/// pipeline (spec §16.3); release builds use the bundled `core.db`.
+/// Environment variable that picks the dataset of debug builds.
+const DEV_DATA_VAR: &str = "SIYAK_DEV_DATA";
+
+/// The database the content database is created from. Release builds use the
+/// bundled `core.db`. Debug builds use the small committed development
+/// database so contributors never need the data pipeline (spec §16.3), or the
+/// real `core.db` with `SIYAK_DEV_DATA=full`; each gets its own content file.
 ///
 /// Chosen with `cfg!` rather than `#[cfg]` so both branches are always compiled.
-fn seed_path(app: &tauri::App) -> AppResult<PathBuf> {
+fn seed(app: &tauri::App) -> AppResult<Seed> {
     if cfg!(debug_assertions) {
-        return Ok(Path::new(env!("CARGO_MANIFEST_DIR")).join("../dev-data/dev-content.db"));
+        return dev_seed(std::env::var(DEV_DATA_VAR).ok().as_deref());
     }
-    app.path()
+    let path = app
+        .path()
         .resolve("resources/core.db", BaseDirectory::Resource)
-        .map_err(|err| AppError::new(AppErrorCode::SeedMissing, err.to_string()))
+        .map_err(|err| AppError::new(AppErrorCode::SeedMissing, err.to_string()))?;
+    Ok(Seed::bundled(path))
+}
+
+/// The seed of a debug build for a `SIYAK_DEV_DATA` value.
+fn dev_seed(value: Option<&str>) -> AppResult<Seed> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    match value.unwrap_or("dev") {
+        "dev" | "" => Ok(Seed {
+            path: root.join("../dev-data/dev-content.db"),
+            file_name: db::content::FILE_NAME,
+            marker: Some("dev"),
+        }),
+        "full" => Ok(Seed {
+            path: root.join("resources/core.db"),
+            file_name: "content.full.db",
+            marker: Some("full"),
+        }),
+        other => Err(AppError::new(
+            AppErrorCode::SeedMissing,
+            format!("{DEV_DATA_VAR} must be 'dev' or 'full', not {other:?}"),
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -139,6 +167,20 @@ mod tests {
 
     /// `COMMAND_NAMES` (used by `build.rs` for permissions) must list exactly
     /// the registered commands, or the webview would be denied a command.
+    #[test]
+    fn dev_seeds_use_separate_content_files() {
+        let dev = dev_seed(None).unwrap();
+        assert_eq!(dev.file_name, "content.db");
+        assert_eq!(dev.marker, Some("dev"));
+        assert!(dev.path.is_file());
+        let full = dev_seed(Some("full")).unwrap();
+        assert_eq!(full.file_name, "content.full.db");
+        assert_eq!(full.marker, Some("full"));
+        assert!(full.path.is_file());
+        let err = dev_seed(Some("everything")).unwrap_err();
+        assert_eq!(err.code, AppErrorCode::SeedMissing);
+    }
+
     #[test]
     fn command_names_match_registered_commands() {
         let dir = tempfile::tempdir().unwrap();

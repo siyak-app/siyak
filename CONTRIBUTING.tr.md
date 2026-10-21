@@ -83,6 +83,11 @@ Debug derlemeler küçük geliştirme veri setini kullanır. Release derlemeler,
 dosyasında kayıtlıdır: şu an siyak-data commit'i `72bc795`, sha256 `76ed118ad4be…`,
 `core_version` 1. Bakımcılar onu `cargo xtask sync-core` ile günceller.
 
+Debug derlemeyi tam veriyle çalıştırmak için `SIYAK_DEV_DATA=full pnpm tauri dev` kullanın. Her veri
+setinin kendi içerik veritabanı vardır (geliştirme verisi için `content.db`, tam veri için
+`content.full.db`); böylece hiçbir şeyi sıfırlamadan ikisi arasında geçiş yapabilirsiniz. `user.db`
+ortaktır. Debug derlemeler hangi veri setinin yüklü olduğunu üst çubukta gösterir.
+
 ## Komutlar
 
 | Komut                      | Ne yapar                                                                       |

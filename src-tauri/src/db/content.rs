@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OptionalExtension};
 use serde::Serialize;
@@ -17,6 +17,31 @@ use crate::error::{AppError, AppErrorCode, AppResult};
 
 /// File name of the content database inside the app data directory.
 pub const FILE_NAME: &str = "content.db";
+
+/// The database `content.db` is created from, and how this build names it.
+#[derive(Debug, Clone)]
+pub struct Seed {
+    /// Copied to the content database on first launch: the bundled `core.db`,
+    /// or the development dataset in debug builds.
+    pub path: PathBuf,
+    /// File name of the content database inside the app data directory.
+    /// Debug builds use one file per seed so switching seeds never needs a reset.
+    pub file_name: &'static str,
+    /// Stored as `content_meta.seed` (debug builds only), so the interface can
+    /// show which data is loaded.
+    pub marker: Option<&'static str>,
+}
+
+impl Seed {
+    /// The seed of release builds: the bundled `core.db` at `path`.
+    pub fn bundled(path: PathBuf) -> Self {
+        Self {
+            path,
+            file_name: FILE_NAME,
+            marker: None,
+        }
+    }
+}
 
 /// Content schema migrations, oldest first.
 pub const MIGRATIONS: &[Migration] = &[
@@ -32,14 +57,22 @@ pub const MIGRATIONS: &[Migration] = &[
     },
 ];
 
-/// Opens `content.db` at `path`, copying `seed` there first if the file does
-/// not exist yet, then applies pending migrations.
-pub fn open(path: &Path, seed: &Path) -> AppResult<Connection> {
+/// Opens the content database in `data_dir`, copying the seed there first if
+/// the file does not exist yet, then applies pending migrations.
+pub fn open(data_dir: &Path, seed: &Seed) -> AppResult<Connection> {
+    let path = data_dir.join(seed.file_name);
     if !path.exists() {
-        copy_seed(seed, path)?;
+        copy_seed(&seed.path, &path)?;
     }
-    let mut conn = connect(path)?;
+    let mut conn = connect(&path)?;
     migrate(&mut conn, MIGRATIONS)?;
+    if let Some(marker) = seed.marker {
+        conn.execute(
+            "INSERT INTO content_meta (key, value) VALUES ('seed', ?1)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            [marker],
+        )?;
+    }
     Ok(conn)
 }
 
@@ -346,7 +379,7 @@ mod tests {
             .unwrap();
         }
         let path = dir.path().join(FILE_NAME);
-        let conn = open(&path, &seed).unwrap();
+        let conn = open(dir.path(), &Seed::bundled(seed)).unwrap();
         let count: i64 = conn
             .query_row("SELECT count(*) FROM surahs", [], |r| r.get(0))
             .unwrap();
@@ -439,9 +472,30 @@ mod tests {
     }
 
     #[test]
+    fn seed_marker_is_written_to_its_own_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let seed = Seed {
+            path: Path::new(env!("CARGO_MANIFEST_DIR")).join("../dev-data/dev-content.db"),
+            file_name: "content.full.db",
+            marker: Some("full"),
+        };
+        let conn = open(dir.path(), &seed).unwrap();
+        let marker: String = conn
+            .query_row(
+                "SELECT value FROM content_meta WHERE key = 'seed'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(marker, "full");
+        assert!(dir.path().join("content.full.db").is_file());
+        assert!(!dir.path().join(FILE_NAME).exists());
+    }
+
+    #[test]
     fn missing_seed_is_reported() {
         let dir = tempfile::tempdir().unwrap();
-        let err = open(&dir.path().join(FILE_NAME), &dir.path().join("nope.db")).unwrap_err();
+        let err = open(dir.path(), &Seed::bundled(dir.path().join("nope.db"))).unwrap_err();
         assert_eq!(err.code, AppErrorCode::SeedMissing);
     }
 }

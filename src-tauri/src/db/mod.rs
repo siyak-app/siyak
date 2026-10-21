@@ -26,10 +26,10 @@ pub struct Databases {
 }
 
 impl Databases {
-    /// Opens both databases inside `data_dir`, seeding `content.db` from
-    /// `seed` on first launch and applying pending migrations.
-    pub fn open(data_dir: &Path, seed: &Path) -> AppResult<Self> {
-        let content = content::open(&data_dir.join(content::FILE_NAME), seed)?;
+    /// Opens both databases inside `data_dir`, seeding the content database
+    /// from `seed` on first launch and applying pending migrations.
+    pub fn open(data_dir: &Path, seed: &content::Seed) -> AppResult<Self> {
+        let content = content::open(data_dir, seed)?;
         let user = user::open(&data_dir.join(user::FILE_NAME))?;
         Ok(Self {
             content: Mutex::new(content),
