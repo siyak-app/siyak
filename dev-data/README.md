@@ -9,9 +9,9 @@ real data instead, `src-tauri/resources/core.db` (see [Real data](#real-data-cor
 | Table                              | Rows                                                                                     |
 | ---------------------------------- | ---------------------------------------------------------------------------------------- |
 | `surahs`                           | all 114 surahs; `bismillah` (Tanzil's basmala) only for surahs whose text is in the seed |
-| `verses`                           | surahs 1, 112, 113 and 114 only (22 verses), Uthmani and Simple Clean text               |
+| `verses`                           | surahs 1, 2, 9, 112, 113 and 114 only (437 verses), Uthmani and Simple Clean text        |
 | `packs`                            | `en.pickthall` (translation, bundled)                                                    |
-| `translations`, `translations_fts` | Pickthall for the 22 verses                                                              |
+| `translations`, `translations_fts` | Pickthall for the 437 verses                                                             |
 | `notices`                          | the Tanzil copyright blocks of both texts, as in `core.db`                               |
 | `content_meta`                     | `core_version` (`CORE_VERSION` in `xtask/src/dev_db.rs`) and `tanzil_version`            |
 | `verses_fts`                       | empty until search arrives in M4 (the app's Rust normalizer fills it); full data has it  |
@@ -22,18 +22,27 @@ source is still being verified (spec §18, question 6).
 
 ## Fixtures and sources
 
-| File                              | Source                                                                                                                                                                                                                         | License                                                                        |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `fixtures/quran-uthmani.xml`      | [Tanzil](https://tanzil.net/download/) Uthmani text, XML, default options: `quranType=uthmani&outType=xml&marks=true&sajdah=true&alef=true&tatweel=true`                                                                       | CC BY 3.0, verbatim copies only                                                |
-| `fixtures/quran-simple-clean.xml` | Tanzil Simple Clean text, XML, no options: `quranType=simple-clean&outType=xml`                                                                                                                                                | CC BY 3.0, verbatim copies only                                                |
-| `fixtures/en.pickthall.txt`       | [Tanzil translations](https://tanzil.net/trans/), `en.pickthall`, "Text (with aya numbers)"                                                                                                                                    | Translation in the public domain (Pickthall, 1930); see the Tanzil terms below |
-| `fixtures/surahs.tsv`             | `name_ar`, `revelation_type`, `ayah_count`: [Tanzil metadata](https://tanzil.net/res/text/metadata/quran-data.xml). `name_tr`, `name_en`: common Turkish names and common English transliterations, written by the maintainers | Metadata: CC BY 3.0 (Tanzil)                                                   |
-| `fixtures/juz.tsv`                | Juz start verses from the Tanzil metadata                                                                                                                                                                                      | CC BY 3.0 (Tanzil)                                                             |
-| `fixtures/packs.json`             | Pack metadata for the bundled translation, written by the maintainers                                                                                                                                                          | MIT OR Apache-2.0                                                              |
+| File                              | Source                                                                                                                                                                                                                                               | License                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `fixtures/quran-uthmani.xml`      | [Tanzil](https://tanzil.net/download/) Uthmani text 1.1, XML: `quranType=uthmani&outType=xml&marks=true&sajdah=true&alef=true&tatweel=true` (pause marks, sajdah signs, tatweel below superscript alefs; rub' al-hizb signs off)                     | CC BY 3.0, verbatim copies only                                                |
+| `fixtures/quran-simple-clean.xml` | Tanzil Simple Clean text 1.1, XML, no options: `quranType=simple-clean&outType=xml`                                                                                                                                                                  | CC BY 3.0, verbatim copies only                                                |
+| `fixtures/en.pickthall.txt`       | [Tanzil translations](https://tanzil.net/trans/), `en.pickthall`, "Text (with aya numbers)"                                                                                                                                                          | Translation in the public domain (Pickthall, 1930); see the Tanzil terms below |
+| `fixtures/surahs.tsv`             | `name_ar`, `revelation_type`, `ayah_count`: [Tanzil metadata](https://tanzil.net/res/text/metadata/quran-data.xml). `name_tr`: `siyak-data/data/surah-names-tr.csv`. `name_en`: Tanzil's transliterated name (`tname`). Both exactly as in `core.db` | Metadata: CC BY 3.0 (Tanzil)                                                   |
+| `fixtures/juz.tsv`                | Juz start verses from the Tanzil metadata                                                                                                                                                                                                            | CC BY 3.0 (Tanzil)                                                             |
+| `fixtures/packs.json`             | Pack metadata for the bundled translation, written by the maintainers                                                                                                                                                                                | MIT OR Apache-2.0                                                              |
 
 The Tanzil files are excerpts of the official downloads: the XML declaration, the copyright
-comment and the `<sura>` elements for surahs 1, 112, 113 and 114 are kept byte for byte. Nothing
-inside them has been changed.
+comment and the `<sura>` elements for surahs 1, 2, 9, 112, 113 and 114 are kept byte for byte.
+Nothing inside them has been changed. They use the same edition and options as `siyak-data`
+(`sources/tanzil/source.toml` there, spec §5.1): the elements were copied from its pinned version
+1.1 downloads, and the header and the elements already present matched those files byte for byte.
+Surah 2 (al-Baqarah, 286 verses) tests the reader on a long surah; surah 9 (at-Tawba) has no
+basmala.
+
+The surah names in `surahs.tsv` are those of `core.db`, so the development data and the full data
+show the same names. TODO: Tanzil's English transliterations (e.g. "Aal-i-Imraan") are not ideal
+for the interface; a curated English list belongs in `siyak-data` (`data/surah-names-en.csv`, like
+the Turkish one), after which this file is updated to match.
 
 **Why XML for the Arabic text:** Tanzil's plain-text format adds the basmala to the start of the
 first verse of each surah. The XML format keeps it in a separate `bismillah` attribute, so

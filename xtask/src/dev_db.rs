@@ -21,7 +21,7 @@ type VerseKey = (u16, u16);
 
 /// `content_meta.core_version` of the dev seed (spec §6.2). Raise it whenever
 /// the generated rows change, so existing dev `content.db` files are refreshed.
-const CORE_VERSION: u32 = 1;
+const CORE_VERSION: u32 = 2;
 
 /// Version of the Tanzil text in the fixtures, as in their copyright block.
 const TANZIL_VERSION: &str = "1.1";

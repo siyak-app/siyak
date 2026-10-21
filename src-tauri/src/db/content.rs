@@ -569,6 +569,26 @@ mod tests {
         assert_eq!(count("verses"), 6236);
     }
 
+    /// The basmala is a surah header for every surah except 1 (where it is
+    /// verse 1) and 9 (spec §5.1); the dev seed has it for its surahs.
+    #[test]
+    fn dev_db_has_basmala_rules_and_al_baqarah() {
+        let dev = dev_db();
+        let bismillah = |surah: u16| -> Option<String> {
+            dev.query_row(
+                "SELECT bismillah FROM surahs WHERE number = ?1",
+                [surah],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(bismillah(1), None);
+        assert_eq!(bismillah(9), None);
+        assert!(bismillah(2).is_some_and(|b| b.starts_with("بِسْمِ")));
+        assert_eq!(get_verses(&dev, 2, &[]).unwrap().len(), 286);
+        assert_eq!(get_verses(&dev, 9, &[]).unwrap().len(), 129);
+    }
+
     #[test]
     fn list_surahs_returns_all_114() {
         let surahs = list_surahs(&dev_db()).unwrap();
