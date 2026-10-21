@@ -19,6 +19,22 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// `(surah, ayah)`, the natural key of a verse in every Tanzil file.
 type VerseKey = (u16, u16);
 
+/// `content_meta.core_version` of the dev seed (spec §6.2). Raise it whenever
+/// the generated rows change, so existing dev `content.db` files are refreshed.
+const CORE_VERSION: u32 = 1;
+
+/// Version of the Tanzil text in the fixtures, as in their copyright block.
+const TANZIL_VERSION: &str = "1.1";
+
+/// One Tanzil XML file: its copyright block and its text.
+struct TanzilText {
+    /// The XML comment before `<quran>`, which must ship with the text.
+    notice: String,
+    /// The basmala Tanzil keeps apart from ayah 1, per surah (absent for 1 and 9).
+    bismillah: BTreeMap<u16, String>,
+    verses: BTreeMap<VerseKey, String>,
+}
+
 struct Surah {
     number: u16,
     name_ar: String,
@@ -58,7 +74,7 @@ pub fn build(root: &Path) -> Result<()> {
     let juz_starts = read_juz_starts(&fixtures.join("juz.tsv"))?;
     let uthmani = read_tanzil_xml(&fixtures.join("quran-uthmani.xml"))?;
     let clean = read_tanzil_xml(&fixtures.join("quran-simple-clean.xml"))?;
-    if uthmani.keys().ne(clean.keys()) {
+    if uthmani.verses.keys().ne(clean.verses.keys()) {
         return Err("Uthmani and Simple Clean fixtures cover different verses".into());
     }
     let packs: Vec<PackFixture> =
@@ -70,14 +86,20 @@ pub fn build(root: &Path) -> Result<()> {
     migrate(&mut conn, MIGRATIONS)?;
 
     let tx = conn.transaction()?;
-    insert_surahs(&tx, &surahs)?;
-    let verse_ids = insert_verses(&tx, &surahs, &juz_starts, &uthmani, &clean)?;
+    insert_surahs(&tx, &surahs, &uthmani.bismillah)?;
+    let verse_ids = insert_verses(&tx, &surahs, &juz_starts, &uthmani.verses, &clean.verses)?;
     for pack in &packs {
         let texts = read_tanzil(&fixtures.join(&pack.file))?;
         insert_translation(&tx, pack, &texts, &verse_ids)?;
     }
-    // verses_fts is an external-content index over `verses` (spec §5.4).
-    tx.execute("INSERT INTO verses_fts(verses_fts) VALUES ('rebuild')", [])?;
+    insert_notices(&tx, &uthmani, &clean)?;
+    tx.execute(
+        "INSERT INTO content_meta (key, value) VALUES ('core_version', ?1), ('tanzil_version', ?2)",
+        params![CORE_VERSION.to_string(), TANZIL_VERSION],
+    )?;
+    // TODO(M4): fill verses_fts with normalize(text_clean) once the Rust port of
+    // the pipeline's normalizer exists (siyak-data docs/normalization.md). Until
+    // then the dev seed's index is empty; `SIYAK_DEV_DATA=full` has it filled.
     tx.commit()?;
     conn.execute_batch("VACUUM;")?;
     drop(conn);
@@ -143,13 +165,19 @@ fn read_juz_starts(path: &Path) -> Result<Vec<(VerseKey, u8)>> {
 
 /// Reads the Arabic text from Tanzil's XML format.
 ///
-/// The XML keeps the basmala of each surah in a separate `bismillah` attribute,
-/// whereas Tanzil's plain-text format prepends it to the first verse; using the
-/// XML keeps `verses.text_*` limited to the verse itself.
-fn read_tanzil_xml(path: &Path) -> Result<BTreeMap<VerseKey, String>> {
+/// The XML keeps the basmala of each surah in a separate `bismillah` attribute
+/// of its first `<aya>`, whereas Tanzil's plain-text format prepends it to the
+/// first verse; using the XML keeps `verses.text_*` limited to the verse itself
+/// and gives `surahs.bismillah` Tanzil's own basmala (spec §5.1).
+fn read_tanzil_xml(path: &Path) -> Result<TanzilText> {
     let xml = fs::read_to_string(path)?;
     let doc = roxmltree::Document::parse(&xml)?;
-    let mut verses = BTreeMap::new();
+    let mut text = TanzilText {
+        notice: read_notice(&xml)
+            .ok_or_else(|| format!("{}: no copyright block", path.display()))?,
+        bismillah: BTreeMap::new(),
+        verses: BTreeMap::new(),
+    };
     for sura in doc.descendants().filter(|n| n.has_tag_name("sura")) {
         let surah: u16 = sura
             .attribute("index")
@@ -157,11 +185,26 @@ fn read_tanzil_xml(path: &Path) -> Result<BTreeMap<VerseKey, String>> {
             .parse()?;
         for aya in sura.children().filter(|n| n.has_tag_name("aya")) {
             let ayah: u16 = aya.attribute("index").ok_or("aya without index")?.parse()?;
-            let text = aya.attribute("text").ok_or("aya without text")?;
-            verses.insert((surah, ayah), text.to_owned());
+            let verse = aya.attribute("text").ok_or("aya without text")?;
+            text.verses.insert((surah, ayah), verse.to_owned());
+            if let Some(bismillah) = aya.attribute("bismillah") {
+                text.bismillah.insert(surah, bismillah.to_owned());
+            }
         }
     }
-    Ok(verses)
+    Ok(text)
+}
+
+/// The copyright block: the first XML comment, trimmed exactly like the
+/// pipeline does (`siyak-data/pipeline/tanzil.py`), so both store the same notice.
+fn read_notice(xml: &str) -> Option<String> {
+    let start = xml.find("<!--")? + "<!--".len();
+    let end = start + xml[start..].find("-->")?;
+    Some(
+        xml[start..end]
+            .trim_matches(['\r', '\n', '\t', ' '])
+            .to_owned(),
+    )
 }
 
 /// Parses Tanzil's `surah|ayah|text` translation format, ignoring the header
@@ -182,10 +225,17 @@ fn read_tanzil(path: &Path) -> Result<BTreeMap<VerseKey, String>> {
     Ok(verses)
 }
 
-fn insert_surahs(tx: &Transaction, surahs: &[Surah]) -> Result<()> {
+/// Inserts all surahs. Only surahs present in the fixtures get a basmala; the
+/// others have no verses in the dev seed either.
+fn insert_surahs(
+    tx: &Transaction,
+    surahs: &[Surah],
+    bismillah: &BTreeMap<u16, String>,
+) -> Result<()> {
     let mut stmt = tx.prepare(
-        "INSERT INTO surahs (number, name_ar, name_tr, name_en, revelation_type, ayah_count)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO surahs (number, name_ar, name_tr, name_en, revelation_type, ayah_count,
+                             bismillah)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     )?;
     for s in surahs {
         stmt.execute(params![
@@ -194,9 +244,30 @@ fn insert_surahs(tx: &Transaction, surahs: &[Surah]) -> Result<()> {
             s.name_tr,
             s.name_en,
             s.revelation_type,
-            s.ayah_count
+            s.ayah_count,
+            bismillah.get(&s.number)
         ])?;
     }
+    Ok(())
+}
+
+/// The Tanzil copyright blocks, which must ship with the text (spec §5.1).
+/// Ids and titles match the rows `siyak-data` writes to `core.db`.
+fn insert_notices(tx: &Transaction, uthmani: &TanzilText, clean: &TanzilText) -> Result<()> {
+    let mut stmt = tx.prepare(
+        "INSERT INTO notices (id, source, title, body, url)
+         VALUES (?1, 'tanzil', ?2, ?3, 'https://tanzil.net')",
+    )?;
+    stmt.execute(params![
+        "tanzil.text.simple-clean",
+        "Tanzil Quran Text (Simple Clean)",
+        clean.notice
+    ])?;
+    stmt.execute(params![
+        "tanzil.text.uthmani",
+        "Tanzil Quran Text (Uthmani)",
+        uthmani.notice
+    ])?;
     Ok(())
 }
 

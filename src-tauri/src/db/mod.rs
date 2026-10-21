@@ -8,10 +8,12 @@
 pub mod content;
 pub mod user;
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::Connection;
+use rusqlite::types::Value;
+use rusqlite::{Connection, MAIN_DB};
 
 use crate::error::{AppError, AppErrorCode, AppResult};
 
@@ -109,6 +111,89 @@ pub fn migrate(conn: &mut Connection, migrations: &[Migration]) -> AppResult<usi
         .map_err(|err| failed(last, err))?;
     tx.commit().map_err(|err| failed(last, err))?;
     Ok(todo.len())
+}
+
+/// Structural description of a database schema, independent of DDL formatting:
+/// object name → description.
+///
+/// Tables are described by their columns (name, type, not null, default,
+/// primary key), foreign keys and `WITHOUT ROWID`; indexes by their table and
+/// columns; virtual tables by their `USING …` clause with whitespace collapsed.
+/// Comments and formatting do not matter. This is a port of `schema_shape` in
+/// `siyak-data/pipeline/schema.py`, so both repositories compare schemas the
+/// same way (e.g. `core.db` against these migrations).
+pub fn schema_shape(conn: &Connection) -> AppResult<BTreeMap<String, String>> {
+    let objects = conn
+        .prepare(
+            "SELECT type, name, tbl_name, coalesce(sql, '') FROM sqlite_master
+             WHERE name NOT LIKE 'sqlite_%' ORDER BY name",
+        )?
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut shape = BTreeMap::new();
+    for (kind, name, table, sql) in objects {
+        let upper = sql.to_uppercase();
+        if kind == "table" && upper.starts_with("CREATE VIRTUAL") {
+            let body = upper.find("USING").map_or("", |at| &sql[at..]);
+            let body = body.split_whitespace().collect::<Vec<_>>().join(" ");
+            shape.insert(format!("virtual {name}"), body);
+        } else if kind == "table" {
+            let columns = rows_of(
+                conn,
+                "SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info(?1)",
+                &name,
+            )?;
+            let foreign_keys = rows_of(
+                conn,
+                "SELECT \"table\", \"from\", \"to\", on_update, on_delete, \"match\"
+                 FROM pragma_foreign_key_list(?1) ORDER BY id, seq",
+                &name,
+            )?;
+            let without_rowid = upper.contains("WITHOUT ROWID");
+            shape.insert(
+                format!("table {name}"),
+                format!("columns {columns:?}; foreign keys {foreign_keys:?}; without rowid {without_rowid}"),
+            );
+        } else if kind == "index" {
+            let columns = rows_of(
+                conn,
+                "SELECT name FROM pragma_index_info(?1) ORDER BY seqno",
+                &name,
+            )?;
+            shape.insert(format!("index {name}"), format!("on {table} {columns:?}"));
+        }
+    }
+    Ok(shape)
+}
+
+/// All rows of a single-parameter query, each as a list of values.
+fn rows_of(conn: &Connection, sql: &str, param: &str) -> AppResult<Vec<Vec<Value>>> {
+    let mut stmt = conn.prepare(sql)?;
+    let width = stmt.column_count();
+    let rows = stmt.query_map([param], |row| {
+        (0..width).map(|i| row.get::<_, Value>(i)).collect()
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Copies the database behind `conn` to `dest` with SQLite's online backup
+/// API rather than a file copy, so the backup also contains changes still
+/// sitting in the write-ahead log.
+pub fn backup(conn: &Connection, dest: &Path) -> AppResult<()> {
+    conn.backup(MAIN_DB, dest, None).map_err(|err| {
+        AppError::new(
+            AppErrorCode::IoFailed,
+            format!("backing up to {}: {err}", dest.display()),
+        )
+    })
 }
 
 #[cfg(test)]

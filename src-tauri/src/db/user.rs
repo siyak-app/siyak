@@ -6,9 +6,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use rusqlite::{Connection, MAIN_DB};
+use rusqlite::Connection;
 
-use super::{Migration, connect, migrate, pending};
+use super::{Migration, backup, connect, migrate, pending};
 use crate::error::{AppError, AppErrorCode, AppResult};
 
 /// File name of the user database inside the app data directory.
@@ -87,17 +87,6 @@ fn is_valid_key(key: &str) -> bool {
                     .bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
         })
-}
-
-/// Uses SQLite's online backup API rather than a file copy, so the backup also
-/// contains changes still sitting in the write-ahead log.
-fn backup(conn: &Connection, dest: &Path) -> AppResult<()> {
-    conn.backup(MAIN_DB, dest, None).map_err(|err| {
-        AppError::new(
-            AppErrorCode::IoFailed,
-            format!("backing up to {}: {err}", dest.display()),
-        )
-    })
 }
 
 #[cfg(test)]

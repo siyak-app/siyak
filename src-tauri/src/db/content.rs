@@ -19,11 +19,18 @@ use crate::error::{AppError, AppErrorCode, AppResult};
 pub const FILE_NAME: &str = "content.db";
 
 /// Content schema migrations, oldest first.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("../../migrations/content/0001_initial.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("../../migrations/content/0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "schema_2",
+        sql: include_str!("../../migrations/content/0002_schema_2.sql"),
+    },
+];
 
 /// Opens `content.db` at `path`, copying `seed` there first if the file does
 /// not exist yet, then applies pending migrations.
@@ -218,7 +225,7 @@ fn copy_seed(seed: &Path, dest: &Path) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{schema_version, tests::assert_contiguous};
+    use crate::db::{schema_shape, schema_version, tests::assert_contiguous};
 
     #[test]
     fn migrations_are_contiguous() {
@@ -230,12 +237,14 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), MIGRATIONS.len());
         assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), 0);
-        assert_eq!(schema_version(&conn).unwrap(), 1);
+        assert_eq!(schema_version(&conn).unwrap(), 2);
         for table in [
             "surahs",
             "verses",
             "packs",
             "translations",
+            "notices",
+            "content_meta",
             "tafsir",
             "tafsir_paragraphs",
             "words",
@@ -256,6 +265,72 @@ mod tests {
         }
     }
 
+    /// A content.db created by M0 (schema 1) keeps its rows when it is
+    /// migrated, including tafsir paragraphs, whose table is rebuilt.
+    #[test]
+    fn schema_1_database_migrates_with_its_data() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&mut conn, &MIGRATIONS[..1]).unwrap();
+        conn.execute_batch(
+            "INSERT INTO surahs VALUES (1, 'الفاتحة', 'Fâtiha', 'Al-Faatiha', 'meccan', 7);
+             INSERT INTO verses VALUES (1, 1, 1, 1, 'بِسْمِ', 'بسم');
+             INSERT INTO packs (id, type, title, version, license, installed_at)
+               VALUES ('ar.test', 'tafsir', 'Test', '1.0.0', 'PD', 'now');
+             INSERT INTO tafsir (id, pack_id, verse_from, verse_to) VALUES (7, 'ar.test', 1, 1);
+             INSERT INTO tafsir_paragraphs VALUES (7, 0, 'first'), (7, 1, 'second');",
+        )
+        .unwrap();
+
+        assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), 1);
+        let paragraphs: Vec<(i64, String, Option<String>)> = conn
+            .prepare(
+                "SELECT idx, text, part FROM tafsir_paragraphs WHERE tafsir_id = 7 ORDER BY idx",
+            )
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            paragraphs,
+            [
+                (0, "first".to_owned(), None),
+                (1, "second".to_owned(), None)
+            ]
+        );
+        let kind: String = conn
+            .query_row("SELECT kind FROM tafsir WHERE id = 7", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(kind, "commentary");
+        let bismillah: Option<String> = conn
+            .query_row("SELECT bismillah FROM surahs WHERE number = 1", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(bismillah, None);
+        // The rebuilt table keeps its uniqueness and its foreign key cascade.
+        assert!(
+            conn.execute(
+                "INSERT INTO tafsir_paragraphs (tafsir_id, idx, text) VALUES (7, 0, 'dup')",
+                []
+            )
+            .is_err()
+        );
+        conn.execute("DELETE FROM tafsir WHERE id = 7", []).unwrap();
+        let left: i64 = conn
+            .query_row("SELECT count(*) FROM tafsir_paragraphs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
+    }
+
+    #[test]
+    fn verses_fts_indexes_normalized_text() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&mut conn, MIGRATIONS).unwrap();
+        let shape = schema_shape(&conn).unwrap();
+        assert_eq!(shape["virtual verses_fts"], "USING fts5(text_norm)");
+    }
+
     #[test]
     fn first_open_copies_seed() {
         let dir = tempfile::tempdir().unwrap();
@@ -264,7 +339,8 @@ mod tests {
             let mut conn = Connection::open(&seed).unwrap();
             migrate(&mut conn, MIGRATIONS).unwrap();
             conn.execute(
-                "INSERT INTO surahs VALUES (1, 'الفاتحة', 'Fâtiha', 'Al-Fatihah', 'meccan', 7)",
+                "INSERT INTO surahs (number, name_ar, name_tr, name_en, revelation_type, ayah_count)
+                 VALUES (1, 'الفاتحة', 'Fâtiha', 'Al-Faatiha', 'meccan', 7)",
                 [],
             )
             .unwrap();
@@ -281,6 +357,20 @@ mod tests {
     fn dev_db() -> Connection {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../dev-data/dev-content.db");
         Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
+    }
+
+    /// The dev seed has the schema the migrations create. Its verses_fts is
+    /// empty until search arrives (TODO(M4) in `xtask/src/dev_db.rs`).
+    #[test]
+    fn dev_db_matches_the_migrations() {
+        let mut fresh = Connection::open_in_memory().unwrap();
+        migrate(&mut fresh, MIGRATIONS).unwrap();
+        let dev = dev_db();
+        assert_eq!(schema_shape(&dev).unwrap(), schema_shape(&fresh).unwrap());
+        assert_eq!(
+            schema_version(&dev).unwrap(),
+            schema_version(&fresh).unwrap()
+        );
     }
 
     #[test]

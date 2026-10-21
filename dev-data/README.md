@@ -6,13 +6,15 @@ same file as `resources/core.db` until the real `core.db` arrives in milestone M
 
 ## Contents
 
-| Table                              | Rows                                                                       |
-| ---------------------------------- | -------------------------------------------------------------------------- |
-| `surahs`                           | all 114 surahs                                                             |
-| `verses`                           | surahs 1, 112, 113 and 114 only (22 verses), Uthmani and Simple Clean text |
-| `packs`                            | `en.pickthall` (translation, bundled)                                      |
-| `translations`, `translations_fts` | Pickthall for the 22 verses                                                |
-| `verses_fts`                       | rebuilt from `verses`                                                      |
+| Table                              | Rows                                                                                     |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| `surahs`                           | all 114 surahs; `bismillah` (Tanzil's basmala) only for surahs whose text is in the seed |
+| `verses`                           | surahs 1, 112, 113 and 114 only (22 verses), Uthmani and Simple Clean text               |
+| `packs`                            | `en.pickthall` (translation, bundled)                                                    |
+| `translations`, `translations_fts` | Pickthall for the 22 verses                                                              |
+| `notices`                          | the Tanzil copyright blocks of both texts, as in `core.db`                               |
+| `content_meta`                     | `core_version` (`CORE_VERSION` in `xtask/src/dev_db.rs`) and `tanzil_version`            |
+| `verses_fts`                       | empty until search arrives in M4 (the app's Rust normalizer fills it); full data has it  |
 
 The schema comes from the app's own migrations (`src-tauri/migrations/content/`), so it always
 matches what the app expects. There is deliberately **no Turkish translation** yet: the Turkish
