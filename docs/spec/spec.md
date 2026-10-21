@@ -224,7 +224,7 @@ Two databases live in the user's application data directory (`app_data_dir()`):
 - **`content.db`**: the Quran text and the content of installed packs. Never written by anything outside the app, and can be rebuilt from scratch at any time.
 - **`user.db`**: the user's own data. Pack operations never touch this file.
 
-On first launch, `resources/core.db` is copied to `content.db`.
+On first launch, `resources/core.db` is copied to `content.db`. When the app ships a newer `core.db`, the core tables are refreshed in place (§6.2).
 
 ### 5.1 `content.db`: core
 
@@ -235,7 +235,8 @@ CREATE TABLE surahs (
   name_tr         TEXT NOT NULL,
   name_en         TEXT NOT NULL,
   revelation_type TEXT NOT NULL CHECK (revelation_type IN ('meccan','medinan')),
-  ayah_count      INTEGER NOT NULL
+  ayah_count      INTEGER NOT NULL,
+  bismillah       TEXT                         -- Tanzil's basmala for the surah header; NULL for 1 and 9
 );
 
 CREATE TABLE verses (
@@ -270,7 +271,25 @@ CREATE TABLE translations (
   text      TEXT NOT NULL,
   PRIMARY KEY (pack_id, verse_id)
 ) WITHOUT ROWID;
+
+CREATE TABLE content_meta (
+  key    TEXT PRIMARY KEY,                     -- e.g. 'core_version', 'tanzil_version'
+  value  TEXT NOT NULL
+);
+
+CREATE TABLE notices (                       -- notices that must ship with the data (About → Sources)
+  id      TEXT PRIMARY KEY,                    -- e.g. 'tanzil.text.uthmani' or a pack id
+  source  TEXT NOT NULL,                       -- source id, e.g. 'tanzil'
+  title   TEXT NOT NULL,
+  body    TEXT NOT NULL,                       -- reproduced verbatim
+  url     TEXT
+);
 ```
+
+**Quran text (Tanzil):** taken from Tanzil's XML files, not the plain-text export (the plain-text export prepends the *basmala* to verse 1 of every surah).
+- `text_uthmani` (display): Tanzil Uthmani **with** pause marks and sajdah signs, rub' al-hizb marks **off**; other options at Tanzil's defaults. The exact options are recorded in `siyak-data/sources/tanzil/source.toml` and in the app's dev data, and must be identical in both.
+- `text_clean` (search): Tanzil Simple Clean, used as-is (never derived with our own normalizer, because Tanzil's terms do not allow changing the text).
+- **Basmala:** it is verse 1 of al-Fatiha only. For the other surahs it is not a verse and is not stored in `verses`; the reader shows it as a surah header (except at-Tawba, surah 9) from `surahs.bismillah`, which keeps Tanzil's own basmala text. Search and morphology are unaffected.
 
 ### 5.2 `content.db`: tafsir
 
@@ -282,6 +301,7 @@ CREATE TABLE tafsir (
   pack_id     TEXT NOT NULL REFERENCES packs(id) ON DELETE CASCADE,
   verse_from  INTEGER NOT NULL REFERENCES verses(id),
   verse_to    INTEGER NOT NULL REFERENCES verses(id),
+  kind        TEXT NOT NULL DEFAULT 'commentary' CHECK (kind IN ('commentary','introduction')),
   CHECK (verse_to >= verse_from)
 );
 CREATE INDEX tafsir_lookup ON tafsir(pack_id, verse_from, verse_to);
@@ -289,14 +309,28 @@ CREATE INDEX tafsir_lookup ON tafsir(pack_id, verse_from, verse_to);
 CREATE TABLE tafsir_paragraphs (
   tafsir_id  INTEGER NOT NULL REFERENCES tafsir(id) ON DELETE CASCADE,
   idx        INTEGER NOT NULL,                 -- starts at 0
-  text       TEXT NOT NULL,
-  PRIMARY KEY (tafsir_id, idx)
-) WITHOUT ROWID;
+  text       TEXT NOT NULL,                    -- small safe HTML subset (see below)
+  part       TEXT,                             -- volume of the printed edition, if known
+  page       INTEGER,                          -- page of the printed edition, if known
+  UNIQUE (tafsir_id, idx)
+);                                             -- a rowid table: WITHOUT ROWID roughly doubles disk use for long text rows
 ```
 
 The pack's `lang` field states the language of the tafsir. For tafsirs where `lang` differs from the UI language, the interface shows the summary/translation buttons.
 
 **Verse groups:** Source data is keyed per verse, but classical tafsirs often explain several verses together. The pipeline merges consecutive verses that share the same text into a single `tafsir` row (`verse_from`–`verse_to`); the text is stored once. When the tafsir of a verse is requested, the covering range is returned and the interface shows "This commentary covers verses 2:153–157".
+
+**Paragraph text** uses a fixed, small HTML subset: `b`, `i`, `br`, `span.ayah` (quoted Quran), `span.ref`, and `span.poem > span.hemistich` for verse. The app sanitizes it again before rendering. `part`/`page` enable citations such as "al-Ṭabarī 1/113".
+
+**Editor footnotes are dropped in v1.** Footnotes of modern critical editions (*taḥqīq*) are contemporary work and fall under the no-contemporary-works rule; packs carry only the classical text. Each pack has a `footnotes = "drop" | "keep"` setting in the pipeline, so classical footnote material (e.g. Ibn al-Munayyir's *al-Intiṣāf* in al-Kashshāf) can be enabled later case by case.
+
+**Author's introduction (*muqaddima*):** stored as a row with `kind = 'introduction'` anchored at 1:1. The tafsir panel shows it as a separate "Introduction" entry, not as commentary on 1:1, and the chat (§10) never adds it to the context.
+
+**Edition material** (editor studies, indexes, colophons) and untagged duplicate fragments of the same text are excluded by documented per-book rules; every excluded character is accounted for by the pipeline's text-fidelity gate.
+
+**Range boundaries** follow the source's grouping; where the source data links groups incorrectly, boundaries are drawn from the printed edition's own range headings (e.g. al-Shawkānī's "[سورة … : الآيات a الى b]"). The text itself is never changed.
+
+**Gaps:** a verse without its own record is added to the preceding range only if that range's text verifiably contains the verse; ranges never cross surah boundaries. Unverified gaps stay empty and are reported; the tafsir panel then says "This tafsir has no separate commentary for this verse".
 
 **Tafsir text is not searchable** (no FTS index). This greatly reduces pack size for large tafsirs; tafsir is always accessed through a verse.
 
@@ -368,13 +402,15 @@ CREATE INDEX seg_lemma ON word_segments(lemma_id);
 
 **Alignment:** QAC word positions (`surah:ayah:word:segment`) are matched to the Tanzil Uthmani text. `validate.py` checks, for every verse, the word count and that the concatenation of segments matches the Tanzil word (using documented normalization rules for diacritics and orthographic differences). On any mismatch the pack is not built.
 
-**Future: MASAQ evaluation.** MASAQ (CC BY 3.0, Tanzil-based) will be evaluated after M7 as a permissively licensed alternative and as an additional layer with traditional *i'rab* tags: review of its fields (especially lemmas), Tanzil alignment, and comparison with QAC on a sample of a few hundred words. Because the schema is source-agnostic, a second morphology pack needs no changes in application code.
+**Future: MASAQ evaluation.** MASAQ (CC BY 3.0, Tanzil-based) will be evaluated after M7 as a permissively licensed alternative and as an additional layer with traditional *i'rab* tags: review of its fields (especially lemmas), Tanzil alignment, and comparison with QAC on a sample of a few hundred words. Because the schema is source-agnostic, MASAQ could replace QAC as the morphology pack without changes in application code (v1 allows only one morphology pack at a time; an additional *i'rab* layer would be a separate pack type).
+
+**Notes for the app (from M1b):** roots keep QAC's letters, so `ءامن` has the root `ا م ن` — root search must pass hamza forms through normalization; four words merged by alignment rule M keep two tokens in `words.text_ar`; QAC lemmas are reproduced as-is, including quirks such as the assimilation shadda in `صَّمَد` (112:2) or `ٱسْتَعِينُ` (2:153) — these go to the errata list, never into the pack.
 
 ### 5.4 `content.db`: search indexes
 
 ```sql
 CREATE VIRTUAL TABLE verses_fts USING fts5(
-  text_clean, content='verses', content_rowid='id'
+  text_norm                                    -- normalize(text_clean): a search index, not distributed text
 );
 CREATE VIRTUAL TABLE translations_fts USING fts5(
   text, pack_id UNINDEXED, verse_id UNINDEXED,
@@ -436,7 +472,7 @@ CREATE INDEX collection_items_order ON collection_items(collection_id, position)
 CREATE TABLE tafsir_translations (
   pack_id        TEXT NOT NULL,
   tafsir_id      INTEGER NOT NULL,
-  paragraph_idx  INTEGER NOT NULL DEFAULT -1,  -- -1: summary of the whole passage
+  paragraph_idx  INTEGER NOT NULL DEFAULT -1,  -- -1: summary of the whole passage (not NULL: NULLs are distinct in SQLite primary keys)
   mode           TEXT NOT NULL CHECK (mode IN ('summary','full')),
   target_lang    TEXT NOT NULL,
   pack_version   TEXT NOT NULL,                -- cache is stale if the source changes
@@ -485,8 +521,6 @@ CREATE TABLE settings (
 
 Verse references in `user.db` cannot be foreign keys into `content.db` (separate databases). Integrity is enforced in the application layer.
 
-`tafsir_translations.paragraph_idx` uses `-1` rather than `NULL` for a whole-passage summary: SQLite allows `NULL` in primary-key columns of rowid tables and treats every `NULL` as distinct, so a nullable key column would let duplicate summaries accumulate and `ON CONFLICT` upserts would never fire.
-
 ### 5.6 Migrations
 Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.db` is backed up to `user.db.bak` before it is migrated.
 
@@ -498,14 +532,23 @@ Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.
 
 | Type | Format | Contents |
 |---|---|---|
-| `translation` | `.sqlite` | A table matching the `translations` schema |
-| `tafsir` | `.sqlite` | `tafsir` + `tafsir_paragraphs` |
+| `translation` | `.sqlite.zst` | A table matching the `translations` schema |
+| `tafsir` | `.sqlite.zst` | `tafsir` + `tafsir_paragraphs` |
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; for QAC also the original file and `NOTICE` (§5.3.1) |
-| `vectors` | `.sqlite` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32 |
+| `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32 |
+
+All SQLite packs are distributed zstd-compressed and carry a `pack_info` table; the detailed format is `siyak-data/docs/pack-format.md`. Archive packs keep their extra files under `<app_data>/packs/<pack-id>/` (e.g. QAC's `NOTICE`, shown in full on About → Sources). At most one morphology pack is installed at a time in v1.
 | `model` | `.tar.zst` | `model.onnx`, `tokenizer.json`, `config.json` |
 
 ### 6.2 Bundled content
 `core.db` is bundled with the installer and contains: the Tanzil Arabic text (Uthmani + Simple Clean) and metadata, a Turkish translation, and Pickthall (English). The app is therefore usable on first launch without internet access. The Turkish translation is planned to be Elmalılı Hamdi Yazır's, pending verification of a clean, properly licensed source of the original text (§18).
+
+**Core refresh.** `core.db` carries `content_meta.core_version` (an integer, incremented by `siyak-data` whenever core content changes). On startup, if the bundled `core.db` has a higher `core_version` than `content.db`:
+1. `content.db` is copied to `content.db.bak`.
+2. In a single transaction, with `core.db` attached: `surahs`, `verses`, `verses_fts`, `notices` and the rows of bundled packs (`packs.bundled = 1` with their `translations` and `translations_fts` rows) are replaced from `core.db`; `content_meta` is updated.
+3. Packs the user installed (`bundled = 0`) and all their tables are left untouched. This is safe because verse ids (1..6236) never change.
+4. On any error the transaction is rolled back and the backup is kept; the app keeps working on the old core and reports the error code.
+
 
 ### 6.3 Manifest
 Addresses (embedded in the app, tried in order):
@@ -596,7 +639,7 @@ The primary address is independent of the GitHub organization and repository nam
 
 **Selection rule (v1):** only pre-modern classical works (author died in the 19th century or earlier). Works from the 20th century onwards (Elmalılı's tafsir, al-Maraghi, al-Manar, al-Sha'rawi, al-Sabuni, al-Zuhayli, al-Tafsir al-Muyassar, etc.) are not included in v1; later versions evaluate them work by work, depending on their license status.
 
-**Verification:** The same title can appear under several Quranpedia IDs (a different work or a different edition). In the pipeline, author, work and edition are verified one by one from the book metadata for every pack and recorded in `siyak-data/sources/tafsir/<id>/README.md`. No pack is built until its ID mapping is verified.
+**Verification:** The same title can appear under several Quranpedia IDs (a different work or a different edition). In the pipeline, author, work and edition are verified one by one from the book metadata for every pack and recorded in `siyak-data/sources/tafsir/<pack-id>/README.md`. No pack is built until its ID mapping is verified.
 
 **v1 tafsir list:**
 
@@ -613,8 +656,8 @@ The primary address is independent of the GitHub organization and repository nam
 | `ar.maturidi` | Taʾwīlāt Ahl al-Sunna | al-Māturīdī (333/944) | Māturīdī theological tradition |
 | `ar.abussuud` | Irshād al-ʿAql al-Salīm | Ebussuud Efendi / Abū al-Suʿūd (982/1574) | Ottoman Shaykh al-Islām |
 | `ar.bursevi` | Rūḥ al-Bayān | İsmail Hakkı Bursevî (1137/1725) | Ottoman; mystical (*ishārī*) interpretation |
-| `ar.alusi` | Rūḥ al-Maʿānī | al-Ālūsī (1270/1854) | The last great synthesis of the classical tradition; very large |
-| `ar.suyuti-durr` | al-Durr al-Manthūr | al-Suyūṭī (911/1505) | Compilation of transmitted reports |
+| `ar.alusi` | Rūḥ al-Maʿānī | Shihāb al-Dīn Maḥmūd al-Ālūsī (1270/1854) | The last great synthesis of the classical tradition; very large. Quranpedia's metadata names his grandson Maḥmūd Shukrī al-Ālūsī (d. 1924); corrected in the pack README and reported to Quranpedia |
+| `ar.suyuti-durr` | al-Durr al-Manthūr | al-Suyūṭī (911/1505) | Compilation of transmitted reports; does not comment on every verse (~4,400 covered) |
 | `ar.ibn-atiyya` | al-Muḥarrar al-Wajīz | Ibn ʿAṭiyya (541/1147) | Andalusian tradition |
 | `ar.abu-hayyan` | al-Baḥr al-Muḥīṭ | Abū Ḥayyān (745/1344) | Grammar-focused |
 | `ar.shawkani` | Fatḥ al-Qadīr | al-Shawkānī (1250/1834) | Combines transmission and reason |
@@ -626,7 +669,7 @@ Pack descriptions (TR/EN) state the work's method and focus in one sentence (tra
 
 - **Permission:** QUL states no origin or license for this resource; its FAQ asks users to check the license of each resource. A written request is sent to Tarteel asking for the origin of the text (edition/*taḥqīq*) and for permission to redistribute it unmodified in an open-source, non-commercial application.
 - **Technical integration does not wait for permission:** `build_tafsir_qul.py` is added to the pipeline; the pack is built and tested in development.
-- **Publication gate:** the `ar.qurtubi` pack is not included in a data release (it does not appear in the `manifest`) until Tarteel replies. If the reply is positive, it ships with the next data release; no app release is needed. The reply (permission text, requested attribution) is recorded in `siyak-data/sources/tafsir/qurtubi/PERMISSION.md`.
+- **Publication gate:** the `ar.qurtubi` pack is not included in a data release (it does not appear in the `manifest`) until Tarteel replies. If the reply is positive, it ships with the next data release; no app release is needed. The reply (permission text, requested attribution) is recorded in `siyak-data/sources/tafsir/ar.qurtubi/PERMISSION.md`.
 - **Attribution:** "Source: Quranic Universal Library (Tarteel)" + link, plus the original edition if stated in the reply.
 - If a removal request arrives, the pack is removed from the manifest in the next data release.
 
@@ -865,7 +908,7 @@ Panes are collapsible and resizable; the layout is persisted in `settings`.
 Reference mockup: the "Okuma Ekranı Mockup" canvas (reader and researcher defaults side by side).
 
 ### 13.3 Screens
-1. **Reader:** virtualized verse list; Arabic (clickable word by word when morphology is installed) + selected translations; bookmark, note, compare and add-to-collection actions on every verse.
+1. **Reader:** virtualized verse list; a basmala header for every surah except al-Fatiha (where it is verse 1) and at-Tawba; Arabic (clickable word by word when morphology is installed) + selected translations; bookmark, note, compare and add-to-collection actions on every verse.
 2. **Compare:** the user's chosen translations and tafsirs for a verse/range in parallel columns; add/remove/reorder columns; rows aligned per verse; summary/translation buttons in tafsir columns.
 3. **Concordance:** root/lemma header, derived forms, distribution per surah (small bar chart), verse list in context (keyword highlighted).
 4. **Search:** All (grouped) · Text · Root · Meaning (§7.1).
@@ -1036,7 +1079,7 @@ Rules are enforced by CI, not just written down. `ci.yml` runs on every PR:
 | `README.md` / `README.tr.md` | What it is, screenshot, download link, development setup in 5 steps, links to ways of contributing |
 | `CONTRIBUTING.md` / `.tr.md` | Setup, branch/commit conventions, PR process, running tests, ways to contribute |
 | `ARCHITECTURE.md` | Layers, data flow, module map, core invariants (e.g. "the webview never touches the network") |
-| `docs/adr/` | Decision records. Initial set: 0001 Tauri v2 + React; 0002 two databases; 0003 tafsir is never embedded; 0004 on-demand Arabic tafsir translation; 0005 progressive disclosure; 0006 `MIT OR Apache-2.0`; 0007 QAC morphology, unmodified; 0008 classical tafsirs from Quranpedia, no contemporary works in v1; 0009 English-only code, bilingual docs |
+| `docs/adr/` | Decision records. Initial set: 0001 Tauri v2 + React; 0002 two databases; 0003 tafsir is never embedded; 0004 on-demand Arabic tafsir translation; 0005 progressive disclosure; 0006 `MIT OR Apache-2.0`; 0007 QAC morphology, unmodified; 0008 classical tafsirs from Quranpedia, no contemporary works in v1; 0009 English-only code, bilingual docs; 0010 Rust `xtask` for dev tooling (dev DB, bindings) |
 | `docs/glossary.md` | Glossary (English code name · Turkish · Arabic) |
 | `docs/spec/spec.md` / `spec.tr.md` | This specification and its Turkish translation |
 | `CODE_OF_CONDUCT.md` (org `.github`) | Contributor Covenant |
