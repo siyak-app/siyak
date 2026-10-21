@@ -14,7 +14,10 @@
     "dev_badge": "Geliştirme derlemesi · {{seed}} veri · çekirdek {{version}}"
   },
   "navigation": {
-    "surahs": "Sureler"
+    "surahs": "Sureler",
+    "filter_label": "Sureleri süz",
+    "filter_placeholder": "Numara veya ad",
+    "no_matches": "Eşleşen sure yok."
   },
   "reader": {
     "meccan": "Mekkî",
@@ -23,7 +26,11 @@
     "ayah_count_other": "{{count}} ayet",
     "verse_label": "Ayet {{surah}}:{{ayah}}",
     "no_verses": "Bu surenin metni bu sürümde henüz yok.",
-    "surah_not_found": "Böyle bir sure yok."
+    "surah_not_found": "Böyle bir sure yok.",
+    "verse_list_label": "{{name}} suresinin ayetleri",
+    "translation_titles_one": "Meal: {{titles}}",
+    "translation_titles_other": "Mealler: {{titles}}",
+    "arabic_only": "Yalnızca Arapça metin"
   },
   "context_panel": {
     "label": "Bağlam paneli",

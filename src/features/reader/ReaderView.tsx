@@ -1,57 +1,130 @@
 import { useParams } from "@tanstack/react-router";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { type RefObject, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useSurahs, useVerses } from "@/lib/queries";
+import type { TextDirection } from "@/lib/bindings";
+import { useSurah, useTranslations, useVerses } from "@/lib/queries";
+import { useUiStore } from "@/stores/ui";
 
-import { DEFAULT_TRANSLATION_IDS } from "./defaults";
+import { SurahHeader } from "./SurahHeader";
 import { surahName } from "./surahName";
 import { VerseItem } from "./VerseItem";
+import { estimateVerseHeight } from "./verseLayout";
+
+/** Verses rendered beyond the visible ones, above and below. */
+const OVERSCAN = 6;
 
 /**
- * Center pane: the verses of the surah in the URL.
- * TODO(M2): virtualized list, translation selection and verse actions.
+ * Center pane: the surah in the URL. Remounted per surah, so each surah gets
+ * a fresh virtualizer.
  */
 export function ReaderView() {
   const { surah } = useParams({ from: "/read/$surah" });
+  return <SurahReader key={surah} surah={surah} />;
+}
+
+/**
+ * Offset of `list` inside its scroll container (the virtualizer's
+ * `scrollMargin`), kept current while `header` above it changes size.
+ */
+function useListOffset(
+  list: RefObject<HTMLElement | null>,
+  header: RefObject<HTMLElement | null>,
+): number {
+  const [offset, setOffset] = useState(0);
+  useLayoutEffect(() => {
+    const update = () => {
+      setOffset(list.current?.offsetTop ?? 0);
+    };
+    update();
+    if (!header.current || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(header.current);
+    return () => {
+      observer.disconnect();
+    };
+  }, [list, header]);
+  return offset;
+}
+
+function SurahReader({ surah }: { surah: number }) {
   const { t, i18n } = useTranslation();
-  const surahs = useSurahs();
-  const verses = useVerses(surah, DEFAULT_TRANSLATION_IDS);
-  const info = surahs.data?.find((s) => s.number === surah);
+  const info = useSurah(surah);
+  const selected = useUiStore((state) => state.preferences["reader.translations"]);
+  const installed = useTranslations();
+  const verses = useVerses(surah, selected);
+  const items = useMemo(() => verses.data ?? [], [verses.data]);
+
+  const shown = useMemo(() => {
+    const byId = new Map((installed.data ?? []).map((pack) => [pack.id, pack]));
+    return selected.flatMap((id) => byId.get(id) ?? []);
+  }, [installed.data, selected]);
+  const directions = useMemo(
+    () =>
+      Object.fromEntries(shown.map((pack) => [pack.id, pack.dir])) as Record<string, TextDirection>,
+    [shown],
+  );
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listOffset = useListOffset(listRef, headerRef);
+
+  // The virtualizer re-renders on scroll by design; the compiler skipping
+  // this component is expected.
+  // eslint-disable-next-line react-hooks/incompatible-library -- see above
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => estimateVerseHeight(items[index]),
+    getItemKey: (index) => items[index]?.id ?? index,
+    overscan: OVERSCAN,
+    scrollMargin: listOffset,
+  });
+
+  const name = info.data ? surahName(info.data, i18n.resolvedLanguage) : String(surah);
 
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto max-w-3xl px-8 py-8">
-        {info && (
-          <header className="mb-4 flex items-baseline justify-between gap-4 border-b pb-4">
-            <div>
-              <h1 className="text-xl font-semibold">
-                {info.number}. {surahName(info, i18n.resolvedLanguage)}
-              </h1>
-              <p className="flex gap-1.5 text-sm text-muted-foreground">
-                <span>
-                  {t(info.revelation_type === "meccan" ? "reader.meccan" : "reader.medinan")}
-                </span>
-                <span className="before:me-1.5 before:content-['·']">
-                  {t("reader.ayah_count", { count: info.ayah_count })}
-                </span>
-              </p>
-            </div>
-            <p dir="rtl" lang="ar" className="font-quran text-3xl">
-              {info.name_ar}
-            </p>
-          </header>
-        )}
-        {verses.isPending && <p className="text-muted-foreground">{t("common.loading")}</p>}
-        {verses.isError && <ErrorMessage error={verses.error} />}
-        {verses.data?.length === 0 && (
-          <p className="text-muted-foreground">{t("reader.no_verses")}</p>
-        )}
-        {verses.data?.map((verse) => (
-          <VerseItem key={verse.id} verse={verse} />
-        ))}
+    <div ref={scrollRef} className="relative h-full overflow-y-auto">
+      <div className="mx-auto max-w-3xl px-8 pt-8 pb-16">
+        <div ref={headerRef}>
+          {info.data && <SurahHeader surah={info.data} translations={shown} />}
+          {info.isError && <ErrorMessage error={info.error} />}
+          {verses.isPending && <p className="text-muted-foreground">{t("common.loading")}</p>}
+          {verses.isError && <ErrorMessage error={verses.error} />}
+          {verses.data?.length === 0 && (
+            <p className="py-6 text-muted-foreground">{t("reader.no_verses")}</p>
+          )}
+        </div>
+        <div
+          ref={listRef}
+          role="list"
+          aria-label={t("reader.verse_list_label", { name })}
+          className="relative"
+          style={{ height: virtualizer.getTotalSize() }}
+        >
+          {virtualizer.getVirtualItems().map((row) => {
+            const verse = items[row.index];
+            if (!verse) return null;
+            return (
+              <div
+                key={row.key}
+                ref={virtualizer.measureElement}
+                data-index={row.index}
+                role="listitem"
+                aria-setsize={items.length}
+                aria-posinset={row.index + 1}
+                className="absolute inset-x-0 top-0"
+                style={{ transform: `translateY(${String(row.start - listOffset)}px)` }}
+              >
+                <VerseItem verse={verse} directions={directions} />
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }

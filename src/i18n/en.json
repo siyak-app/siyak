@@ -14,7 +14,10 @@
     "dev_badge": "Development build · {{seed}} data · core {{version}}"
   },
   "navigation": {
-    "surahs": "Surahs"
+    "surahs": "Surahs",
+    "filter_label": "Filter surahs",
+    "filter_placeholder": "Number or name",
+    "no_matches": "No surah matches."
   },
   "reader": {
     "meccan": "Meccan",
@@ -23,7 +26,11 @@
     "ayah_count_other": "{{count}} verses",
     "verse_label": "Verse {{surah}}:{{ayah}}",
     "no_verses": "The text of this surah is not available in this build yet.",
-    "surah_not_found": "There is no such surah."
+    "surah_not_found": "There is no such surah.",
+    "verse_list_label": "Verses of {{name}}",
+    "translation_titles_one": "Translation: {{titles}}",
+    "translation_titles_other": "Translations: {{titles}}",
+    "arabic_only": "Arabic text only"
   },
   "context_panel": {
     "label": "Context panel",

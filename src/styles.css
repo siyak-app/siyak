@@ -125,6 +125,26 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Reader typography; the values come from the typography settings (spec §13.4). */
+:root {
+  --arabic-size: 28px;
+  --arabic-line-height: 2.2;
+  --translation-size: 16px;
+  --translation-line-height: 1.7;
+}
+
+@layer components {
+  .arabic-text {
+    font-family: var(--font-quran);
+    font-size: var(--arabic-size);
+    line-height: var(--arabic-line-height);
+  }
+  .translation-text {
+    font-size: var(--translation-size);
+    line-height: var(--translation-line-height);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
