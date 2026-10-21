@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+
+# PLEASE DO NOT REMOVE OR CHANGE THIS COPYRIGHT BLOCK
+#====================================================================
+#
+#  Tanzil Quran Text (Simple Clean, Version 1.1)
+#  Copyright (C) 2007-2026 Tanzil Project
+#  License: Creative Commons Attribution 3.0
+#
+#  This copy of the Quran text is carefully produced, highly 
+#  verified and continuously monitored by a group of specialists 
+#  at Tanzil Project.
+#
+#  TERMS OF USE:
+#
+#  - Permission is granted to copy and distribute verbatim copies 
+#    of this text, but CHANGING IT IS NOT ALLOWED.
+#
+#  - This Quran text can be used in any website or application, 
+#    provided that its source (Tanzil Project) is clearly indicated, 
+#    and a link is made to tanzil.net to enable users to keep
+#    track of changes.
+#
+#  - This copyright notice shall be included in all verbatim copies 
+#    of the text, and shall be reproduced appropriately in all files 
+#    derived from or containing substantial portion of this text.
+#
+#  Please check updates at: http://tanzil.net/updates/
+#
+#====================================================================
+	
+-->
+<quran>
+	<sura index="1" name="الفاتحة">
+		<aya index="1" text="بسم الله الرحمن الرحيم" />
+		<aya index="2" text="الحمد لله رب العالمين" />
+		<aya index="3" text="الرحمن الرحيم" />
+		<aya index="4" text="مالك يوم الدين" />
+		<aya index="5" text="إياك نعبد وإياك نستعين" />
+		<aya index="6" text="اهدنا الصراط المستقيم" />
+		<aya index="7" text="صراط الذين أنعمت عليهم غير المغضوب عليهم ولا الضالين" />
+	</sura>
+	<sura index="112" name="الإخلاص">
+		<aya index="1" text="قل هو الله أحد" bismillah="بسم الله الرحمن الرحيم" />
+		<aya index="2" text="الله الصمد" />
+		<aya index="3" text="لم يلد ولم يولد" />
+		<aya index="4" text="ولم يكن له كفوا أحد" />
+	</sura>
+	<sura index="113" name="الفلق">
+		<aya index="1" text="قل أعوذ برب الفلق" bismillah="بسم الله الرحمن الرحيم" />
+		<aya index="2" text="من شر ما خلق" />
+		<aya index="3" text="ومن شر غاسق إذا وقب" />
+		<aya index="4" text="ومن شر النفاثات في العقد" />
+		<aya index="5" text="ومن شر حاسد إذا حسد" />
+	</sura>
+	<sura index="114" name="الناس">
+		<aya index="1" text="قل أعوذ برب الناس" bismillah="بسم الله الرحمن الرحيم" />
+		<aya index="2" text="ملك الناس" />
+		<aya index="3" text="إله الناس" />
+		<aya index="4" text="من شر الوسواس الخناس" />
+		<aya index="5" text="الذي يوسوس في صدور الناس" />
+		<aya index="6" text="من الجنة والناس" />
+	</sura>
+</quran>

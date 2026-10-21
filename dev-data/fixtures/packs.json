@@ -1,0 +1,15 @@
+[
+  {
+    "id": "en.pickthall",
+    "type": "translation",
+    "lang": "en",
+    "title": "The Meaning of the Glorious Koran",
+    "author": "Marmaduke Pickthall",
+    "version": "1.0.0",
+    "license": "Public domain",
+    "attribution": "Source: Tanzil.net (https://tanzil.net/trans/)",
+    "installed_at": "2026-10-21T00:00:00Z",
+    "bundled": true,
+    "file": "en.pickthall.txt"
+  }
+]

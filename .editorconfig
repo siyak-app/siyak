@@ -18,3 +18,8 @@ trim_trailing_whitespace = false
 [{LICENSE-MIT,LICENSE-APACHE}]
 indent_style = unset
 indent_size = unset
+
+# Upstream files copied verbatim (license blocks contain trailing spaces).
+[{dev-data/fixtures/**,docs/spec/**}]
+trim_trailing_whitespace = false
+insert_final_newline = unset

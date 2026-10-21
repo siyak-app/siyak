@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+
+# PLEASE DO NOT REMOVE OR CHANGE THIS COPYRIGHT BLOCK
+#====================================================================
+#
+#  Tanzil Quran Text (Uthmani, Version 1.1)
+#  Copyright (C) 2007-2026 Tanzil Project
+#  License: Creative Commons Attribution 3.0
+#
+#  This copy of the Quran text is carefully produced, highly 
+#  verified and continuously monitored by a group of specialists 
+#  at Tanzil Project.
+#
+#  TERMS OF USE:
+#
+#  - Permission is granted to copy and distribute verbatim copies 
+#    of this text, but CHANGING IT IS NOT ALLOWED.
+#
+#  - This Quran text can be used in any website or application, 
+#    provided that its source (Tanzil Project) is clearly indicated, 
+#    and a link is made to tanzil.net to enable users to keep
+#    track of changes.
+#
+#  - This copyright notice shall be included in all verbatim copies 
+#    of the text, and shall be reproduced appropriately in all files 
+#    derived from or containing substantial portion of this text.
+#
+#  Please check updates at: http://tanzil.net/updates/
+#
+#====================================================================
+	
+-->
+<quran>
+	<sura index="1" name="الفاتحة">
+		<aya index="1" text="بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ" />
+		<aya index="2" text="ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَـٰلَمِينَ" />
+		<aya index="3" text="ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ" />
+		<aya index="4" text="مَـٰلِكِ يَوْمِ ٱلدِّينِ" />
+		<aya index="5" text="إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ" />
+		<aya index="6" text="ٱهْدِنَا ٱلصِّرَٰطَ ٱلْمُسْتَقِيمَ" />
+		<aya index="7" text="صِرَٰطَ ٱلَّذِينَ أَنْعَمْتَ عَلَيْهِمْ غَيْرِ ٱلْمَغْضُوبِ عَلَيْهِمْ وَلَا ٱلضَّآلِّينَ" />
+	</sura>
+	<sura index="112" name="الإخلاص">
+		<aya index="1" text="قُلْ هُوَ ٱللَّهُ أَحَدٌ" bismillah="بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ" />
+		<aya index="2" text="ٱللَّهُ ٱلصَّمَدُ" />
+		<aya index="3" text="لَمْ يَلِدْ وَلَمْ يُولَدْ" />
+		<aya index="4" text="وَلَمْ يَكُن لَّهُۥ كُفُوًا أَحَدٌۢ" />
+	</sura>
+	<sura index="113" name="الفلق">
+		<aya index="1" text="قُلْ أَعُوذُ بِرَبِّ ٱلْفَلَقِ" bismillah="بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ" />
+		<aya index="2" text="مِن شَرِّ مَا خَلَقَ" />
+		<aya index="3" text="وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ" />
+		<aya index="4" text="وَمِن شَرِّ ٱلنَّفَّـٰثَـٰتِ فِى ٱلْعُقَدِ" />
+		<aya index="5" text="وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ" />
+	</sura>
+	<sura index="114" name="الناس">
+		<aya index="1" text="قُلْ أَعُوذُ بِرَبِّ ٱلنَّاسِ" bismillah="بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ" />
+		<aya index="2" text="مَلِكِ ٱلنَّاسِ" />
+		<aya index="3" text="إِلَـٰهِ ٱلنَّاسِ" />
+		<aya index="4" text="مِن شَرِّ ٱلْوَسْوَاسِ ٱلْخَنَّاسِ" />
+		<aya index="5" text="ٱلَّذِى يُوَسْوِسُ فِى صُدُورِ ٱلنَّاسِ" />
+		<aya index="6" text="مِنَ ٱلْجِنَّةِ وَٱلنَّاسِ" />
+	</sura>
+</quran>
