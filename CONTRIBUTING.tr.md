@@ -75,6 +75,14 @@ dizininde durur: macOS'ta `~/Library/Application Support/com.kemalozyon.siyak`, 
 `%APPDATA%\com.kemalozyon.siyak`, Linux'ta `~/.local/share/com.kemalozyon.siyak`. Bu dizini silmek
 uygulamayı sıfırlar.
 
+### Kuran verisi
+
+Debug derlemeler küçük geliştirme veri setini kullanır. Release derlemeler,
+[`siyak-data`](https://github.com/siyak/siyak-data) tarafından üretilen tam veriyi,
+`src-tauri/resources/core.db`'yi içerir. Kaynağı [`dev-data/README.md`](dev-data/README.md#real-data-coredb)
+dosyasında kayıtlıdır: şu an siyak-data commit'i `72bc795`, sha256 `76ed118ad4be…`,
+`core_version` 1. Bakımcılar onu `cargo xtask sync-core` ile günceller.
+
 ## Komutlar
 
 | Komut                      | Ne yapar                                                                       |
@@ -91,6 +99,7 @@ uygulamayı sıfırlar.
 | `cargo test`               | Rust testleri                                                                  |
 | `cargo xtask bindings`     | Bir komutu ya da tiplerini değiştirdikten sonra `src/lib/bindings.ts`'i üretir |
 | `cargo xtask build-dev-db` | `dev-data/fixtures/` değişince `dev-data/dev-content.db`'yi yeniden üretir     |
+| `cargo xtask sync-core`    | `siyak-data`'nın `core.db`'sini denetleyip `src-tauri/resources/`'a kopyalar   |
 
 ## Kontrolleri yerelde çalıştırma
 

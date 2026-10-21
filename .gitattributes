@@ -1,6 +1,6 @@
 * text=auto eol=lf
 
-# Binary assets
+# Binary assets (including src-tauri/resources/core.db, the real data from siyak-data)
 *.db binary
 *.sqlite binary
 *.png binary

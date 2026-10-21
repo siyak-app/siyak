@@ -72,6 +72,15 @@ e.g. `~/Library/Application Support/com.kemalozyon.siyak` on macOS,
 `%APPDATA%\com.kemalozyon.siyak` on Windows and `~/.local/share/com.kemalozyon.siyak` on Linux.
 Deleting that directory resets the app.
 
+### Quran data
+
+Debug builds use the small development dataset. Release builds bundle
+`src-tauri/resources/core.db`, the complete data built by
+[`siyak-data`](https://github.com/siyak/siyak-data). Its origin is recorded in
+[`dev-data/README.md`](dev-data/README.md#real-data-coredb): currently siyak-data commit
+`72bc795`, sha256 `76ed118ad4be…`, `core_version` 1. Maintainers update it with
+`cargo xtask sync-core`.
+
 ## Scripts
 
 | Command                    | What it does                                                           |
@@ -88,6 +97,7 @@ Deleting that directory resets the app.
 | `cargo test`               | Rust tests                                                             |
 | `cargo xtask bindings`     | Regenerate `src/lib/bindings.ts` after changing a command or its types |
 | `cargo xtask build-dev-db` | Rebuild `dev-data/dev-content.db` after changing `dev-data/fixtures/`  |
+| `cargo xtask sync-core`    | Check and copy `siyak-data`'s `core.db` to `src-tauri/resources/`      |
 
 ## Running the checks locally
 

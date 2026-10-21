@@ -2,7 +2,7 @@
 
 `dev-content.db` is a small seed database that debug builds copy to `content.db` on first launch,
 so contributors can run Siyak without the data pipeline (spec §16.3). Release builds bundle the
-same file as `resources/core.db` until the real `core.db` arrives in milestone M1.
+real data instead, `src-tauri/resources/core.db` (see [Real data](#real-data-coredb) below).
 
 ## Contents
 
@@ -50,6 +50,25 @@ is shown, the source must be stated with a link:
 The Tanzil translation terms say: _"The translations provided at this page are for non-commercial
 purposes only. If used otherwise, you need to obtain necessary permission from the translator or
 the publisher."_ Siyak is non-commercial, and Pickthall's translation is in the public domain.
+
+## Real data (`core.db`)
+
+`src-tauri/resources/core.db` is the complete database built by
+[`siyak-data`](https://github.com/siyak/siyak-data) (all 6,236 verses, the bundled translations,
+the Tanzil notices). Release builds bundle it and copy it to `content.db` on first launch.
+
+| Field             | Value                                                              |
+| ----------------- | ------------------------------------------------------------------ |
+| siyak-data commit | `72bc7953fc37b93dc17e6ad7ab421147ef64358e`                         |
+| sha256            | `76ed118ad4be5faf020e65f1507c7a380321499e7b190daf3d008f9a1635a50d` |
+| `core_version`    | 1                                                                  |
+| `tanzil_version`  | 1.1                                                                |
+
+To update it, build `core.db` in a `siyak-data` checkout next to this repository, then run
+`cargo xtask sync-core` (or `cargo xtask sync-core --from <path>`). The task checks the row
+counts, `core_version` (it must never go down) and that the schema is exactly what the app's
+content migrations create, copies the file and prints the values for the table above. Commit the
+database together with the updated table.
 
 ## Regenerating
 

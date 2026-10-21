@@ -373,6 +373,28 @@ mod tests {
         );
     }
 
+    /// The bundled `core.db` (copied from siyak-data by `cargo xtask sync-core`)
+    /// has exactly the schema of these migrations, so the app can open it.
+    #[test]
+    fn bundled_core_db_matches_the_migrations() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/core.db");
+        let core =
+            Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let mut fresh = Connection::open_in_memory().unwrap();
+        migrate(&mut fresh, MIGRATIONS).unwrap();
+        assert_eq!(schema_shape(&core).unwrap(), schema_shape(&fresh).unwrap());
+        assert_eq!(
+            schema_version(&core).unwrap(),
+            schema_version(&fresh).unwrap()
+        );
+        let count = |table: &str| -> i64 {
+            core.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(count("surahs"), 114);
+        assert_eq!(count("verses"), 6236);
+    }
+
     #[test]
     fn list_surahs_returns_all_114() {
         let surahs = list_surahs(&dev_db()).unwrap();
