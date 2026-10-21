@@ -93,5 +93,14 @@
   },
   "term_format": {
     "inline": "{{plain}} ({{technical}})"
+  },
+  "onboarding": {
+    "title": "How would you like to use the app?",
+    "description": "Your answer only sets the starting layout. Nothing is locked.",
+    "reader_title": "Read and understand",
+    "reader_description": "A calm reading view with one translation; details appear when you ask for them.",
+    "researcher_title": "Do research",
+    "researcher_description": "More on screen: two translations, the side panel open and technical terms shown.",
+    "note": "You can change all of this later in Settings → Display & behaviour."
   }
 }

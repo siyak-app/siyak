@@ -93,5 +93,14 @@
   },
   "term_format": {
     "inline": "{{plain}} ({{technical}})"
+  },
+  "onboarding": {
+    "title": "Uygulamayı nasıl kullanmak istersiniz?",
+    "description": "Cevabınız yalnızca başlangıç düzenini belirler. Hiçbir özellik kilitlenmez.",
+    "reader_title": "Okumak ve anlamak",
+    "reader_description": "Tek mealle sade bir okuma ekranı; ayrıntılar siz istediğinizde açılır.",
+    "researcher_title": "Araştırma yapmak",
+    "researcher_description": "Ekranda daha fazlası: iki meal, açık yan panel ve görünür teknik terimler.",
+    "note": "Bunların hepsini daha sonra Ayarlar → Görünüm ve davranış bölümünden değiştirebilirsiniz."
   }
 }

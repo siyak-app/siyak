@@ -1,11 +1,13 @@
 import { Outlet } from "@tanstack/react-router";
 import { PanelLeftIcon, PanelRightIcon } from "lucide-react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { type PanelSize, usePanelRef } from "react-resizable-panels";
 
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ContextPanel } from "@/features/context-panel/ContextPanel";
+import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog";
 import { CoreRefreshBanner, DevDataBadge } from "@/features/core-status/CoreStatus";
 import { SurahList } from "@/features/reader/SurahList";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
@@ -40,6 +42,25 @@ export function AppShell() {
   const right = initial["layout.right_panel"];
   const leftRef = usePanelRef();
   const rightRef = usePanelRef();
+
+  // The right panel is also opened and closed from outside the panel itself:
+  // by the experience profile, a settings reset or Enter on a verse.
+  useEffect(
+    () =>
+      useUiStore.subscribe((state, previous) => {
+        const next = state.preferences["layout.right_panel"];
+        if (next.collapsed === previous.preferences["layout.right_panel"].collapsed) return;
+        const handle = rightRef.current;
+        if (!handle || handle.isCollapsed() === next.collapsed) return;
+        if (next.collapsed) {
+          handle.collapse();
+        } else {
+          handle.expand();
+          handle.resize(next.size);
+        }
+      }),
+    [rightRef],
+  );
 
   const toggle = (key: PaneKey, panel: typeof leftRef) => {
     const handle = panel.current;
@@ -120,6 +141,7 @@ export function AppShell() {
           </aside>
         </ResizablePanel>
       </ResizablePanelGroup>
+      <OnboardingDialog />
     </div>
   );
 }
