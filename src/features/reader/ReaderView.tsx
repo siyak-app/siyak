@@ -257,7 +257,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
   const noSuchVerse = ayah !== undefined && info.data !== undefined && ayah > info.data.ayah_count;
 
   return (
-    <div ref={scrollRef} className="relative h-full overflow-y-auto">
+    <div ref={scrollRef} data-reader-scroll className="relative h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-8 pt-8 pb-16">
         <div ref={headerRef}>
           {info.data && <SurahHeader surah={info.data} translations={shown} />}

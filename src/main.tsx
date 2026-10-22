@@ -8,6 +8,12 @@ import "./styles.css";
 import { Providers } from "./app/providers";
 import { router } from "./app/router";
 
+if (import.meta.env.DEV) {
+  void import("./features/reader/perf").then(({ installPerfTools }) => {
+    installPerfTools();
+  });
+}
+
 const root = document.getElementById("root");
 if (!root) throw new Error("#root element missing from index.html");
 
