@@ -1,6 +1,15 @@
 import { useParams } from "@tanstack/react-router";
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
-import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type FocusEvent,
+  type KeyboardEvent,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
@@ -57,14 +66,88 @@ function useListOffset(
   return offset;
 }
 
+/** Index of the verse at the top of the visible area. */
+function topIndex(virtualizer: Virtualizer<HTMLDivElement, Element>): number | undefined {
+  const offset = virtualizer.scrollOffset ?? 0;
+  return virtualizer.getVirtualItems().find((item) => item.end > offset + 1)?.index;
+}
+
 /** The verse at the top of the visible area. */
 function topVerse(
   virtualizer: Virtualizer<HTMLDivElement, Element>,
   items: readonly VerseWithTranslations[],
 ): VerseWithTranslations | undefined {
-  const offset = virtualizer.scrollOffset ?? 0;
-  const row = virtualizer.getVirtualItems().find((item) => item.end > offset + 1);
-  return row ? items[row.index] : undefined;
+  const index = topIndex(virtualizer);
+  return index === undefined ? undefined : items[index];
+}
+
+/** Shows `verse` in the context panel, opening the panel if needed. */
+function openInPanel(verse: VerseWithTranslations) {
+  const { preferences, setPreference, selectVerse } = useUiStore.getState();
+  selectVerse({ surah: verse.surah, ayah: verse.ayah });
+  const panel = preferences["layout.right_panel"];
+  if (panel.collapsed) setPreference("layout.right_panel", { ...panel, collapsed: false });
+}
+
+/**
+ * Keyboard navigation of the verse list (one tab stop, roving focus):
+ * ↑/↓ move between verses, Home/End jump to the first or last, scrolling
+ * the virtualized list as needed; Enter opens the verse in the context
+ * panel. Keys inside a verse's buttons keep their usual meaning.
+ */
+function useVerseFocus(
+  listRef: RefObject<HTMLDivElement | null>,
+  virtualizer: Virtualizer<HTMLDivElement, Element>,
+  items: readonly VerseWithTranslations[],
+) {
+  const [focusIndex, setFocusIndex] = useState(0);
+  const pendingFocus = useRef<number | null>(null);
+
+  // A verse scrolled into the window renders a frame later; focus it then.
+  useEffect(() => {
+    const index = pendingFocus.current;
+    if (index === null) return;
+    const verse = listRef.current?.querySelector<HTMLElement>(
+      `[data-index="${String(index)}"] article`,
+    );
+    if (!verse) return;
+    pendingFocus.current = null;
+    verse.focus({ preventScroll: true });
+  });
+
+  const moveTo = (index: number) => {
+    const next = Math.min(Math.max(index, 0), items.length - 1);
+    setFocusIndex(next);
+    pendingFocus.current = next;
+    virtualizer.scrollToIndex(next, { align: "auto" });
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.tagName !== "ARTICLE" || event.altKey || event.ctrlKey || event.metaKey) return;
+    const index = Number(target.closest<HTMLElement>("[data-index]")?.dataset.index);
+    const verse = items[index];
+    if (!verse) return;
+    if (event.key === "ArrowDown") moveTo(index + 1);
+    else if (event.key === "ArrowUp") moveTo(index - 1);
+    else if (event.key === "Home") moveTo(0);
+    else if (event.key === "End") moveTo(items.length - 1);
+    else if (event.key === "Enter") openInPanel(verse);
+    else return;
+    event.preventDefault();
+  };
+
+  const onFocus = (event: FocusEvent<HTMLElement>) => {
+    const row = event.target.closest<HTMLElement>("[data-index]");
+    if (row) setFocusIndex(Number(row.dataset.index));
+  };
+
+  // The tab stop must be rendered: when the focused verse has scrolled out
+  // of the window, the verse at the top takes its place.
+  const rendered = virtualizer.getVirtualItems().some((row) => row.index === focusIndex);
+  const tabStop = rendered ? focusIndex : (topIndex(virtualizer) ?? 0);
+
+  return { tabStop, setFocusIndex, onKeyDown, onFocus };
 }
 
 /**
@@ -146,6 +229,9 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
     scrollMargin: listOffset,
   });
 
+  const focus = useVerseFocus(listRef, virtualizer, items);
+  const { setFocusIndex } = focus;
+
   // A deep link scrolls to its verse and highlights it briefly; otherwise the
   // surah opens where it was left in this session.
   const [highlighted, setHighlighted] = useState<number | null>(null);
@@ -154,6 +240,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
     const index = items.findIndex((verse) => verse.ayah === target);
     if (index < 0) return;
     virtualizer.scrollToIndex(index, { align: "start" });
+    setFocusIndex(index);
     if (ayah === undefined) return;
     setHighlighted(ayah);
     const timer = setTimeout(() => {
@@ -162,7 +249,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
     return () => {
       clearTimeout(timer);
     };
-  }, [surah, ayah, items, virtualizer]);
+  }, [surah, ayah, items, virtualizer, setFocusIndex]);
 
   useReadingPosition(surah, scrollRef, virtualizer, items);
 
@@ -192,6 +279,8 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
           aria-label={t("reader.verse_list_label", { name })}
           className="relative"
           style={{ height: virtualizer.getTotalSize() }}
+          onKeyDown={focus.onKeyDown}
+          onFocus={focus.onFocus}
         >
           {virtualizer.getVirtualItems().map((row) => {
             const verse = items[row.index];
@@ -212,6 +301,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
                   packs={packs}
                   surahName={name}
                   highlighted={verse.ayah === highlighted}
+                  tabStop={row.index === focus.tabStop}
                 />
               </div>
             );

@@ -56,7 +56,22 @@
       "notes": "Notes",
       "chat": "Chat"
     },
-    "coming_soon": "Coming in a later version."
+    "coming_soon": "Coming in a later version.",
+    "selected_verse": "Selected verse:"
+  },
+  "command_palette": {
+    "title": "Command palette",
+    "go_to": "Go to",
+    "placeholder": "Surah and verse, e.g. 2:255 or Bakara 255",
+    "hint": "Type a surah number or name, optionally with a verse: 2:255, Bakara 255, Baqarah 255.",
+    "surahs": "Surahs",
+    "go_to_surah": "Go to {{number}}. {{name}}",
+    "go_to_verse": "Go to {{reference}}",
+    "errors": {
+      "surah_out_of_range": "There are 114 surahs.",
+      "ayah_out_of_range": "That surah has no such verse.",
+      "no_match": "No surah matches."
+    }
   },
   "settings": {
     "title": "Settings",

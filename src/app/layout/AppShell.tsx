@@ -7,6 +7,7 @@ import { type PanelSize, usePanelRef } from "react-resizable-panels";
 import { LiveAnnouncer } from "@/components/LiveAnnouncer";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { CommandPalette } from "@/features/command-palette/CommandPalette";
 import { ContextPanel } from "@/features/context-panel/ContextPanel";
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog";
 import { CoreRefreshBanner, DevDataBadge } from "@/features/core-status/CoreStatus";
@@ -89,6 +90,7 @@ export function AppShell() {
         </Button>
         <span className="ms-1 flex-1 text-sm font-semibold">{t("app.name")}</span>
         <DevDataBadge />
+        <CommandPalette />
         <SettingsDialog />
         <Button
           variant="ghost"

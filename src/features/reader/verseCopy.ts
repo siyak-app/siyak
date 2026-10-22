@@ -14,7 +14,12 @@ export function translationsText(
     .join("\n\n");
 }
 
+/** A verse number such as "2:153". */
+export function verseNumber(verse: { surah: number; ayah: number }): string {
+  return `${String(verse.surah)}:${String(verse.ayah)}`;
+}
+
 /** A verse reference such as "Al-Baqara 2:153" or "Bakara 2:153". */
 export function verseReference(surahName: string, verse: { surah: number; ayah: number }): string {
-  return `${surahName} ${String(verse.surah)}:${String(verse.ayah)}`;
+  return `${surahName} ${verseNumber(verse)}`;
 }

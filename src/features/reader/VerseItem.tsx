@@ -23,6 +23,7 @@ export const VerseItem = memo(function VerseItem({
   packs,
   surahName,
   highlighted = false,
+  tabStop = false,
 }: {
   verse: VerseWithTranslations;
   /** The shown translation packs by id. */
@@ -31,16 +32,24 @@ export const VerseItem = memo(function VerseItem({
   surahName: string;
   /** Briefly marks the verse a deep link opened. */
   highlighted?: boolean;
+  /** The verse list's one tab stop (roving focus). */
+  tabStop?: boolean;
 }) {
   const { t } = useTranslation();
   const mode = useUiStore((state) => state.preferences["reader.actions"]);
+  const selected = useUiStore(
+    (state) =>
+      state.selectedVerse?.surah === verse.surah && state.selectedVerse.ayah === verse.ayah,
+  );
   const titles = Object.fromEntries(Object.entries(packs).map(([id, pack]) => [id, pack.title]));
   const actions = <VerseActions verse={verse} surahName={surahName} titles={titles} mode={mode} />;
   return (
     <article
       aria-label={t("reader.verse_label", { surah: verse.surah, ayah: verse.ayah })}
+      tabIndex={tabStop ? 0 : -1}
       data-highlighted={highlighted || undefined}
-      className="group/verse flex gap-4 rounded-lg border-b border-border px-2 py-6 data-highlighted:animate-verse-highlight"
+      data-selected={selected || undefined}
+      className="group/verse flex gap-4 rounded-lg border-b border-border px-2 py-6 outline-none focus-visible:ring-2 focus-visible:ring-ring data-highlighted:animate-verse-highlight data-selected:bg-muted/60"
     >
       <span
         aria-hidden

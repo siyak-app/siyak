@@ -56,7 +56,22 @@
       "notes": "Notlar",
       "chat": "Sohbet"
     },
-    "coming_soon": "Sonraki bir sürümde gelecek."
+    "coming_soon": "Sonraki bir sürümde gelecek.",
+    "selected_verse": "Seçili ayet:"
+  },
+  "command_palette": {
+    "title": "Komut paleti",
+    "go_to": "Git",
+    "placeholder": "Sure ve ayet, ör. 2:255 ya da Bakara 255",
+    "hint": "Sure numarası ya da adı yazın, isterseniz ayetle birlikte: 2:255, Bakara 255, Baqarah 255.",
+    "surahs": "Sureler",
+    "go_to_surah": "{{number}}. {{name}} suresine git",
+    "go_to_verse": "{{reference}} ayetine git",
+    "errors": {
+      "surah_out_of_range": "Kur'an'da 114 sure var.",
+      "ayah_out_of_range": "O surede böyle bir ayet yok.",
+      "no_match": "Eşleşen sure yok."
+    }
   },
   "settings": {
     "title": "Ayarlar",

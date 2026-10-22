@@ -115,6 +115,7 @@ describe("ReaderView", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("en");
     useUiStore.getState().hydrate(DEFAULT_PREFERENCES);
+    useUiStore.getState().selectVerse(null);
   });
 
   it("renders verses as a list with accessible names", () => {
@@ -250,6 +251,63 @@ describe("ReaderView", () => {
     show(2);
     expect(await screen.findByRole("article", { name: "Verse 2:200" })).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: "Verse 2:1" })).not.toBeInTheDocument();
+  });
+
+  describe("keyboard", () => {
+    const focused = () => document.activeElement?.getAttribute("aria-label");
+
+    it("has one tab stop in the verse list", () => {
+      show(1);
+      const verses = screen.getAllByRole("article");
+      expect(verses.filter((verse) => verse.tabIndex === 0)).toHaveLength(1);
+      expect(verses[0]).toHaveAttribute("tabindex", "0");
+    });
+
+    it("moves between verses with the arrow keys, Home and End", async () => {
+      show(9);
+      const first = screen.getByRole("article", { name: "Verse 9:1" });
+      first.focus();
+      fireEvent.keyDown(first, { key: "ArrowDown" });
+      await vi.waitFor(() => {
+        expect(focused()).toBe("Verse 9:2");
+      });
+      fireEvent.keyDown(document.activeElement ?? first, { key: "ArrowUp" });
+      await vi.waitFor(() => {
+        expect(focused()).toBe("Verse 9:1");
+      });
+      fireEvent.keyDown(document.activeElement ?? first, { key: "ArrowUp" });
+      expect(focused()).toBe("Verse 9:1");
+      // The last verse is far outside the rendered window.
+      fireEvent.keyDown(document.activeElement ?? first, { key: "End" });
+      await vi.waitFor(() => {
+        expect(focused()).toBe("Verse 9:129");
+      });
+      expect(screen.getByRole("article", { name: "Verse 9:129" })).toHaveAttribute("tabindex", "0");
+    });
+
+    it("leaves keys in a verse's buttons alone", () => {
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:1" });
+      const button = within(verse).getByRole("button", { name: "Copy Arabic" });
+      button.focus();
+      fireEvent.keyDown(button, { key: "ArrowDown" });
+      expect(document.activeElement).toBe(button);
+    });
+
+    it("opens the verse in the context panel on Enter", () => {
+      useUiStore.getState().setPreference("layout.right_panel", {
+        ...DEFAULT_PREFERENCES["layout.right_panel"],
+        collapsed: true,
+      });
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:3" });
+      verse.focus();
+      fireEvent.keyDown(verse, { key: "Enter" });
+      const state = useUiStore.getState();
+      expect(state.selectedVerse).toEqual({ surah: 1, ayah: 3 });
+      expect(state.preferences["layout.right_panel"].collapsed).toBe(false);
+      expect(verse).toHaveAttribute("data-selected", "true");
+    });
   });
 
   describe("verse actions", () => {
