@@ -2,29 +2,45 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { TextDirection, VerseWithTranslations } from "@/lib/bindings";
+import { useUiStore } from "@/stores/ui";
+
+import { VerseActions } from "./VerseActions";
+
+/** What a verse needs to know about a shown translation pack. */
+export interface ShownPack {
+  dir: TextDirection;
+  /** Title in the interface language. */
+  title: string;
+}
 
 /**
  * One verse: Arabic text followed by the selected translations, each in its
- * pack's language and direction. Memoized: scrolling re-renders only the
- * verses entering the virtualized window.
+ * pack's language and direction, and the verse's actions. Memoized:
+ * scrolling re-renders only the verses entering the virtualized window.
  */
 export const VerseItem = memo(function VerseItem({
   verse,
-  directions,
+  packs,
+  surahName,
   highlighted = false,
 }: {
   verse: VerseWithTranslations;
-  /** Writing direction per translation pack id. */
-  directions: Readonly<Record<string, TextDirection>>;
+  /** The shown translation packs by id. */
+  packs: Readonly<Record<string, ShownPack>>;
+  /** The surah's name in the interface language. */
+  surahName: string;
   /** Briefly marks the verse a deep link opened. */
   highlighted?: boolean;
 }) {
   const { t } = useTranslation();
+  const mode = useUiStore((state) => state.preferences["reader.actions"]);
+  const titles = Object.fromEntries(Object.entries(packs).map(([id, pack]) => [id, pack.title]));
+  const actions = <VerseActions verse={verse} surahName={surahName} titles={titles} mode={mode} />;
   return (
     <article
       aria-label={t("reader.verse_label", { surah: verse.surah, ayah: verse.ayah })}
       data-highlighted={highlighted || undefined}
-      className="flex gap-4 rounded-lg border-b border-border px-2 py-6 data-highlighted:animate-verse-highlight"
+      className="group/verse flex gap-4 rounded-lg border-b border-border px-2 py-6 data-highlighted:animate-verse-highlight"
     >
       <span
         aria-hidden
@@ -40,13 +56,15 @@ export const VerseItem = memo(function VerseItem({
           <p
             key={translation.pack_id}
             lang={translation.lang ?? undefined}
-            dir={directions[translation.pack_id] ?? "auto"}
+            dir={packs[translation.pack_id]?.dir ?? "auto"}
             className="translation-text text-foreground/85"
           >
             {translation.text}
           </p>
         ))}
+        {mode === "labeled" && actions}
       </div>
+      {mode === "hover" && <div className="mt-1 shrink-0">{actions}</div>}
     </article>
   );
 });

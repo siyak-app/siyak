@@ -4,14 +4,15 @@ import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
-import type { TextDirection, VerseWithTranslations } from "@/lib/bindings";
+import type { VerseWithTranslations } from "@/lib/bindings";
 import { useSurah, useTranslations, useVerses } from "@/lib/queries";
 import { useUiStore } from "@/stores/ui";
 
 import { recallTopAyah, rememberTopAyah } from "./scrollMemory";
 import { SurahHeader } from "./SurahHeader";
 import { surahName } from "./surahName";
-import { VerseItem } from "./VerseItem";
+import { translationTitle } from "./translationTitle";
+import { type ShownPack, VerseItem } from "./VerseItem";
 import { estimateVerseHeight } from "./verseLayout";
 
 /** Verses rendered beyond the visible ones, above and below. */
@@ -119,10 +120,13 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
     const byId = new Map((installed.data ?? []).map((pack) => [pack.id, pack]));
     return selected.flatMap((id) => byId.get(id) ?? []);
   }, [installed.data, selected]);
-  const directions = useMemo(
+  const language = i18n.resolvedLanguage;
+  const packs = useMemo(
     () =>
-      Object.fromEntries(shown.map((pack) => [pack.id, pack.dir])) as Record<string, TextDirection>,
-    [shown],
+      Object.fromEntries(
+        shown.map((pack) => [pack.id, { dir: pack.dir, title: translationTitle(pack, language) }]),
+      ) as Record<string, ShownPack>,
+    [shown, language],
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -162,7 +166,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
 
   useReadingPosition(surah, scrollRef, virtualizer, items);
 
-  const name = info.data ? surahName(info.data, i18n.resolvedLanguage) : String(surah);
+  const name = info.data ? surahName(info.data, language) : String(surah);
   const noSuchVerse = ayah !== undefined && info.data !== undefined && ayah > info.data.ayah_count;
 
   return (
@@ -205,7 +209,8 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
               >
                 <VerseItem
                   verse={verse}
-                  directions={directions}
+                  packs={packs}
+                  surahName={name}
                   highlighted={verse.ayah === highlighted}
                 />
               </div>

@@ -39,6 +39,14 @@
     "move_translation_up": "Move {{title}} up",
     "move_translation_down": "Move {{title}} down"
   },
+  "verse_actions": {
+    "copy_arabic": "Copy Arabic",
+    "copy_translation_one": "Copy translation",
+    "copy_translation_other": "Copy translations",
+    "copy_reference": "Copy reference",
+    "copied": "Copied",
+    "copy_failed": "Could not copy to the clipboard."
+  },
   "context_panel": {
     "label": "Context panel",
     "tabs": {

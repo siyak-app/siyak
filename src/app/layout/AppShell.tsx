@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { type PanelSize, usePanelRef } from "react-resizable-panels";
 
+import { LiveAnnouncer } from "@/components/LiveAnnouncer";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ContextPanel } from "@/features/context-panel/ContextPanel";
@@ -142,6 +143,7 @@ export function AppShell() {
         </ResizablePanel>
       </ResizablePanelGroup>
       <OnboardingDialog />
+      <LiveAnnouncer />
     </div>
   );
 }

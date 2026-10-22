@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import i18n from "@/i18n";
+import { useAnnouncement } from "@/lib/announce";
 import type { Surah, TranslationInfo, VerseWithTranslations } from "@/lib/bindings";
 import { DEFAULT_PREFERENCES, useUiStore } from "@/stores/ui";
 import { stubLayout } from "@/test/layout";
@@ -98,7 +100,7 @@ vi.mock("@/lib/queries", () => ({
 function show(number: number, translations: string[] = ["en.pickthall"], ayah?: number) {
   current = { surah: number, ayah };
   useUiStore.getState().setPreference("reader.translations", translations);
-  return render(<ReaderView />);
+  return render(<ReaderView />, { wrapper: TooltipProvider });
 }
 
 describe("ReaderView", () => {
@@ -248,5 +250,82 @@ describe("ReaderView", () => {
     show(2);
     expect(await screen.findByRole("article", { name: "Verse 2:200" })).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: "Verse 2:1" })).not.toBeInTheDocument();
+  });
+
+  describe("verse actions", () => {
+    let writeText: Mock<(text: string) => Promise<void>>;
+    beforeEach(() => {
+      writeText = vi.fn(() => Promise.resolve());
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText },
+      });
+    });
+
+    const verse = (name: string) => screen.findByRole("article", { name });
+
+    it("copies the reference with the surah name in the interface language", async () => {
+      show(2, ["en.pickthall"], 153);
+      const article = await verse("Verse 2:153");
+      fireEvent.click(within(article).getByRole("button", { name: "Copy reference" }));
+      await vi.waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith("Al-Baqara 2:153");
+      });
+      expect(useAnnouncement.getState().message).toBe("Copied");
+    });
+
+    it("copies the Arabic text", async () => {
+      show(2, ["en.pickthall"], 153);
+      const article = await verse("Verse 2:153");
+      fireEvent.click(within(article).getByRole("button", { name: "Copy Arabic" }));
+      await vi.waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith("آية 153");
+      });
+    });
+
+    it("copies all shown translations, each under its title", async () => {
+      show(1, ["ur.test", "en.pickthall"]);
+      const article = await verse("Verse 1:2");
+      fireEvent.click(within(article).getByRole("button", { name: "Copy translations" }));
+      await vi.waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith(
+          "Urdu test\nur.test 1:2\n\nThe Meaning of the Glorious Koran\nen.pickthall 1:2",
+        );
+      });
+    });
+
+    it("offers no translation copy for Arabic only", async () => {
+      show(1, []);
+      const article = await verse("Verse 1:1");
+      expect(within(article).queryByRole("button", { name: /Copy translation/ })).toBeNull();
+      expect(within(article).getByRole("button", { name: "Copy Arabic" })).toBeInTheDocument();
+    });
+
+    it("shows labels in labeled mode", async () => {
+      useUiStore.getState().setPreference("reader.actions", "labeled");
+      show(1);
+      const article = await verse("Verse 1:1");
+      expect(within(article).getByRole("button", { name: "Copy reference" })).toHaveTextContent(
+        "Copy reference",
+      );
+    });
+
+    it("uses icon buttons in hover mode", async () => {
+      show(1);
+      const article = await verse("Verse 1:1");
+      expect(within(article).getByRole("button", { name: "Copy reference" })).toHaveTextContent("");
+    });
+
+    it("announces a failed copy", async () => {
+      writeText.mockRejectedValueOnce(new Error("denied"));
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      show(1);
+      const article = await verse("Verse 1:1");
+      fireEvent.click(within(article).getByRole("button", { name: "Copy Arabic" }));
+      await vi.waitFor(() => {
+        expect(useAnnouncement.getState().message).toBe("Could not copy to the clipboard.");
+      });
+      consoleError.mockRestore();
+    });
   });
 });

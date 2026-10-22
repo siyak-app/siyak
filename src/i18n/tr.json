@@ -39,6 +39,14 @@
     "move_translation_up": "{{title}} yukarı taşı",
     "move_translation_down": "{{title}} aşağı taşı"
   },
+  "verse_actions": {
+    "copy_arabic": "Arapçasını kopyala",
+    "copy_translation_one": "Meali kopyala",
+    "copy_translation_other": "Mealleri kopyala",
+    "copy_reference": "Referansı kopyala",
+    "copied": "Kopyalandı",
+    "copy_failed": "Panoya kopyalanamadı."
+  },
   "context_panel": {
     "label": "Bağlam paneli",
     "tabs": {
