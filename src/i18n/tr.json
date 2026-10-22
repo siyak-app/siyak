@@ -31,7 +31,13 @@
     "translation_titles_one": "Meal: {{titles}}",
     "translation_titles_other": "Mealler: {{titles}}",
     "arabic_only": "Yalnızca Arapça metin",
-    "verse_not_found": "{{surah}}:{{ayah}} diye bir ayet yok."
+    "verse_not_found": "{{surah}}:{{ayah}} diye bir ayet yok.",
+    "translations_button": "Mealler",
+    "translations_picker_title": "Gösterilen mealler",
+    "translations_picker_hint": "İşaretli mealler her ayetin altında bu sırayla gösterilir.",
+    "no_translations_installed": "Yüklü meal yok.",
+    "move_translation_up": "{{title}} yukarı taşı",
+    "move_translation_down": "{{title}} aşağı taşı"
   },
   "context_panel": {
     "label": "Bağlam paneli",

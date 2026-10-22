@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { Surah, TranslationInfo } from "@/lib/bindings";
 
 import { surahName } from "./surahName";
+import { TranslationPicker } from "./TranslationPicker";
 import { translationTitle } from "./translationTitle";
 
 /**
@@ -38,11 +39,14 @@ export function SurahHeader({
           {surah.name_ar}
         </p>
       </div>
-      <p className="mt-3 text-sm text-muted-foreground">
-        {titles.length === 0
-          ? t("reader.arabic_only")
-          : t("reader.translation_titles", { count: titles.length, titles: titles.join(" · ") })}
-      </p>
+      <div className="mt-3 flex items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">
+          {titles.length === 0
+            ? t("reader.arabic_only")
+            : t("reader.translation_titles", { count: titles.length, titles: titles.join(" · ") })}
+        </p>
+        <TranslationPicker />
+      </div>
       {surah.bismillah !== null && (
         <p dir="rtl" lang="ar" className="arabic-text mt-6 text-center" data-testid="basmala">
           {surah.bismillah}

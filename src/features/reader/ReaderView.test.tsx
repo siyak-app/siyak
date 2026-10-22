@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
@@ -142,6 +142,33 @@ describe("ReaderView", () => {
     expect(english).toHaveAttribute("dir", "ltr");
     // The selected order is the display order.
     expect(urdu.compareDocumentPosition(english) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("reorders the shown translations from the picker", async () => {
+    show(1, ["en.pickthall", "ur.test"]);
+    fireEvent.click(screen.getByRole("button", { name: "Translations" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Move Urdu test up" }));
+    expect(useUiStore.getState().preferences["reader.translations"]).toEqual([
+      "ur.test",
+      "en.pickthall",
+    ]);
+    const urdu = screen.getByText("ur.test 1:1");
+    const english = screen.getByText("en.pickthall 1:1");
+    expect(urdu.compareDocumentPosition(english) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(urdu).toHaveAttribute("dir", "rtl");
+    expect(english).toHaveAttribute("dir", "ltr");
+  });
+
+  it("shows and hides translations from the picker", async () => {
+    show(1, ["en.pickthall"]);
+    fireEvent.click(screen.getByRole("button", { name: "Translations" }));
+    const urdu = await screen.findByRole("checkbox", { name: /Urdu test/ });
+    expect(urdu).not.toBeChecked();
+    fireEvent.click(urdu);
+    expect(await screen.findByText("ur.test 1:1")).toHaveAttribute("lang", "ur");
+    fireEvent.click(screen.getByRole("checkbox", { name: /The Meaning of the Glorious Koran/ }));
+    expect(useUiStore.getState().preferences["reader.translations"]).toEqual(["ur.test"]);
+    expect(screen.queryByText("en.pickthall 1:1")).not.toBeInTheDocument();
   });
 
   it("names the translations once, in the surah header", () => {

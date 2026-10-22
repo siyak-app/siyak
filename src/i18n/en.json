@@ -31,7 +31,13 @@
     "translation_titles_one": "Translation: {{titles}}",
     "translation_titles_other": "Translations: {{titles}}",
     "arabic_only": "Arabic text only",
-    "verse_not_found": "There is no verse {{surah}}:{{ayah}}."
+    "verse_not_found": "There is no verse {{surah}}:{{ayah}}.",
+    "translations_button": "Translations",
+    "translations_picker_title": "Translations shown",
+    "translations_picker_hint": "Checked translations appear under each verse, in this order.",
+    "no_translations_installed": "No translations are installed.",
+    "move_translation_up": "Move {{title}} up",
+    "move_translation_down": "Move {{title}} down"
   },
   "context_panel": {
     "label": "Context panel",
