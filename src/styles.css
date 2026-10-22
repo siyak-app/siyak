@@ -68,7 +68,7 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.54 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -125,6 +125,36 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Sepia: a warm, paper-like light theme for long reading. */
+.sepia {
+  --background: oklch(0.955 0.025 85);
+  --foreground: oklch(0.27 0.03 60);
+  --card: oklch(0.975 0.02 85);
+  --card-foreground: oklch(0.27 0.03 60);
+  --popover: oklch(0.975 0.02 85);
+  --popover-foreground: oklch(0.27 0.03 60);
+  --primary: oklch(0.47 0.08 186);
+  --primary-foreground: oklch(0.985 0.01 85);
+  --secondary: oklch(0.92 0.03 85);
+  --secondary-foreground: oklch(0.3 0.03 60);
+  --muted: oklch(0.92 0.03 85);
+  --muted-foreground: oklch(0.47 0.035 60);
+  --accent: oklch(0.92 0.03 85);
+  --accent-foreground: oklch(0.3 0.03 60);
+  --destructive: oklch(0.53 0.2 27.325);
+  --border: oklch(0.87 0.03 80);
+  --input: oklch(0.87 0.03 80);
+  --ring: oklch(0.55 0.09 186);
+  --sidebar: oklch(0.94 0.028 85);
+  --sidebar-foreground: oklch(0.27 0.03 60);
+  --sidebar-primary: oklch(0.47 0.08 186);
+  --sidebar-primary-foreground: oklch(0.985 0.01 85);
+  --sidebar-accent: oklch(0.92 0.03 85);
+  --sidebar-accent-foreground: oklch(0.3 0.03 60);
+  --sidebar-border: oklch(0.87 0.03 80);
+  --sidebar-ring: oklch(0.55 0.09 186);
+}
+
 /* A verse opened by a deep link fades from a tint to its normal background. */
 @theme {
   --animate-verse-highlight: verse-highlight 2.5s ease-out;
@@ -145,7 +175,7 @@
   }
 }
 
-/* Reader typography; the values come from the typography settings (spec §13.4). */
+/* Reader typography: defaults, overridden on <html> from the typography settings (spec §13.4). */
 :root {
   --arabic-size: 28px;
   --arabic-line-height: 2.2;

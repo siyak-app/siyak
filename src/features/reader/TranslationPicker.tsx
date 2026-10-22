@@ -28,12 +28,34 @@ function languageName(code: string, language: string | undefined): string {
   }
 }
 
+/** The reader header's button that opens `TranslationChooser` in a popover. */
+export function TranslationPicker() {
+  const { t } = useTranslation();
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          <LanguagesIcon aria-hidden />
+          {t("reader.translations_button")}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80">
+        <PopoverHeader>
+          <PopoverTitle>{t("reader.translations_picker_title")}</PopoverTitle>
+          <PopoverDescription>{t("reader.translations_picker_hint")}</PopoverDescription>
+        </PopoverHeader>
+        <TranslationChooser />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /**
  * Chooses the translations shown in the reader and their order
  * (`reader.translations`). Shown translations come first, in display order,
  * each with move up/down buttons; the other installed ones follow.
  */
-export function TranslationPicker() {
+export function TranslationChooser() {
   const { t } = useTranslation();
   const installed = useTranslations();
   const selected = useUiStore((state) => state.preferences["reader.translations"]);
@@ -50,52 +72,37 @@ export function TranslationPicker() {
     setPreference("reader.translations", next);
   };
 
+  if (packs.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t("reader.no_translations_installed")}</p>;
+  }
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <LanguagesIcon aria-hidden />
-          {t("reader.translations_button")}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
-        <PopoverHeader>
-          <PopoverTitle>{t("reader.translations_picker_title")}</PopoverTitle>
-          <PopoverDescription>{t("reader.translations_picker_hint")}</PopoverDescription>
-        </PopoverHeader>
-        {packs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("reader.no_translations_installed")}</p>
-        ) : (
-          <ul className="-mx-1 flex flex-col">
-            {shown.map((pack, index) => (
-              <TranslationRow
-                key={pack.id}
-                pack={pack}
-                checked
-                first={index === 0}
-                last={index === shown.length - 1}
-                onCheckedChange={(checked) => {
-                  update(toggleTranslation(shownIds, pack.id, checked));
-                }}
-                onMove={(by) => {
-                  update(moveTranslation(shownIds, pack.id, by));
-                }}
-              />
-            ))}
-            {others.map((pack) => (
-              <TranslationRow
-                key={pack.id}
-                pack={pack}
-                checked={false}
-                onCheckedChange={(checked) => {
-                  update(toggleTranslation(shownIds, pack.id, checked));
-                }}
-              />
-            ))}
-          </ul>
-        )}
-      </PopoverContent>
-    </Popover>
+    <ul className="-mx-1 flex flex-col">
+      {shown.map((pack, index) => (
+        <TranslationRow
+          key={pack.id}
+          pack={pack}
+          checked
+          first={index === 0}
+          last={index === shown.length - 1}
+          onCheckedChange={(checked) => {
+            update(toggleTranslation(shownIds, pack.id, checked));
+          }}
+          onMove={(by) => {
+            update(moveTranslation(shownIds, pack.id, by));
+          }}
+        />
+      ))}
+      {others.map((pack) => (
+        <TranslationRow
+          key={pack.id}
+          pack={pack}
+          checked={false}
+          onCheckedChange={(checked) => {
+            update(toggleTranslation(shownIds, pack.id, checked));
+          }}
+        />
+      ))}
+    </ul>
   );
 }
 

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { systemLanguage } from "@/i18n";
 import { queryKeys, useSetSetting, useSettings } from "@/lib/queries";
-import { serializeSetting } from "@/lib/settings";
+import { serializeSetting, type Typography } from "@/lib/settings";
 import {
   preferencesFromSettings,
   useUiStore,
@@ -94,4 +94,15 @@ export function useApplyTheme(preference: UiPreferences["ui.theme"]): void {
       media.removeEventListener("change", apply);
     };
   }, [preference]);
+}
+
+/** Sets the reader typography variables on `<html>` (see `styles.css`). */
+export function useApplyTypography(arabic: Typography, translation: Typography): void {
+  useEffect(() => {
+    const style = document.documentElement.style;
+    style.setProperty("--arabic-size", `${String(arabic.size)}px`);
+    style.setProperty("--arabic-line-height", String(arabic.line_height));
+    style.setProperty("--translation-size", `${String(translation.size)}px`);
+    style.setProperty("--translation-line-height", String(translation.line_height));
+  }, [arabic, translation]);
 }

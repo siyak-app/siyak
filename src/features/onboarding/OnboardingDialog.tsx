@@ -10,8 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { profileDefaults } from "@/features/profile/profileDefaults";
-import { useSetSettings, useTranslations } from "@/lib/queries";
+import { useApplyProfile } from "@/features/profile/useApplyProfile";
 import type { ExperienceProfile } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
@@ -67,25 +66,8 @@ const PROFILES: { profile: ExperienceProfile; icon: LucideIcon }[] = [
 
 /** The profile question; writes every default of the chosen profile at once. */
 function ProfileStep({ onDone }: { onDone: () => void }) {
-  const { t, i18n } = useTranslation();
-  const translations = useTranslations();
-  const save = useSetSettings();
-
-  const choose = (profile: ExperienceProfile) => {
-    const { preferences, setPreferences } = useUiStore.getState();
-    const values = profileDefaults(
-      profile,
-      translations.data ?? [],
-      i18n.resolvedLanguage ?? "en",
-      preferences["layout.right_panel"],
-    );
-    save.mutate(values, {
-      onSuccess: () => {
-        setPreferences(values);
-        onDone();
-      },
-    });
-  };
+  const { t } = useTranslation();
+  const { apply, busy, error } = useApplyProfile();
 
   return (
     <div className="grid gap-3">
@@ -94,9 +76,9 @@ function ProfileStep({ onDone }: { onDone: () => void }) {
           <button
             key={profile}
             type="button"
-            disabled={translations.isPending || save.isPending}
+            disabled={busy}
             onClick={() => {
-              choose(profile);
+              apply(profile, onDone);
             }}
             className="flex flex-col items-start gap-2 rounded-lg border p-4 text-start transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
           >
@@ -106,7 +88,7 @@ function ProfileStep({ onDone }: { onDone: () => void }) {
           </button>
         ))}
       </div>
-      {save.isError && <ErrorMessage error={save.error} />}
+      {error && <ErrorMessage error={error} />}
       <p className="text-xs text-muted-foreground">{t("onboarding.note")}</p>
     </div>
   );

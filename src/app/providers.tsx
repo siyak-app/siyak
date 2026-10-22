@@ -4,7 +4,12 @@ import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useUiStore } from "@/stores/ui";
 
-import { useApplyLanguage, useApplyTheme, usePreferencesSync } from "./preferences";
+import {
+  useApplyLanguage,
+  useApplyTheme,
+  useApplyTypography,
+  usePreferencesSync,
+} from "./preferences";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,7 +24,10 @@ function PreferencesGate({ children }: { children: ReactNode }) {
   const language = useUiStore((state) => state.preferences["ui.language"]);
   const theme = useUiStore((state) => state.preferences["ui.theme"]);
   useApplyLanguage(language);
+  const arabic = useUiStore((state) => state.preferences["typography.arabic"]);
+  const translation = useUiStore((state) => state.preferences["typography.translation"]);
   useApplyTheme(theme);
+  useApplyTypography(arabic, translation);
   // Pane sizes are only read on mount, so wait for the stored layout.
   return hydrated ? children : null;
 }

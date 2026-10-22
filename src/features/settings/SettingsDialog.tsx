@@ -10,38 +10,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import type { LanguagePreference, ThemePreference } from "@/lib/settings";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { LanguagePreference } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
-const LANGUAGES: readonly LanguagePreference[] = ["system", "tr", "en"];
-const THEMES: readonly ThemePreference[] = ["system", "light", "dark"];
+import { AppearanceSettings } from "./AppearanceSettings";
+import { DisplaySettings } from "./DisplaySettings";
+import { RadioField } from "./fields";
 
-/**
- * Minimal settings: interface language and theme.
- * TODO(M2): appearance (fonts, sizes) and reader defaults (spec §13.3).
- */
+const LANGUAGES: readonly LanguagePreference[] = ["system", "tr", "en"];
+
+/** Settings: appearance, display & behaviour, and the interface language. */
 export function SettingsDialog() {
   const { t } = useTranslation();
-  const language = useUiStore((state) => state.preferences["ui.language"]);
-  const theme = useUiStore((state) => state.preferences["ui.theme"]);
-  const setPreference = useUiStore((state) => state.setPreference);
-
-  const languageLabel = (value: LanguagePreference) =>
-    value === "system"
-      ? t("settings.follow_system")
-      : t(value === "tr" ? "settings.language_tr" : "settings.language_en");
-  const themeLabel = (value: ThemePreference) =>
-    value === "system"
-      ? t("settings.follow_system")
-      : t(value === "light" ? "settings.theme_light" : "settings.theme_dark");
-
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -49,56 +30,49 @@ export function SettingsDialog() {
           <SettingsIcon />
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("settings.title")}</DialogTitle>
           <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">
-          <label className="grid gap-1.5">
-            <span className="font-medium">{t("settings.language")}</span>
-            <Select
-              value={language}
-              onValueChange={(value) => {
-                const next = LANGUAGES.find((option) => option === value);
-                if (next) setPreference("ui.language", next);
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LANGUAGES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {languageLabel(option)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <label className="grid gap-1.5">
-            <span className="font-medium">{t("settings.theme")}</span>
-            <Select
-              value={theme}
-              onValueChange={(value) => {
-                const next = THEMES.find((option) => option === value);
-                if (next) setPreference("ui.theme", next);
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {THEMES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {themeLabel(option)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-        </div>
+        <Tabs defaultValue="appearance" className="min-h-0 flex-1">
+          <TabsList className="w-full">
+            <TabsTrigger value="appearance">{t("settings.tab_appearance")}</TabsTrigger>
+            <TabsTrigger value="display">{t("settings.tab_display")}</TabsTrigger>
+            <TabsTrigger value="language">{t("settings.tab_language")}</TabsTrigger>
+          </TabsList>
+          <div className="-mx-1 min-h-0 overflow-y-auto px-1 pt-3">
+            <TabsContent value="appearance">
+              <AppearanceSettings />
+            </TabsContent>
+            <TabsContent value="display">
+              <DisplaySettings />
+            </TabsContent>
+            <TabsContent value="language">
+              <LanguageSettings />
+            </TabsContent>
+          </div>
+        </Tabs>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function LanguageSettings() {
+  const { t } = useTranslation();
+  const language = useUiStore((state) => state.preferences["ui.language"]);
+  const setPreference = useUiStore((state) => state.setPreference);
+  return (
+    <RadioField
+      legend={t("settings.language")}
+      value={language}
+      options={LANGUAGES.map((value) => ({
+        value,
+        label: value === "system" ? t("settings.follow_system") : t(`settings.language_${value}`),
+      }))}
+      onChange={(value) => {
+        setPreference("ui.language", value);
+      }}
+    />
   );
 }
