@@ -69,7 +69,8 @@ Both live in the operating system's app data directory (`app_data_dir()`, e.g.
   verse and highlights it briefly. The verse at the top is remembered per surah for the session
   and stored as `reader.last_position`, which the index route opens on the next launch.
 - **Keyboard.** The verse list is one tab stop with roving focus: ↑/↓, Home and End move between
-  verses (scrolling the virtual list as needed) and Enter opens the verse in the context panel.
+  verses (scrolling the virtual list as needed) and Enter opens the verse in the context panel,
+  as does a click (except one that ends a text selection, so text can still be copied).
   Ctrl/⌘+K opens the command palette, whose "Go to" understands `2:255`, `Bakara 255` and
   `Baqarah 255` (`src/lib/goTo.ts`).
 - **Translations and actions.** `reader.translations` is an ordered list of pack ids; each block

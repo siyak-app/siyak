@@ -253,7 +253,7 @@ describe("ReaderView", () => {
     expect(screen.queryByRole("article", { name: "Verse 2:1" })).not.toBeInTheDocument();
   });
 
-  describe("keyboard", () => {
+  describe("keyboard and selection", () => {
     const focused = () => document.activeElement?.getAttribute("aria-label");
 
     it("has one tab stop in the verse list", () => {
@@ -308,6 +308,30 @@ describe("ReaderView", () => {
       expect(state.preferences["layout.right_panel"].collapsed).toBe(false);
       expect(verse).toHaveAttribute("data-selected", "true");
     });
+
+    it("selects a verse for the context panel on a click", () => {
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:4" });
+      fireEvent.click(within(verse).getByText("آية 4"));
+      expect(useUiStore.getState().selectedVerse).toEqual({ surah: 1, ayah: 4 });
+      expect(verse).toHaveAttribute("data-selected", "true");
+    });
+
+    it("selects nothing on a click that ends a text selection", () => {
+      useUiStore.getState().selectVerse(null);
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:5" });
+      const arabic = within(verse).getByText("آية 5");
+      const selection = window.getSelection();
+      selection?.selectAllChildren(arabic);
+      try {
+        fireEvent.click(arabic);
+      } finally {
+        selection?.removeAllRanges();
+      }
+      expect(useUiStore.getState().selectedVerse).toBeNull();
+      expect(verse).not.toHaveAttribute("data-selected");
+    });
   });
 
   describe("verse actions", () => {
@@ -321,6 +345,17 @@ describe("ReaderView", () => {
     });
 
     const verse = (name: string) => screen.findByRole("article", { name });
+
+    it("does not select the verse when one of its buttons is clicked", async () => {
+      useUiStore.getState().selectVerse(null);
+      show(1);
+      const article = await verse("Verse 1:6");
+      fireEvent.click(within(article).getByRole("button", { name: "Copy reference" }));
+      await vi.waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith("Al-Faatiha 1:6");
+      });
+      expect(useUiStore.getState().selectedVerse).toBeNull();
+    });
 
     it("copies the reference with the surah name in the interface language", async () => {
       show(2, ["en.pickthall"], 153);

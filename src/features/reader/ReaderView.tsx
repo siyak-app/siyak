@@ -3,6 +3,7 @@ import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import {
   type FocusEvent,
   type KeyboardEvent,
+  type MouseEvent,
   type RefObject,
   useEffect,
   useLayoutEffect,
@@ -81,6 +82,11 @@ function topVerse(
   return index === undefined ? undefined : items[index];
 }
 
+/** Whether the user has selected some text (a click then only ends the selection). */
+function hasTextSelection(): boolean {
+  return (window.getSelection()?.toString() ?? "") !== "";
+}
+
 /** Shows `verse` in the context panel, opening the panel if needed. */
 function openInPanel(verse: VerseWithTranslations) {
   const { preferences, setPreference, selectVerse } = useUiStore.getState();
@@ -92,8 +98,10 @@ function openInPanel(verse: VerseWithTranslations) {
 /**
  * Keyboard navigation of the verse list (one tab stop, roving focus):
  * ↑/↓ move between verses, Home/End jump to the first or last, scrolling
- * the virtualized list as needed; Enter opens the verse in the context
- * panel. Keys inside a verse's buttons keep their usual meaning.
+ * the virtualized list as needed; Enter or a click opens the verse in the
+ * context panel. Keys and clicks on a verse's buttons keep their usual
+ * meaning, and a click that ends a text selection selects nothing, so text
+ * can still be selected and copied.
  */
 function useVerseFocus(
   listRef: RefObject<HTMLDivElement | null>,
@@ -137,6 +145,14 @@ function useVerseFocus(
     event.preventDefault();
   };
 
+  const onClick = (event: MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("button, a, input") || hasTextSelection()) return;
+    const index = Number(target.closest<HTMLElement>("[data-index]")?.dataset.index);
+    const verse = items[index];
+    if (verse) openInPanel(verse);
+  };
+
   const onFocus = (event: FocusEvent<HTMLElement>) => {
     const row = event.target.closest<HTMLElement>("[data-index]");
     if (row) setFocusIndex(Number(row.dataset.index));
@@ -147,7 +163,7 @@ function useVerseFocus(
   const rendered = virtualizer.getVirtualItems().some((row) => row.index === focusIndex);
   const tabStop = rendered ? focusIndex : (topIndex(virtualizer) ?? 0);
 
-  return { tabStop, setFocusIndex, onKeyDown, onFocus };
+  return { tabStop, setFocusIndex, onKeyDown, onClick, onFocus };
 }
 
 /**
@@ -280,6 +296,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
           className="relative"
           style={{ height: virtualizer.getTotalSize() }}
           onKeyDown={focus.onKeyDown}
+          onClick={focus.onClick}
           onFocus={focus.onFocus}
         >
           {virtualizer.getVirtualItems().map((row) => {
