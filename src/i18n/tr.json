@@ -116,7 +116,7 @@
     "word_underline_none": "Alt çizgi yok",
     "word_underline_dotted": "Noktalı alt çizgi",
     "search_mode_chips": "Arama kipi düğmelerini göster",
-    "citation_action": "Ayetlerde “Atıf kopyala”yı göster"
+    "citation_action": "Ayetlerde “Atıfı kopyala” eylemini göster"
   },
   "errors": {
     "title": "Bir sorun oluştu",
@@ -147,19 +147,19 @@
     },
     "semantic_search": {
       "plain": "anlamına göre ara",
-      "technical": "semantik arama"
+      "technical": "anlamsal arama"
     },
     "segment": {
       "plain": "kelime parçası",
-      "technical": "segment"
+      "technical": "morfem"
     },
     "morphology": {
       "plain": "kelime tahlili",
-      "technical": "morfoloji"
+      "technical": "sarf"
     },
     "part_of_speech": {
       "plain": "kelime türü",
-      "technical": "sözcük türü etiketi"
+      "technical": "sözcük türü"
     }
   },
   "term_format": {

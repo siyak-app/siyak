@@ -900,7 +900,7 @@ Paneller daraltılabilir ve yeniden boyutlandırılabilir; düzen tercihi `setti
 | Kelime vurgusu (`word.underline`) | Yok | Noktalı alt çizgi |
 | Teknik terimler (`ui.technical_terms`) | Gizli (ipucunda) | Parantez içinde görünür |
 | Arama mod çipleri (`search.mode_chips`) | Gizli (yalnızca Tümü) | Görünür |
-| Atıf kopyala (`reader.citation_action`) | Gizli | Görünür |
+| Atıfı kopyala (`reader.citation_action`) | Gizli | Görünür |
 
 **Bileşen ilkesi:** İki profil aynı bileşenleri kullanır, farklı ekranlar yazılmaz. Örneğin küçük kelime kartındaki "Detaylı analiz", sağ paneldeki Kelime sekmesini açar. Yeni bir özellik eklerken "sade varsayılanda nasıl görünür / gizlenir?" sorusu PR şablonunda yer alır.
 
