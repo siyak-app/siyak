@@ -29,9 +29,24 @@ thiserror = "2.0.21"
 specta = { version = "=2.0.0-rc.25", features = ["derive", "serde_json"] }
 specta-typescript = "=0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+# The only HTTP client (net.rs); rustls, no cookies, redirects followed by hand.
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2", "system-proxy"] }
+tokio = { version = "1.54.0", features = ["macros", "rt", "sync", "time", "fs", "io-util"] }
+tokio-util = "0.7.20"
+bytes = "1.12.1"
+sha2 = "0.11.1"
+zstd = "0.14.3"
+tar = { version = "0.4.46", default-features = false }
+semver = "1.0.28"
+fs4 = "1.1.0"
+# Rust side only: the webview gets no opener permission (spec §14.3).
+tauri-plugin-opener = "2.7.2"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+tokio = { version = "1.54.0", features = ["macros", "rt-multi-thread", "net"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+futures-util = { version = "0.3.34", default-features = false }
 
 [lints]
 workspace = true

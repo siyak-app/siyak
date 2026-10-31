@@ -8,3 +8,6 @@
 pub mod download;
 pub mod install;
 pub mod manifest;
+
+#[cfg(test)]
+mod test_support;

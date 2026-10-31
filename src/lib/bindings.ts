@@ -65,7 +65,43 @@ export type AppErrorCode =
  *  Updating the Quran text and bundled translations from the newer bundled
  *  `core.db` failed; the previous data is still in use (spec §6.2).
  */
-"core_refresh_failed";
+"core_refresh_failed" | 
+/**  A network request failed (offline, timeout, connection reset). */
+"network_failed" | 
+/**  A request or redirect went to a host outside the allow-list (spec §14.1). */
+"host_not_allowed" | 
+/**  The server answered a download with an unexpected status or body. */
+"download_failed" | 
+/**  The pack manifest is not valid JSON or breaks the manifest rules. */
+"manifest_invalid" | 
+/**  The pack manifest has a `schema_version` this app does not know. */
+"manifest_unsupported" | 
+/**  No manifest could be fetched and none is cached. */
+"manifest_unavailable" | 
+/**  The pack type is not supported by this app version. */
+"pack_unsupported" | 
+/**  The pack needs a newer app version (`min_app_version`). */
+"pack_incompatible" | 
+/**  Bundled packs cannot be installed or removed; they ship with the app. */
+"pack_bundled" | 
+/**  The pack is being downloaded or installed right now. */
+"pack_busy" | 
+/**  The downloaded file does not match the manifest's sha256. */
+"pack_hash_mismatch" | 
+/**  The pack is larger than the manifest says. */
+"pack_too_large" | 
+/**  The pack's structure or `pack_info` is not what its manifest entry describes. */
+"pack_invalid" | 
+/**  The pack was built for a content schema this app does not know. */
+"pack_schema_unsupported" | 
+/**  There is not enough free disk space for the download and installation. */
+"disk_space_insufficient" | 
+/**  The user cancelled the installation. */
+"install_cancelled" | 
+/**  The pack's terms must be acknowledged before its first download. */
+"terms_not_acknowledged" | 
+/**  Installing this morphology pack replaces the installed one and needs confirmation. */
+"morphology_replace_required";
 
 /**  The core data in use and whether refreshing it failed at startup (spec §6.2). */
 export type CoreStatus = {

@@ -18,11 +18,18 @@ pub const FILE_NAME: &str = "user.db";
 pub const BACKUP_FILE_NAME: &str = "user.db.bak";
 
 /// User schema migrations, oldest first.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("../../migrations/user/0001_initial.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("../../migrations/user/0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "packs",
+        sql: include_str!("../../migrations/user/0002_packs.sql"),
+    },
+];
 
 /// Opens (or creates) `user.db` at `path` and applies pending migrations,
 /// backing up an existing database first.
@@ -89,6 +96,85 @@ pub fn set_settings(conn: &mut Connection, values: &Settings) -> AppResult<()> {
     Ok(())
 }
 
+/// Number of connection log entries kept (spec §14.1).
+pub const NETWORK_LOG_LIMIT: u32 = 500;
+
+/// One connection log entry (spec §14.1): no URL path, query or content.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, specta::Type)]
+pub struct NetworkLogEntry {
+    /// Host name the request went to.
+    pub host: String,
+    /// UTC time, `YYYY-MM-DDTHH:MM:SSZ`.
+    pub at: String,
+    /// Why the request was made, e.g. `manifest` or `pack`.
+    pub purpose: String,
+    /// HTTP status, or `None` if no response arrived.
+    pub status: Option<u16>,
+    /// Response body bytes received (a float: 64-bit integers do not cross IPC).
+    pub bytes: f64,
+}
+
+/// Appends a connection log entry and keeps only the newest
+/// [`NETWORK_LOG_LIMIT`] entries.
+pub fn log_request(
+    conn: &Connection,
+    host: &str,
+    purpose: &str,
+    status: Option<u16>,
+    bytes: u64,
+) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO network_log (host, at, purpose, status, bytes)
+         VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), ?2, ?3, ?4)",
+        (
+            host,
+            purpose,
+            status,
+            i64::try_from(bytes).unwrap_or(i64::MAX),
+        ),
+    )?;
+    conn.execute(
+        "DELETE FROM network_log WHERE id <= (SELECT max(id) FROM network_log) - ?1",
+        [NETWORK_LOG_LIMIT],
+    )?;
+    Ok(())
+}
+
+/// Returns the newest `limit` connection log entries, newest first.
+pub fn network_log(conn: &Connection, limit: u32) -> AppResult<Vec<NetworkLogEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT host, at, purpose, status, bytes FROM network_log ORDER BY id DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map([limit.min(NETWORK_LOG_LIMIT)], |row| {
+        Ok(NetworkLogEntry {
+            host: row.get(0)?,
+            at: row.get(1)?,
+            purpose: row.get(2)?,
+            status: row.get(3)?,
+            bytes: row.get::<_, i64>(4)? as f64,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Records that the user has read the terms of `pack_id` at `version`.
+pub fn acknowledge_terms(conn: &Connection, pack_id: &str, version: &str) -> AppResult<()> {
+    conn.execute(
+        "INSERT INTO pack_terms_acks (pack_id, version, acknowledged_at)
+         VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+         ON CONFLICT (pack_id, version) DO NOTHING",
+        (pack_id, version),
+    )?;
+    Ok(())
+}
+
+/// Every acknowledged `(pack id, version)` pair.
+pub fn acknowledged_terms(conn: &Connection) -> AppResult<Vec<(String, String)>> {
+    let mut stmt = conn.prepare("SELECT pack_id, version FROM pack_terms_acks")?;
+    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
 /// `^[a-z0-9_]+(\.[a-z0-9_]+)*$`, at most [`MAX_KEY_LEN`] bytes.
 fn is_valid_key(key: &str) -> bool {
     key.len() <= MAX_KEY_LEN
@@ -115,7 +201,7 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), MIGRATIONS.len());
         assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), 0);
-        assert_eq!(schema_version(&conn).unwrap(), 1);
+        assert_eq!(schema_version(&conn).unwrap(), 2);
     }
 
     #[test]
@@ -229,5 +315,46 @@ mod tests {
             VALUES ('ar.jalalayn', 1, 'summary', 'tr', '1.0.0', ?1, 'p', 'm', '2026-10-21')";
         conn.execute(insert, ["first"]).unwrap();
         assert!(conn.execute(insert, ["second"]).is_err());
+    }
+
+    #[test]
+    fn network_log_keeps_the_newest_entries() {
+        let conn = migrated();
+        for i in 0..(NETWORK_LOG_LIMIT + 7) {
+            log_request(&conn, "github.com", "pack", Some(200), u64::from(i)).unwrap();
+        }
+        log_request(&conn, "quran.kemalozyon.com", "manifest", None, 0).unwrap();
+        let count: u32 = conn
+            .query_row("SELECT count(*) FROM network_log", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, NETWORK_LOG_LIMIT);
+        let newest = network_log(&conn, 2).unwrap();
+        assert_eq!(newest[0].host, "quran.kemalozyon.com");
+        assert_eq!(newest[0].status, None);
+        assert_eq!(newest[1].bytes, f64::from(NETWORK_LOG_LIMIT + 6));
+        assert!(newest[0].at.ends_with('Z'));
+    }
+
+    #[test]
+    fn network_log_rejects_unknown_purposes() {
+        let conn = migrated();
+        assert!(log_request(&conn, "example.org", "tracking", Some(200), 0).is_err());
+    }
+
+    #[test]
+    fn terms_acknowledgements_are_per_version() {
+        let conn = migrated();
+        acknowledge_terms(&conn, "morphology.qac", "1.0.0").unwrap();
+        acknowledge_terms(&conn, "morphology.qac", "1.0.0").unwrap();
+        acknowledge_terms(&conn, "morphology.qac", "1.1.0").unwrap();
+        let mut acks = acknowledged_terms(&conn).unwrap();
+        acks.sort();
+        assert_eq!(
+            acks,
+            [
+                ("morphology.qac".to_owned(), "1.0.0".to_owned()),
+                ("morphology.qac".to_owned(), "1.1.0".to_owned()),
+            ]
+        );
     }
 }

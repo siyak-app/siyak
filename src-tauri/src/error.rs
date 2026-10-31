@@ -34,6 +34,42 @@ pub enum AppErrorCode {
     /// Updating the Quran text and bundled translations from the newer bundled
     /// `core.db` failed; the previous data is still in use (spec §6.2).
     CoreRefreshFailed,
+    /// A network request failed (offline, timeout, connection reset).
+    NetworkFailed,
+    /// A request or redirect went to a host outside the allow-list (spec §14.1).
+    HostNotAllowed,
+    /// The server answered a download with an unexpected status or body.
+    DownloadFailed,
+    /// The pack manifest is not valid JSON or breaks the manifest rules.
+    ManifestInvalid,
+    /// The pack manifest has a `schema_version` this app does not know.
+    ManifestUnsupported,
+    /// No manifest could be fetched and none is cached.
+    ManifestUnavailable,
+    /// The pack type is not supported by this app version.
+    PackUnsupported,
+    /// The pack needs a newer app version (`min_app_version`).
+    PackIncompatible,
+    /// Bundled packs cannot be installed or removed; they ship with the app.
+    PackBundled,
+    /// The pack is being downloaded or installed right now.
+    PackBusy,
+    /// The downloaded file does not match the manifest's sha256.
+    PackHashMismatch,
+    /// The pack is larger than the manifest says.
+    PackTooLarge,
+    /// The pack's structure or `pack_info` is not what its manifest entry describes.
+    PackInvalid,
+    /// The pack was built for a content schema this app does not know.
+    PackSchemaUnsupported,
+    /// There is not enough free disk space for the download and installation.
+    DiskSpaceInsufficient,
+    /// The user cancelled the installation.
+    InstallCancelled,
+    /// The pack's terms must be acknowledged before its first download.
+    TermsNotAcknowledged,
+    /// Installing this morphology pack replaces the installed one and needs confirmation.
+    MorphologyReplaceRequired,
 }
 
 /// Error returned by every command: `{ code, message }` on the frontend.

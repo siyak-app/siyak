@@ -130,7 +130,25 @@
     "not_found": "İstenen öğe bulunamadı.",
     "invalid_setting_key": "Ayar kaydedilemedi.",
     "invalid_setting_value": "Ayar kaydedilemedi.",
-    "core_refresh_failed": "Kur'an metni ve uygulamayla gelen mealler bu sürümün verisine güncellenemedi. Önceki veriler kullanılmaya devam ediyor."
+    "core_refresh_failed": "Kur'an metni ve uygulamayla gelen mealler bu sürümün verisine güncellenemedi. Önceki veriler kullanılmaya devam ediyor.",
+    "network_failed": "Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip yeniden deneyin.",
+    "host_not_allowed": "Adres, Siyak'ın izin verilen sunucular listesinde olmadığı için bağlantı engellendi.",
+    "download_failed": "İndirme başarısız oldu. Lütfen daha sonra yeniden deneyin.",
+    "manifest_invalid": "Paket listesi okunamadı.",
+    "manifest_unsupported": "Paket listesi Siyak'ın daha yeni bir sürümünü gerektiriyor. Lütfen uygulamayı güncelleyin.",
+    "manifest_unavailable": "Paket listesi yüklenemedi. İnternet bağlantınızı kontrol edin.",
+    "pack_unsupported": "Siyak'ın bu sürümü bu türde bir paketi kuramıyor.",
+    "pack_incompatible": "Bu paket Siyak'ın daha yeni bir sürümünü gerektiriyor. Lütfen uygulamayı güncelleyin.",
+    "pack_bundled": "Bu paket uygulamayla birlikte gelir; ayrıca kurulamaz ya da kaldırılamaz.",
+    "pack_busy": "Bu paket şu anda zaten indiriliyor ya da kuruluyor.",
+    "pack_hash_mismatch": "İndirilen dosya bozuk ya da değiştirilmiş. Kurulmadı.",
+    "pack_too_large": "Paket beklenenden büyük. Kurulmadı.",
+    "pack_invalid": "Paketin içeriği geçerli değil. Kurulmadı.",
+    "pack_schema_unsupported": "Bu paket Siyak'ın farklı bir sürümü için hazırlanmış.",
+    "disk_space_insufficient": "Bu paket için diskte yeterli boş alan yok.",
+    "install_cancelled": "Kurulum iptal edildi.",
+    "terms_not_acknowledged": "İndirmeden önce lütfen paketin kullanım koşullarını okuyup kabul edin.",
+    "morphology_replace_required": "Bu morfoloji paketini kurmak, kurulu olanın yerini alır. Lütfen onaylayın."
   },
   "term": {
     "lemma": {

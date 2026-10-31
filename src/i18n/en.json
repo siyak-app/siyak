@@ -130,7 +130,25 @@
     "not_found": "The requested item was not found.",
     "invalid_setting_key": "The setting could not be saved.",
     "invalid_setting_value": "The setting could not be saved.",
-    "core_refresh_failed": "The Quran text and built-in translations could not be updated to this version's data. The previous data is still in use."
+    "core_refresh_failed": "The Quran text and built-in translations could not be updated to this version's data. The previous data is still in use.",
+    "network_failed": "Could not connect. Check your internet connection and try again.",
+    "host_not_allowed": "The connection was blocked because the address is not on Siyak's list of allowed servers.",
+    "download_failed": "The download failed. Please try again later.",
+    "manifest_invalid": "The pack list could not be read.",
+    "manifest_unsupported": "The pack list needs a newer version of Siyak. Please update the app.",
+    "manifest_unavailable": "The pack list could not be loaded. Check your internet connection.",
+    "pack_unsupported": "This version of Siyak cannot install this kind of pack.",
+    "pack_incompatible": "This pack needs a newer version of Siyak. Please update the app.",
+    "pack_bundled": "This pack ships with the app; it cannot be installed or removed separately.",
+    "pack_busy": "This pack is already being downloaded or installed.",
+    "pack_hash_mismatch": "The downloaded file is damaged or has been changed. It was not installed.",
+    "pack_too_large": "The pack is larger than expected. It was not installed.",
+    "pack_invalid": "The pack's contents are not valid. It was not installed.",
+    "pack_schema_unsupported": "This pack was built for a different version of Siyak.",
+    "disk_space_insufficient": "There is not enough free disk space for this pack.",
+    "install_cancelled": "The installation was cancelled.",
+    "terms_not_acknowledged": "Please read and accept the pack's terms before downloading it.",
+    "morphology_replace_required": "Installing this morphology pack replaces the one already installed. Please confirm."
   },
   "term": {
     "lemma": {
