@@ -88,6 +88,11 @@ setinin kendi içerik veritabanı vardır (geliştirme verisi için `content.db`
 `content.full.db`); böylece hiçbir şeyi sıfırlamadan ikisi arasında geçiş yapabilirsiniz. `user.db`
 ortaktır. Debug derlemeler hangi veri setinin yüklü olduğunu üst çubukta gösterir.
 
+Paketleri yayımlamadan denemek için onları `siyak-data` içinde derleyin ve bir debug derlemeyi
+çıktısına yönlendirin: `SIYAK_PACK_SOURCE=../siyak-data/dist pnpm tauri dev`. Uygulama bu durumda
+`manifest.json` dosyasını o dizinden okur ve her paketi dosya adıyla oradan, indirmeyle aynı
+denetimlerden geçirerek kopyalar.
+
 ## Komutlar
 
 | Komut                      | Ne yapar                                                                       |

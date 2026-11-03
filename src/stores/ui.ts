@@ -33,10 +33,13 @@ interface UiState {
   preferences: UiPreferences;
   /** The verse the context panel follows; not persisted. */
   selectedVerse: VersePosition | null;
+  /** Whether the Packs dialog is open; other screens may open it. Not persisted. */
+  packsDialogOpen: boolean;
   hydrate: (preferences: UiPreferences) => void;
   setPreference: <K extends PreferenceKey>(key: K, value: UiPreferences[K]) => void;
   setPreferences: (values: Partial<UiPreferences>) => void;
   selectVerse: (verse: VersePosition | null) => void;
+  setPacksDialogOpen: (open: boolean) => void;
 }
 
 /**
@@ -47,6 +50,7 @@ export const useUiStore = create<UiState>()((set) => ({
   hydrated: false,
   preferences: DEFAULT_PREFERENCES,
   selectedVerse: null,
+  packsDialogOpen: false,
   hydrate: (preferences) => {
     set({ hydrated: true, preferences });
   },
@@ -58,5 +62,8 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   selectVerse: (verse) => {
     set({ selectedVerse: verse });
+  },
+  setPacksDialogOpen: (open) => {
+    set({ packsDialogOpen: open });
   },
 }));

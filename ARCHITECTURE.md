@@ -14,8 +14,9 @@ rules must not be broken. The full design, including features that are not built
                                │ Tauri IPC (typed commands)
 ┌──────────────────────────────┴───── Rust core (src-tauri) ──┐
 │ commands/ ──▶ db/ ──▶ content.db + user.db (SQLite)         │
-│ later: search, morphology, related, embed, packs, llm,      │
-│        export, net, secrets                                 │
+│ commands/packs ──▶ packs/ ──▶ net (allow-listed HTTP)       │
+│ commands/search ──▶ search (FTS5)                           │
+│ later: morphology, related, embed, llm, export, secrets     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -101,8 +102,35 @@ Both live in the operating system's app data directory (`app_data_dir()`, e.g.
 Optional content — translations, tafsirs, morphology, vectors and embedding models — is published
 as versioned packs on GitHub Releases of the `siyak-data` repository and listed in a manifest
 (spec §6). The app downloads a pack, verifies its sha256 and copies only the expected tables and
-columns into `content.db` in one transaction. Packs are planned for M3; `src-tauri/src/packs/` is
-the seam.
+columns into `content.db` in one transaction.
+
+- `packs/manifest.rs` fetches and caches the manifest (one hour; the last good copy offline) and
+  builds the catalog the Packs screen shows. `packs/download.rs` downloads with resume and checks
+  sizes and sha256; `packs/install.rs` installs, removes and cleans up after interrupted jobs.
+- `packs/service.rs` is the queue: one job at a time, each on its own `content.db` connection, so
+  reading never waits for an install. Progress reaches the webview as the `pack://progress`,
+  `pack://done` and `pack://error` events; `usePackEvents` patches them into the cached catalog.
+- `net.rs` is the only HTTP client: a fixed host allow-list, redirects checked hop by hop and a
+  connection log without content in `user.db` (Settings → Privacy).
+- Debug builds can read packs from a local directory with `SIYAK_PACK_SOURCE` (see CONTRIBUTING).
+
+The context panel's Tafsir tab reads a passage through `get_tafsir` and follows the selected verse.
+Passage text is untrusted: `TafsirText` parses it in an inert document and rebuilds only the allowed
+elements of spec §5.2, without attributes, so no markup from a pack reaches the page.
+
+The compare screen (`/compare/:surah/:range`) is a table with one row per verse. `get_compare` returns
+the verses and each tafsir's overlapping passages; `tafsirCells` lays a passage covering several verses
+over their rows as one cell, which scrolls so that long commentary does not stretch the rows.
+
+## Search (summary)
+
+`search.rs` holds the single search box's logic (spec §7): `classify_query` decides whether a query
+is a verse to jump to, Arabic letters, a Latin-script root or other text, and `search_text` queries
+`verses_fts` or `translations_fts`. User input never reaches FTS5 as syntax: `fts_query` rebuilds it
+from quoted strings. `normalize` is the port of the pipeline's Arabic normalizer; it is tested against
+the shared vectors (`dev-data/fixtures/normalize_vectors.json`) and must reproduce `core.db`'s index.
+The Arabic index holds normalized text that is never displayed, so its matches are marked word by word
+on `text_clean`. Results carry their text as plain parts, never markup.
 
 ## IPC and generated bindings
 
@@ -139,9 +167,10 @@ These hold in every change; a pull request that weakens one needs an ADR.
 
 1. **The webview never talks to the network.** The CSP is `default-src 'self'` (plus Tauri's IPC
    endpoint); fonts, scripts and styles are bundled. All HTTP goes through one allow-listed client
-   in Rust (`net.rs`, M3/M8).
+   in Rust (`net.rs`).
 2. **The webview gets no plugin permissions.** No `fs`, `http` or `shell`; the main capability
-   grants only the app's own commands.
+   grants only the app's own commands and listening to its events. Links (a pack's source) are
+   opened by the Rust side from addresses it already holds.
 3. **API keys never reach the webview.** They live in the OS keychain and the interface only learns
    whether a key is saved (`secrets.rs`, M8).
 4. **Packs are untrusted input.** Only expected tables and columns are copied; no SQL, triggers or
@@ -176,6 +205,6 @@ These hold in every change; a pull request that weakens one needs an ADR.
 | CI                                 | `.github/workflows/ci.yml`                                                                                                   |
 | the website                        | `website/src/content/docs/{en,tr}/`                                                                                          |
 
-Modules for later milestones (`search`, `morphology`, `related`, `embed`, `packs`, `llm`, `export`,
-`net`, `secrets`) already exist as documented, empty files; their `//!` comments say what they will
+Modules for later milestones (`morphology`, `related`, `embed`, `llm`, `export`,
+`secrets`) already exist as documented, empty files; their `//!` comments say what they will
 hold and in which milestone.

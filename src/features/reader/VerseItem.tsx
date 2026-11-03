@@ -24,6 +24,7 @@ export const VerseItem = memo(function VerseItem({
   surahName,
   highlighted = false,
   tabStop = false,
+  onCompare,
 }: {
   verse: VerseWithTranslations;
   /** The shown translation packs by id. */
@@ -34,6 +35,8 @@ export const VerseItem = memo(function VerseItem({
   highlighted?: boolean;
   /** The verse list's one tab stop (roving focus). */
   tabStop?: boolean;
+  /** Opens the verse on the compare screen. */
+  onCompare?: (verse: VerseWithTranslations) => void;
 }) {
   const { t } = useTranslation();
   const mode = useUiStore((state) => state.preferences["reader.actions"]);
@@ -42,7 +45,15 @@ export const VerseItem = memo(function VerseItem({
       state.selectedVerse?.surah === verse.surah && state.selectedVerse.ayah === verse.ayah,
   );
   const titles = Object.fromEntries(Object.entries(packs).map(([id, pack]) => [id, pack.title]));
-  const actions = <VerseActions verse={verse} surahName={surahName} titles={titles} mode={mode} />;
+  const actions = (
+    <VerseActions
+      verse={verse}
+      surahName={surahName}
+      titles={titles}
+      mode={mode}
+      onCompare={onCompare}
+    />
+  );
   return (
     <article
       aria-label={t("reader.verse_label", { surah: verse.surah, ayah: verse.ayah })}

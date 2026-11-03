@@ -144,7 +144,6 @@ export function DisplaySettings() {
           onChange={(value) => {
             setPreference("search.mode_chips", value);
           }}
-          unavailable
         />
         <CheckField
           label={t("settings.citation_action")}

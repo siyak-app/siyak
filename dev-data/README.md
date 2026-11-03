@@ -14,7 +14,7 @@ real data instead, `src-tauri/resources/core.db` (see [Real data](#real-data-cor
 | `translations`, `translations_fts` | Pickthall for the 437 verses                                                             |
 | `notices`                          | the Tanzil copyright blocks of both texts, as in `core.db`                               |
 | `content_meta`                     | `core_version` (`CORE_VERSION` in `xtask/src/dev_db.rs`) and `tanzil_version`            |
-| `verses_fts`                       | empty until search arrives in M4 (the app's Rust normalizer fills it); full data has it  |
+| `verses_fts`                       | the normalized Simple Clean text of the 437 verses, written by the app's Rust normalizer |
 
 The schema comes from the app's own migrations (`src-tauri/migrations/content/`), so it always
 matches what the app expects. There is deliberately **no Turkish translation** yet: the Turkish
@@ -30,6 +30,7 @@ source is still being verified (spec §18, question 6).
 | `fixtures/surahs.tsv`             | `name_ar`, `revelation_type`, `ayah_count`: [Tanzil metadata](https://tanzil.net/res/text/metadata/quran-data.xml). `name_tr`: `siyak-data/data/surah-names-tr.csv`. `name_en`: Tanzil's transliterated name (`tname`). Both exactly as in `core.db` | Metadata: CC BY 3.0 (Tanzil)                                                   |
 | `fixtures/juz.tsv`                | Juz start verses from the Tanzil metadata                                                                                                                                                                                                            | CC BY 3.0 (Tanzil)                                                             |
 | `fixtures/packs.json`             | Pack metadata for the bundled translation, written by the maintainers                                                                                                                                                                                | MIT OR Apache-2.0                                                              |
+| `fixtures/normalize_vectors.json` | Exact copy of `siyak-data/tests/normalize_vectors.json`, the contract of the Arabic search normalizer (a test checks the two match when both repositories are present)                                                                               | MIT OR Apache-2.0                                                              |
 
 The Tanzil files are excerpts of the official downloads: the XML declaration, the copyright
 comment and the `<sura>` elements for surahs 1, 2, 9, 112, 113 and 114 are kept byte for byte.

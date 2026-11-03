@@ -18,6 +18,48 @@ export const commands = {
 	listTranslations: () => typedError<TranslationInfo[], AppError>(__TAURI_INVOKE("list_translations")),
 	/**  Reports the core data version and any core refresh error. */
 	getCoreStatus: () => typedError<CoreStatus, AppError>(__TAURI_INVOKE("get_core_status")),
+	/**  Lists the installed tafsir packs. */
+	listTafsirs: () => typedError<TafsirInfo[], AppError>(__TAURI_INVOKE("list_tafsirs")),
+	/**
+	 *  Returns the commentary covering a verse (it may cover several), or `None`
+	 *  if this tafsir has no commentary for it.
+	 */
+	getTafsir: (verseId: number, packId: string) => typedError<{
+	/**  Passage id in `content.db`. */
+	id: number,
+	/**  First verse covered. */
+	verse_from: VerseRef,
+	/**  Last verse covered. */
+	verse_to: VerseRef,
+	/**  Paragraphs in order. */
+	paragraphs: TafsirParagraph[],
+} | null, AppError>(__TAURI_INVOKE("get_tafsir", { verseId, packId })),
+	/**  Returns the author's introduction of a tafsir, if it has one. */
+	getTafsirIntroduction: (packId: string) => typedError<{
+	/**  Passage id in `content.db`. */
+	id: number,
+	/**  First verse covered. */
+	verse_from: VerseRef,
+	/**  Last verse covered. */
+	verse_to: VerseRef,
+	/**  Paragraphs in order. */
+	paragraphs: TafsirParagraph[],
+} | null, AppError>(__TAURI_INVOKE("get_tafsir_introduction", { packId })),
+	/**
+	 *  Returns a range of verses (at most 50) with the given translations and the
+	 *  commentary of the given tafsirs, for the compare screen.
+	 */
+	getCompare: (from: number, to: number, translationIds: string[], tafsirIds: string[]) => typedError<Compare, AppError>(__TAURI_INVOKE("get_compare", { from, to, translationIds, tafsirIds })),
+	/**
+	 *  Classifies a query: a verse to jump to, Arabic letters, a Latin-script root
+	 *  or other text.
+	 */
+	classifyQuery: (query: string) => typedError<QueryClass, AppError>(__TAURI_INVOKE("classify_query", { query })),
+	/**
+	 *  Searches the Arabic text or the translations, best matches first. An empty
+	 *  `pack_ids` searches every installed translation.
+	 */
+	searchText: (query: string, scope: SearchScope, packIds: string[], filters: SearchFilters, limit: number) => typedError<SearchResults, AppError>(__TAURI_INVOKE("search_text", { query, scope, packIds, filters, limit })),
 	/**  Returns all stored settings as `key → JSON text`. */
 	getSettings: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("get_settings")),
 	/**  Stores a setting. `value` must be JSON text, e.g. `"\"tr\""` or `"{\"size\":20}"`. */
@@ -27,7 +69,43 @@ export const commands = {
 	 *  any key or value is invalid, none.
 	 */
 	setSettings: (values: { [key in string]: string }) => typedError<null, AppError>(__TAURI_INVOKE("set_settings", { values })),
+	/**
+	 *  The manifest (cached for an hour unless `force`) combined with what is
+	 *  installed and queued. Never fails for network reasons: an offline catalog
+	 *  carries the error and the last good manifest, if any.
+	 */
+	fetchManifest: (force: boolean) => typedError<Catalog, AppError>(__TAURI_INVOKE("fetch_manifest", { force })),
+	/**
+	 *  Queues a pack (and the packs it requires). `confirm_replace` confirms
+	 *  that a morphology pack replaces the installed one.
+	 */
+	installPack: (id: string, confirmReplace: boolean) => typedError<null, AppError>(__TAURI_INVOKE("install_pack", { id, confirmReplace })),
+	/**  Queues the members of a bundle that are not installed yet. */
+	installBundle: (id: string, confirmReplace: boolean) => typedError<null, AppError>(__TAURI_INVOKE("install_bundle", { id, confirmReplace })),
+	/**  Cancels a queued or running job; the job reports `install_cancelled`. */
+	cancelInstall: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("cancel_install", { id })),
+	/**  Removes an installed pack (not a bundled one). */
+	uninstallPack: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("uninstall_pack", { id })),
+	/**  Compacts `content.db`; suggested after removing packs. */
+	vacuumContent: () => typedError<VacuumSizes, AppError>(__TAURI_INVOKE("vacuum_content")),
+	/**  Records that the user has read the terms of `id` at `version`. */
+	acknowledgePackTerms: (id: string, version: string) => typedError<null, AppError>(__TAURI_INVOKE("acknowledge_pack_terms", { id, version })),
+	/**  The newest connection log entries, newest first (spec §14.1). */
+	getNetworkLog: (limit: number) => typedError<NetworkLogEntry[], AppError>(__TAURI_INVOKE("get_network_log", { limit })),
+	/**
+	 *  Opens the source page of a pack (`citation.url`) in the default browser.
+	 *  Only addresses from the manifest or `content.db` are opened, never one
+	 *  from the webview.
+	 */
+	openPackSource: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("open_pack_source", { id })),
 };
+
+/* Constants */
+export const PACK_DONE_EVENT = "pack://done" as const;
+
+export const PACK_ERROR_EVENT = "pack://error" as const;
+
+export const PACK_PROGRESS_EVENT = "pack://progress" as const;
 
 /* Types */
 /**  Error returned by every command: `{ code, message }` on the frontend. */
@@ -103,6 +181,62 @@ export type AppErrorCode =
 /**  Installing this morphology pack replaces the installed one and needs confirmation. */
 "morphology_replace_required";
 
+/**  One bundle of the Packs screen and of the first-launch card. */
+export type BundleView = {
+	/**  Bundle id. */
+	id: string,
+	/**  Title. */
+	title: LocalizedText,
+	/**  Description. */
+	description: LocalizedText | null,
+	/**  Member pack ids. */
+	packs: string[],
+	/**  Members that are not installed yet (and can be). */
+	missing: string[],
+	/**  Download size of the missing members. */
+	size: number | null,
+	/**  Installed size of the missing members. */
+	installed_size: number | null,
+};
+
+/**  The Packs screen. */
+export type Catalog = {
+	/**  `remote` or `local`. */
+	source: string,
+	/**  When the manifest was fetched (milliseconds since the epoch). */
+	fetched_at: number | null,
+	/**  True if the latest fetch failed and a cached manifest is shown. */
+	offline: boolean,
+	/**  Why the latest fetch failed. */
+	error: AppError | null,
+	/**  Packs: manifest order, then installed packs missing from the manifest. */
+	packs: PackView[],
+	/**  Bundles. */
+	bundles: BundleView[],
+};
+
+/**  A range of verses with the chosen translations and tafsirs (spec §13.3). */
+export type Compare = {
+	/**
+	 *  The verses, at most [`MAX_COMPARE_VERSES`], with translations in the
+	 *  requested order.
+	 */
+	verses: VerseWithTranslations[],
+	/**  The tafsirs in the requested order. */
+	tafsirs: CompareTafsir[],
+};
+
+/**  The commentary of one tafsir on a range of verses. */
+export type CompareTafsir = {
+	/**  Tafsir pack id. */
+	pack_id: string,
+	/**
+	 *  Passages overlapping the range, in verse order. A passage may begin
+	 *  before the range or end after it.
+	 */
+	passages: TafsirPassage[],
+};
+
 /**  The core data in use and whether refreshing it failed at startup (spec §6.2). */
 export type CoreStatus = {
 	/**  `content_meta.core_version` of the content database. */
@@ -113,6 +247,45 @@ export type CoreStatus = {
 	refresh_error: AppError | null,
 };
 
+/**
+ *  Why a query that looks like a verse reference leads nowhere. The values are
+ *  the `command_palette.errors` keys of the interface.
+ */
+export type InvalidReference = 
+/**  There are 114 surahs. */
+"surah_out_of_range" | 
+/**  The surah has no such verse, or the range is reversed. */
+"ayah_out_of_range";
+
+/**  What the app is doing with a pack right now. */
+export type JobView = 
+/**  Waiting for an earlier job. */
+{ state: "queued" } | 
+/**  Downloading, verifying or installing. */
+{ state: "running"; 
+/**  Current phase. */
+phase: Phase; 
+/**  Bytes done in this phase. */
+done: number | null; 
+/**  Bytes in this phase. */
+total: number | null };
+
+/**  A `{ "tr": [...], "en": [...] }` list, e.g. `license_terms`. */
+export type LocalizedList = {
+	/**  Turkish items. */
+	tr: string[],
+	/**  English items. */
+	en: string[],
+};
+
+/**  A `{ "tr", "en" }` text. */
+export type LocalizedText = {
+	/**  Turkish. */
+	tr: string,
+	/**  English. */
+	en: string,
+};
+
 /**  The title of a pack in the interface languages, where the pack provides one. */
 export type LocalizedTitle = {
 	/**  Turkish title. */
@@ -121,12 +294,177 @@ export type LocalizedTitle = {
 	en: string | null,
 };
 
+/**  One connection log entry (spec §14.1): no URL path, query or content. */
+export type NetworkLogEntry = {
+	/**  Host name the request went to. */
+	host: string,
+	/**  UTC time, `YYYY-MM-DDTHH:MM:SSZ`. */
+	at: string,
+	/**  Why the request was made, e.g. `manifest` or `pack`. */
+	purpose: string,
+	/**  HTTP status, or `None` if no response arrived. */
+	status: number | null,
+	/**  Response body bytes received (a float: 64-bit integers do not cross IPC). */
+	bytes: number | null,
+};
+
+/**  A pack was installed. */
+export type PackDone = {
+	/**  Pack id. */
+	id: string,
+	/**  The morphology pack it replaced, if any. */
+	replaced: string | null,
+};
+
+/**  A job failed or was cancelled (`install_cancelled`). */
+export type PackFailed = {
+	/**  Pack id. */
+	id: string,
+	/**  Why. */
+	error: AppError,
+};
+
+/**  A job was queued or moved on. */
+export type PackProgress = {
+	/**  Pack id. */
+	id: string,
+	/**  The job's state. */
+	job: JobView,
+};
+
+/**  One row of the Packs screen. */
+export type PackView = {
+	/**  Pack id. */
+	id: string,
+	/**  Pack type (`translation`, `tafsir`, `morphology`, …). */
+	kind: string,
+	/**  Language of the content. */
+	lang: string | null,
+	/**  Title in the interface languages. */
+	title: LocalizedTitle,
+	/**  English title, the fallback. */
+	title_fallback: string,
+	/**  Description in the interface languages. */
+	description: LocalizedText | null,
+	/**  Author. */
+	author: string | null,
+	/**  Version in the manifest, or the installed one if the pack is not in it. */
+	version: string,
+	/**  Download size in bytes. */
+	size: number | null,
+	/**  Installed size in bytes. */
+	installed_size: number | null,
+	/**  License name. */
+	license: string,
+	/**  Terms shown before download. */
+	license_terms: LocalizedList,
+	/**  Attribution. */
+	attribution: string | null,
+	/**  Citation fields. */
+	citation: { [key in string]: string },
+	/**  Link to the source (`citation.url`). */
+	source_url: string | null,
+	/**  Oldest app version that can use the pack. */
+	min_app_version: string,
+	/**  Whether the manifest lists the pack. */
+	in_manifest: boolean,
+	/**  Whether this app can install packs of this type. */
+	supported: boolean,
+	/**  Whether the pack is installed. */
+	installed: boolean,
+	/**  The installed version. */
+	installed_version: string | null,
+	/**  Whether the manifest has a newer version than the installed one. */
+	update_available: boolean,
+	/**  Whether the pack needs a newer app. */
+	incompatible: boolean,
+	/**  Whether the pack ships with the app (cannot be installed or removed). */
+	bundled: boolean,
+	/**  Whether the terms must be confirmed before download. */
+	terms_ack_required: boolean,
+	/**  Whether the user confirmed the terms of this version. */
+	terms_acknowledged: boolean,
+	/**  The installed morphology pack this one would replace. */
+	replaces: string | null,
+	/**  The running or queued job for this pack. */
+	job: JobView | null,
+};
+
+/**  Phases of a pack job. */
+export type Phase = 
+/**  Downloading (or copying from a local source). */
+"download" | 
+/**  Checking the sha256. */
+"verify" | 
+/**  Decompressing, checking and copying rows. */
+"install";
+
+/**  What a query is (spec §7.1). */
+export type QueryClass = 
+/**  Nothing to search for. */
+{ kind: "empty" } | 
+/**  A verse or range to jump to: no search. */
+{ kind: "reference"; 
+/**  Surah number. */
+surah: number; 
+/**  First verse; `None` for a whole surah. */
+ayah: number | null; 
+/**  Last verse of a range. */
+ayah_to: number | null } | 
+/**  A verse reference that does not exist. */
+{ kind: "invalid_reference"; 
+/**  Why. */
+reason: InvalidReference } | 
+/**  Arabic letters: searched in the Arabic text. */
+{ kind: "arabic" } | 
+/**  A root in Latin script, e.g. `s-b-r`. */
+{ kind: "latin_root" } | 
+/**  Any other text: searched in the translations. */
+{ kind: "text" };
+
 /**  Where a surah was revealed. */
 export type RevelationType = 
 /**  Revealed in Mecca. */
 "meccan" | 
 /**  Revealed in Medina. */
 "medinan";
+
+/**  Limits on the verses searched (spec §7.2). */
+export type SearchFilters = {
+	/**  First surah. */
+	surah_from: number | null,
+	/**  Last surah. */
+	surah_to: number | null,
+	/**  Meccan or Medinan surahs only. */
+	revelation: RevelationType | null,
+};
+
+/**  One result: a verse, or one translation of it. */
+export type SearchHit = {
+	/**  Surah number. */
+	surah: number,
+	/**  Verse number within the surah. */
+	ayah: number,
+	/**  The translation pack; `None` for the Arabic text. */
+	pack_id: string | null,
+	/**  The text with its matches marked: never markup. */
+	parts: TextPart[],
+};
+
+/**  The results of a search. */
+export type SearchResults = {
+	/**  How many results there are in all. */
+	total: number,
+	/**  The best results, up to the limit. */
+	hits: SearchHit[],
+};
+
+/**  What to search. */
+export type SearchScope = 
+/**  The Arabic text (`verses_fts`). */
+"arabic" | 
+/**  The translations (`translations_fts`). */
+"translations";
 
 /**  A row of the `surahs` table. */
 export type Surah = {
@@ -149,12 +487,67 @@ export type Surah = {
 	bismillah: string | null,
 };
 
+/**  An installed tafsir pack. */
+export type TafsirInfo = {
+	/**  Pack id, e.g. `ar.jalalayn`. */
+	id: string,
+	/**  Title as published (`packs.title`). */
+	title: string,
+	/**  Title in the interface languages, from the pack's metadata. */
+	titles: LocalizedTitle,
+	/**  Author of the work. */
+	author: string | null,
+	/**  BCP 47 language of the text, used for the `lang` attribute. */
+	lang: string | null,
+	/**  Writing direction of the text, used for the `dir` attribute. */
+	dir: TextDirection,
+	/**  Attribution that must stay visible with the text (spec §6.5). */
+	attribution: string | null,
+	/**  Whether the pack has the author's introduction (spec §5.2). */
+	has_introduction: boolean,
+};
+
+/**  One paragraph of a tafsir passage. */
+export type TafsirParagraph = {
+	/**  Position within the passage, from 0. */
+	idx: number,
+	/**
+	 *  Text in the small HTML subset of spec §5.2; untrusted, the interface
+	 *  renders only the allowed elements.
+	 */
+	text: string,
+	/**  Volume of the printed edition, if known. */
+	part: string | null,
+	/**  Page of the printed edition, if known. */
+	page: number | null,
+};
+
+/**  A tafsir passage: commentary on a range of verses, or the introduction. */
+export type TafsirPassage = {
+	/**  Passage id in `content.db`. */
+	id: number,
+	/**  First verse covered. */
+	verse_from: VerseRef,
+	/**  Last verse covered. */
+	verse_to: VerseRef,
+	/**  Paragraphs in order. */
+	paragraphs: TafsirParagraph[],
+};
+
 /**  Writing direction of a text block. */
 export type TextDirection = 
 /**  Left to right. */
 "ltr" | 
 /**  Right to left. */
 "rtl";
+
+/**  A piece of a result's text. */
+export type TextPart = {
+	/**  The text. */
+	text: string,
+	/**  Whether it matched the query. */
+	matched: boolean,
+};
 
 /**  An installed translation pack. */
 export type TranslationInfo = {
@@ -170,6 +563,22 @@ export type TranslationInfo = {
 	dir: TextDirection,
 	/**  Whether the pack ships with the app (`core.db`). */
 	bundled: boolean,
+};
+
+/**  Sizes of `content.db` before and after compacting, in bytes. */
+export type VacuumSizes = {
+	/**  Before. */
+	before: number | null,
+	/**  After. */
+	after: number | null,
+};
+
+/**  A verse by its surah and number. */
+export type VerseRef = {
+	/**  Surah number. */
+	surah: number,
+	/**  Verse number within the surah. */
+	ayah: number,
 };
 
 /**  One translation of a verse. */

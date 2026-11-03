@@ -6,7 +6,7 @@
  *
  * @packageDocumentation
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { serializeSetting, type SettingKey, type Settings } from "./settings";
 
@@ -14,9 +14,19 @@ import {
   commands,
   type AppError,
   type AppErrorCode,
+  type Catalog,
+  type Compare,
   type CoreStatus,
+  type NetworkLogEntry,
+  type QueryClass,
+  type SearchFilters,
+  type SearchResults,
+  type SearchScope,
   type Surah,
+  type TafsirInfo,
+  type TafsirPassage,
   type TranslationInfo,
+  type VacuumSizes,
   type VerseWithTranslations,
 } from "./bindings";
 
@@ -53,6 +63,32 @@ async function unwrap<T>(result: Promise<CommandResult<T>>): Promise<T> {
   return settled.data;
 }
 
+/** Variables of {@link useCompare}. */
+export interface CompareVariables {
+  /** Global id of the first verse. */
+  from: number;
+  /** Global id of the last verse. */
+  to: number;
+  /** Translation pack ids. */
+  translationIds: string[];
+  /** Tafsir pack ids. */
+  tafsirIds: string[];
+}
+
+/** Variables of {@link useSearchText}. */
+export interface SearchTextVariables {
+  /** The query as typed. */
+  query: string;
+  /** The Arabic text or the translations. */
+  scope: SearchScope;
+  /** Translation packs to search; empty for all of them. */
+  packIds: string[];
+  /** Surah limits. */
+  filters: SearchFilters;
+  /** Most results to return. */
+  limit: number;
+}
+
 /** Query keys, exported so callers can invalidate or prefill caches. */
 export const queryKeys = {
   /** Key of {@link useSurahs}. */
@@ -68,6 +104,22 @@ export const queryKeys = {
   settings: ["settings"] as const,
   /** Key of {@link useCoreStatus}. */
   coreStatus: ["core-status"] as const,
+  /** Key of {@link useTafsirs}. */
+  tafsirs: ["tafsirs"] as const,
+  /** Key of {@link useTafsir}. */
+  tafsir: (packId: string, verseId: number) => ["tafsir", packId, verseId] as const,
+  /** Key of {@link useTafsirIntroduction}. */
+  tafsirIntroduction: (packId: string) => ["tafsir-introduction", packId] as const,
+  /** Key of {@link useCompare}. */
+  compare: (variables: CompareVariables) => ["compare", variables] as const,
+  /** Key of {@link useClassifyQuery}. */
+  classify: (query: string) => ["classify", query] as const,
+  /** Key of {@link useSearchText}. */
+  search: (variables: SearchTextVariables) => ["search", variables] as const,
+  /** Key of {@link useCatalog}. */
+  catalog: ["catalog"] as const,
+  /** Key of {@link useNetworkLog}. */
+  networkLog: ["network-log"] as const,
 };
 
 /** All 114 surahs. Content changes only when packs change, so it never goes stale. */
@@ -177,4 +229,207 @@ export function useSetSettings() {
       }));
     },
   });
+}
+
+/** The installed tafsir packs. */
+export function useTafsirs() {
+  return useQuery<TafsirInfo[]>({
+    queryKey: queryKeys.tafsirs,
+    queryFn: () => unwrap(commands.listTafsirs()),
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * The commentary of a tafsir covering a verse, or `null` if it has none. The
+ * previous passage stays up while moving between verses of the same tafsir.
+ */
+export function useTafsir(verseId: number, packId: string) {
+  return useQuery<TafsirPassage | null>({
+    queryKey: queryKeys.tafsir(packId, verseId),
+    queryFn: () => unwrap(commands.getTafsir(verseId, packId)),
+    staleTime: Infinity,
+    placeholderData: (previous, query) =>
+      query?.queryKey[1] === packId ? keepPreviousData(previous) : undefined,
+  });
+}
+
+/** The author's introduction of a tafsir, or `null` if it has none. */
+export function useTafsirIntroduction(packId: string) {
+  return useQuery<TafsirPassage | null>({
+    queryKey: queryKeys.tafsirIntroduction(packId),
+    queryFn: () => unwrap(commands.getTafsirIntroduction(packId)),
+    staleTime: Infinity,
+  });
+}
+
+/** A range of verses with the chosen translations and tafsirs. */
+export function useCompare(variables: CompareVariables) {
+  const { from, to, translationIds, tafsirIds } = variables;
+  return useQuery<Compare>({
+    queryKey: queryKeys.compare(variables),
+    queryFn: () => unwrap(commands.getCompare(from, to, translationIds, tafsirIds)),
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+  });
+}
+
+const classifyOptions = (query: string) => ({
+  queryKey: queryKeys.classify(query),
+  queryFn: () => unwrap(commands.classifyQuery(query)),
+  staleTime: Infinity,
+});
+
+/** What a query is: a verse to jump to, Arabic letters, a root or other text. */
+export function useClassifyQuery(query: string) {
+  return useQuery<QueryClass>(classifyOptions(query));
+}
+
+/** {@link useClassifyQuery} outside rendering, for the search box's submit. */
+export function classifyQuery(
+  queryClient: ReturnType<typeof useQueryClient>,
+  query: string,
+): Promise<QueryClass> {
+  return queryClient.query(classifyOptions(query));
+}
+
+/**
+ * Searches the Arabic text or the translations. The previous results stay up
+ * while the filters or the length of the list change.
+ */
+export function useSearchText(variables: SearchTextVariables) {
+  const { query, scope, packIds, filters, limit } = variables;
+  return useQuery<SearchResults>({
+    queryKey: queryKeys.search(variables),
+    queryFn: () => unwrap(commands.searchText(query, scope, packIds, filters, limit)),
+    staleTime: Infinity,
+    placeholderData: (previous, previousQuery) => {
+      const before = previousQuery?.queryKey[1] as SearchTextVariables | undefined;
+      return before?.query === query && before.scope === scope ? previous : undefined;
+    },
+  });
+}
+
+/**
+ * The Packs screen: manifest (fetched at most hourly by the core) plus what is
+ * installed and queued. Enabled on demand, so the network is only used where
+ * packs are shown. Job progress is patched in by `usePackEvents`.
+ */
+export function useCatalog(enabled = true) {
+  return useQuery<Catalog>({
+    queryKey: queryKeys.catalog,
+    queryFn: () => unwrap(commands.fetchManifest(false)),
+    staleTime: 60_000,
+    enabled,
+  });
+}
+
+/** Fetches the manifest again, ignoring the one-hour cache. */
+export function useRefreshCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation<Catalog>({
+    mutationFn: () => unwrap(commands.fetchManifest(true)),
+    onSuccess: (catalog) => {
+      queryClient.setQueryData(queryKeys.catalog, catalog);
+    },
+  });
+}
+
+/** Variables of {@link useInstallPack} and {@link useInstallBundle}. */
+export interface InstallVariables {
+  /** Pack or bundle id. */
+  id: string;
+  /** Confirms that a morphology pack replaces the installed one. */
+  confirmReplace?: boolean;
+}
+
+function useCatalogMutation<V>(run: (variables: V) => Promise<unknown>) {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, V>({
+    mutationFn: run,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.catalog }),
+  });
+}
+
+/** Queues a pack (and what it requires). */
+export function useInstallPack() {
+  return useCatalogMutation<InstallVariables>(({ id, confirmReplace = false }) =>
+    unwrap(commands.installPack(id, confirmReplace)),
+  );
+}
+
+/** Queues the missing members of a bundle. */
+export function useInstallBundle() {
+  return useCatalogMutation<InstallVariables>(({ id, confirmReplace = false }) =>
+    unwrap(commands.installBundle(id, confirmReplace)),
+  );
+}
+
+/** Cancels a queued or running job. */
+export function useCancelInstall() {
+  return useCatalogMutation<string>((id) => unwrap(commands.cancelInstall(id)));
+}
+
+/** Variables of {@link useAcknowledgeTerms}. */
+export interface AcknowledgeVariables {
+  /** Pack id. */
+  id: string;
+  /** The pack version whose terms were read. */
+  version: string;
+}
+
+/** Records that the terms of a pack version were read. */
+export function useAcknowledgeTerms() {
+  return useCatalogMutation<AcknowledgeVariables>(({ id, version }) =>
+    unwrap(commands.acknowledgePackTerms(id, version)),
+  );
+}
+
+/** Removes an installed pack; content queries are refreshed afterwards. */
+export function useUninstallPack() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, string>({
+    mutationFn: (id) => unwrap(commands.uninstallPack(id)),
+    onSettled: () => invalidateContent(queryClient),
+  });
+}
+
+/** Compacts the content database after removals. */
+export function useVacuumContent() {
+  return useMutation<VacuumSizes>({
+    mutationFn: () => unwrap(commands.vacuumContent()),
+  });
+}
+
+/** Opens a pack's source page in the default browser. */
+export function useOpenPackSource() {
+  return useMutation<unknown, Error, string>({
+    mutationFn: (id) => unwrap(commands.openPackSource(id)),
+  });
+}
+
+/** The newest connection log entries (spec §14.1). */
+export function useNetworkLog(limit = 100) {
+  return useQuery<NetworkLogEntry[]>({
+    queryKey: queryKeys.networkLog,
+    queryFn: () => unwrap(commands.getNetworkLog(limit)),
+    staleTime: 0,
+  });
+}
+
+/** Refreshes everything that depends on the installed packs. */
+export function invalidateContent(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all(
+    [
+      queryKeys.catalog,
+      queryKeys.translations,
+      ["verses"] as const,
+      queryKeys.tafsirs,
+      ["tafsir"] as const,
+      ["tafsir-introduction"] as const,
+      ["search"] as const,
+      ["compare"] as const,
+      queryKeys.networkLog,
+    ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  );
 }

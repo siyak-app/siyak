@@ -1,6 +1,7 @@
-import { useParams } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
 import {
+  useCallback,
   type FocusEvent,
   type KeyboardEvent,
   type MouseEvent,
@@ -16,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import type { VerseWithTranslations } from "@/lib/bindings";
 import { useSurah, useTranslations, useVerses } from "@/lib/queries";
+import type { ContextTab } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
 import { recallTopAyah, rememberTopAyah } from "./scrollMemory";
@@ -87,19 +89,36 @@ function hasTextSelection(): boolean {
   return (window.getSelection()?.toString() ?? "") !== "";
 }
 
-/** Shows `verse` in the context panel, opening the panel if needed. */
-function openInPanel(verse: VerseWithTranslations) {
+/** Shows `verse` in the context panel, opening the panel (and `tab`) if needed. */
+function openInPanel(verse: VerseWithTranslations, tab?: ContextTab) {
   const { preferences, setPreference, selectVerse } = useUiStore.getState();
   selectVerse({ surah: verse.surah, ayah: verse.ayah });
   const panel = preferences["layout.right_panel"];
-  if (panel.collapsed) setPreference("layout.right_panel", { ...panel, collapsed: false });
+  const nextTab = tab ?? panel.tab;
+  if (panel.collapsed || nextTab !== panel.tab) {
+    setPreference("layout.right_panel", { ...panel, collapsed: false, tab: nextTab });
+  }
+}
+
+/** Opens a verse on the compare screen. Stable, as verses are memoized. */
+function useCompareVerse() {
+  const navigate = useNavigate();
+  return useCallback(
+    (verse: VerseWithTranslations) => {
+      void navigate({
+        to: "/compare/$surah/$range",
+        params: { surah: verse.surah, range: { from: verse.ayah, to: verse.ayah } },
+      });
+    },
+    [navigate],
+  );
 }
 
 /**
  * Keyboard navigation of the verse list (one tab stop, roving focus):
  * ↑/↓ move between verses, Home/End jump to the first or last, scrolling
  * the virtualized list as needed; Enter or a click opens the verse in the
- * context panel. Keys and clicks on a verse's buttons keep their usual
+ * context panel, `t` opens it on the Tafsir tab and `c` on the compare screen. Keys and clicks on a verse's buttons keep their usual
  * meaning, and a click that ends a text selection selects nothing, so text
  * can still be selected and copied.
  */
@@ -130,6 +149,7 @@ function useVerseFocus(
     virtualizer.scrollToIndex(next, { align: "auto" });
   };
 
+  const compareVerse = useCompareVerse();
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
     if (target.tagName !== "ARTICLE" || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -141,6 +161,8 @@ function useVerseFocus(
     else if (event.key === "Home") moveTo(0);
     else if (event.key === "End") moveTo(items.length - 1);
     else if (event.key === "Enter") openInPanel(verse);
+    else if (event.key === "t") openInPanel(verse, "tafsir");
+    else if (event.key === "c") compareVerse(verse);
     else return;
     event.preventDefault();
   };
@@ -208,6 +230,7 @@ function useReadingPosition(
 }
 
 function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined }) {
+  const compareVerse = useCompareVerse();
   const { t, i18n } = useTranslation();
   const info = useSurah(surah);
   const selected = useUiStore((state) => state.preferences["reader.translations"]);
@@ -267,6 +290,14 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
     };
   }, [surah, ayah, items, virtualizer, setFocusIndex]);
 
+  // The context panel follows a verse opened by a deep link.
+  const linkedVerseExists = items.some((verse) => verse.ayah === ayah);
+  useEffect(() => {
+    if (ayah !== undefined && linkedVerseExists) {
+      useUiStore.getState().selectVerse({ surah, ayah });
+    }
+  }, [surah, ayah, linkedVerseExists]);
+
   useReadingPosition(surah, scrollRef, virtualizer, items);
 
   const name = info.data ? surahName(info.data, language) : String(surah);
@@ -319,6 +350,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
                   surahName={name}
                   highlighted={verse.ayah === highlighted}
                   tabStop={row.index === focus.tabStop}
+                  onCompare={compareVerse}
                 />
               </div>
             );

@@ -134,10 +134,12 @@ pub struct Installed {
 
 /// Opens a connection to `content.db` for pack operations: the app's usual
 /// settings, plus `trusted_schema = OFF` so nothing in an attached pack's
-/// schema can call functions.
+/// schema can call functions, and a busy timeout because the app's reader
+/// connection is open at the same time.
 pub fn open_content(path: &Path) -> AppResult<Connection> {
     let conn = crate::db::connect(path)?;
     conn.execute_batch("PRAGMA trusted_schema = OFF;")?;
+    conn.busy_timeout(std::time::Duration::from_secs(10))?;
     Ok(conn)
 }
 
@@ -1086,6 +1088,56 @@ mod tests {
             let entry = entry_for(&zst, id, kind, version, size);
             (zst, entry)
         }
+    }
+
+    /// The published pack format end to end: a real tafsir from `siyak-data`,
+    /// installed into the real `core.db` and read back as the panel reads it.
+    #[test]
+    fn installs_and_reads_a_real_tafsir_when_present() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let dist = root.join("../../siyak-data/dist");
+        let Ok(bytes) = fs::read(dist.join("manifest.json")) else {
+            return;
+        };
+        let manifest = crate::packs::manifest::parse(&bytes).unwrap();
+        let entry = manifest.pack("ar.jalalayn").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("content.db");
+        fs::copy(root.join("resources/core.db"), &path).unwrap();
+        let mut conn = open_content(&path).unwrap();
+        install_file(
+            &mut conn,
+            &dist.join(entry.file_name()),
+            entry,
+            dir.path(),
+            &CancellationToken::new(),
+            &|_, _, _| {},
+        )
+        .unwrap();
+
+        let info = crate::db::content::list_tafsirs(&conn).unwrap();
+        assert_eq!(info[0].id, "ar.jalalayn");
+        // 2:2 is verse 9; al-Jalalayn has no commentary on 1:1.
+        let passage = crate::db::content::get_tafsir(&conn, 9, "ar.jalalayn")
+            .unwrap()
+            .unwrap();
+        assert!(passage.verse_from.surah == 2 && !passage.paragraphs.is_empty());
+        assert_eq!(
+            crate::db::content::get_tafsir(&conn, 1, "ar.jalalayn").unwrap(),
+            None
+        );
+        // The compare screen's query over the same pack: 2:1–5.
+        let compare = crate::db::content::get_compare(
+            &conn,
+            8,
+            12,
+            &["en.pickthall".to_owned()],
+            &["ar.jalalayn".to_owned()],
+        )
+        .unwrap();
+        assert_eq!(compare.verses.len(), 5);
+        assert!(compare.verses.iter().all(|v| v.translations.len() == 1));
+        assert!(!compare.tafsirs[0].passages.is_empty());
     }
 
     #[test]

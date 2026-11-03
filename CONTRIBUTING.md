@@ -86,6 +86,10 @@ dataset gets its own content database (`content.db` for the development data, `c
 the full data), so you can switch back and forth without resetting anything; `user.db` is shared.
 Debug builds show which dataset is loaded in the header.
 
+To try packs without publishing them, build them in `siyak-data` and point a debug build at its
+output: `SIYAK_PACK_SOURCE=../siyak-data/dist pnpm tauri dev`. The app then reads `manifest.json`
+from that directory and copies each pack from it by file name, with the same checks as a download.
+
 ## Scripts
 
 | Command                    | What it does                                                           |

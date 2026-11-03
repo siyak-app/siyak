@@ -12,7 +12,6 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { TranslationInfo } from "@/lib/bindings";
 import { useTranslations } from "@/lib/queries";
 import { useUiStore } from "@/stores/ui";
 
@@ -56,7 +55,7 @@ export function TranslationPicker() {
  * each with move up/down buttons; the other installed ones follow.
  */
 export function TranslationChooser() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const installed = useTranslations();
   const selected = useUiStore((state) => state.preferences["reader.translations"]);
   const setPreference = useUiStore((state) => state.setPreference);
@@ -78,9 +77,10 @@ export function TranslationChooser() {
   return (
     <ul className="-mx-1 flex flex-col">
       {shown.map((pack, index) => (
-        <TranslationRow
+        <ChooserRow
           key={pack.id}
-          pack={pack}
+          title={translationTitle(pack, i18n.resolvedLanguage)}
+          lang={pack.lang}
           checked
           first={index === 0}
           last={index === shown.length - 1}
@@ -93,9 +93,10 @@ export function TranslationChooser() {
         />
       ))}
       {others.map((pack) => (
-        <TranslationRow
+        <ChooserRow
           key={pack.id}
-          pack={pack}
+          title={translationTitle(pack, i18n.resolvedLanguage)}
+          lang={pack.lang}
           checked={false}
           onCheckedChange={(checked) => {
             update(toggleTranslation(shownIds, pack.id, checked));
@@ -106,15 +107,18 @@ export function TranslationChooser() {
   );
 }
 
-function TranslationRow({
-  pack,
+/** A pack in a chooser list: a checkbox and, if it is shown, move buttons. */
+export function ChooserRow({
+  title,
+  lang,
   checked,
   first = false,
   last = false,
   onCheckedChange,
   onMove,
 }: {
-  pack: TranslationInfo;
+  title: string;
+  lang: string | null;
   checked: boolean;
   first?: boolean;
   last?: boolean;
@@ -123,7 +127,6 @@ function TranslationRow({
 }) {
   const { t, i18n } = useTranslation();
   const id = useId();
-  const title = translationTitle(pack, i18n.resolvedLanguage);
   return (
     <li className="flex items-center gap-2 rounded-md px-1 py-1.5">
       <Checkbox
@@ -135,9 +138,9 @@ function TranslationRow({
       />
       <label htmlFor={id} className="min-w-0 flex-1 text-sm">
         <span className="block truncate">{title}</span>
-        {pack.lang && (
+        {lang && (
           <span className="block text-xs text-muted-foreground">
-            {languageName(pack.lang, i18n.resolvedLanguage)}
+            {languageName(lang, i18n.resolvedLanguage)}
           </span>
         )}
       </label>

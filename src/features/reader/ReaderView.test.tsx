@@ -69,8 +69,10 @@ const versesOf = (number: number, count: number, ids: readonly string[]): VerseW
 
 let current: { surah: number; ayah?: number } = { surah: 1 };
 
+const navigate = vi.fn();
 vi.mock("@tanstack/react-router", () => ({
   useParams: () => current,
+  useNavigate: () => navigate,
 }));
 
 // Query data is referentially stable between renders, as with TanStack Query.
@@ -209,6 +211,16 @@ describe("ReaderView", () => {
     expect(screen.getByText("Meal: Pickthall İngilizce Meali")).toBeInTheDocument();
   });
 
+  it("selects the verse of a deep link for the context panel", () => {
+    show(1, ["en.pickthall"], 3);
+    expect(useUiStore.getState().selectedVerse).toEqual({ surah: 1, ayah: 3 });
+  });
+
+  it("keeps the selection when a deep link names no such verse", () => {
+    show(1, ["en.pickthall"], 99);
+    expect(useUiStore.getState().selectedVerse).toBeNull();
+  });
+
   it("opens a deep link at its verse and highlights it", async () => {
     show(2, ["en.pickthall"], 255);
     const verse = await screen.findByRole("article", { name: "Verse 2:255" });
@@ -292,6 +304,36 @@ describe("ReaderView", () => {
       button.focus();
       fireEvent.keyDown(button, { key: "ArrowDown" });
       expect(document.activeElement).toBe(button);
+    });
+
+    it("opens the verse on the Tafsir tab with t", () => {
+      useUiStore.getState().setPreference("layout.right_panel", {
+        ...DEFAULT_PREFERENCES["layout.right_panel"],
+        collapsed: true,
+        tab: "word",
+      });
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:3" });
+      verse.focus();
+      fireEvent.keyDown(verse, { key: "t" });
+      const state = useUiStore.getState();
+      expect(state.selectedVerse).toEqual({ surah: 1, ayah: 3 });
+      expect(state.preferences["layout.right_panel"]).toMatchObject({
+        collapsed: false,
+        tab: "tafsir",
+      });
+    });
+
+    it("opens the verse on the compare screen with c", () => {
+      navigate.mockClear();
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:3" });
+      verse.focus();
+      fireEvent.keyDown(verse, { key: "c" });
+      expect(navigate).toHaveBeenCalledWith({
+        to: "/compare/$surah/$range",
+        params: { surah: 1, range: { from: 3, to: 3 } },
+      });
     });
 
     it("opens the verse in the context panel on Enter", () => {

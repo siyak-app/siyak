@@ -11,7 +11,10 @@ import { CommandPalette } from "@/features/command-palette/CommandPalette";
 import { ContextPanel } from "@/features/context-panel/ContextPanel";
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog";
 import { CoreRefreshBanner, DevDataBadge } from "@/features/core-status/CoreStatus";
+import { PacksDialog } from "@/features/packs/PacksDialog";
+import { usePackEvents } from "@/features/packs/usePackEvents";
 import { SurahList } from "@/features/reader/SurahList";
+import { SearchBox } from "@/features/search/SearchBox";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import type { PaneState } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
@@ -44,6 +47,7 @@ export function AppShell() {
   const right = initial["layout.right_panel"];
   const leftRef = usePanelRef();
   const rightRef = usePanelRef();
+  usePackEvents();
 
   // The right panel is also opened and closed from outside the panel itself:
   // by the experience profile, a settings reset or Enter on a verse.
@@ -90,7 +94,9 @@ export function AppShell() {
         </Button>
         <span className="ms-1 flex-1 text-sm font-semibold">{t("app.name")}</span>
         <DevDataBadge />
+        <SearchBox />
         <CommandPalette />
+        <PacksDialog />
         <SettingsDialog />
         <Button
           variant="ghost"

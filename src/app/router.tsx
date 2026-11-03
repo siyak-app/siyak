@@ -7,12 +7,15 @@ import {
   redirect,
 } from "@tanstack/react-router";
 
+import { CompareView } from "@/features/compare/CompareView";
 import { ReaderView } from "@/features/reader/ReaderView";
 import { SurahNotFound } from "@/features/reader/SurahNotFound";
+import { parseSearchParams } from "@/features/search/searchParams";
+import { SearchView } from "@/features/search/SearchView";
 import { useUiStore } from "@/stores/ui";
 
 import { AppShell } from "./layout/AppShell";
-import { parseAyahParam, parseSurahParam } from "./readParams";
+import { formatRangeParam, parseAyahParam, parseRangeParam, parseSurahParam } from "./readParams";
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -65,12 +68,49 @@ export const readVerseRoute = createRoute({
   notFoundComponent: SurahNotFound,
 });
 
+/** `/compare/:surah/:range`, e.g. `/compare/2/153-157` (spec §13.1 deep links). */
+export const compareRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/compare/$surah/$range",
+  params: {
+    parse: ({ surah, range }) => {
+      const parsed = parseRangeParam(range);
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router signals 404 by throwing
+      if (parsed === null) throw notFound();
+      return { surah: parseSurah(surah), range: parsed };
+    },
+    stringify: ({ surah, range }) => ({ surah: String(surah), range: formatRangeParam(range) }),
+  },
+  component: function CompareRoute() {
+    const { surah, range } = compareRoute.useParams();
+    return <CompareView surah={surah} from={range.from} to={range.to} />;
+  },
+  notFoundComponent: SurahNotFound,
+});
+
+/** `/search?q=…&mode=…`: the search screen. */
+export const searchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/search",
+  validateSearch: parseSearchParams,
+  component: function SearchRoute() {
+    const { q, mode } = searchRoute.useSearch();
+    return <SearchView q={q} mode={mode} />;
+  },
+});
+
 /**
  * Hash history: the app is served from local files inside the webview, where
  * there is no server to answer deep paths on reload.
  */
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([indexRoute, readRoute, readVerseRoute]),
+  routeTree: rootRoute.addChildren([
+    indexRoute,
+    readRoute,
+    readVerseRoute,
+    compareRoute,
+    searchRoute,
+  ]),
   history: createHashHistory(),
   defaultNotFoundComponent: SurahNotFound,
 });

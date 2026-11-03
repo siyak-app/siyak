@@ -1,0 +1,800 @@
+{
+  "version": 1,
+  "description": "Shared test vectors for Arabic search normalization; see docs/normalization.md. 'expected' values are written by hand.",
+  "vectors": [
+    {
+      "id": "v001",
+      "rules": [
+        "N1"
+      ],
+      "input": "بِسْمِ",
+      "expected": "بسم",
+      "source": "tanzil uthmani 1:1 token 1"
+    },
+    {
+      "id": "v002",
+      "rules": [
+        "N1",
+        "N5"
+      ],
+      "input": "ٱللَّهِ",
+      "expected": "الله",
+      "source": "tanzil uthmani 1:1 token 2",
+      "note": "alef wasla + shadda/kasra"
+    },
+    {
+      "id": "v003",
+      "rules": [
+        "N1",
+        "N2",
+        "N4",
+        "N5"
+      ],
+      "input": "ٱلرَّحْمَـٰنِ",
+      "expected": "الرحمن",
+      "source": "tanzil uthmani 1:1 token 3",
+      "note": "tatweel carrying a superscript alef"
+    },
+    {
+      "id": "v004",
+      "rules": [
+        "N1",
+        "N2",
+        "N4",
+        "N5"
+      ],
+      "input": "ٱلْعَـٰلَمِينَ",
+      "expected": "العلمين",
+      "source": "tanzil uthmani 1:2 token 4",
+      "note": "superscript alef is removed, not turned into alef: differs from Simple Clean العالمين (documented limitation)"
+    },
+    {
+      "id": "v005",
+      "rules": [
+        "N1",
+        "N2",
+        "N4"
+      ],
+      "input": "مَـٰلِكِ",
+      "expected": "ملك",
+      "source": "tanzil uthmani 1:4 token 1"
+    },
+    {
+      "id": "v006",
+      "rules": [
+        "N1",
+        "N2",
+        "N5"
+      ],
+      "input": "ٱلصِّرَٰطَ",
+      "expected": "الصرط",
+      "source": "tanzil uthmani 1:6 token 2"
+    },
+    {
+      "id": "v007",
+      "rules": [
+        "N1",
+        "N8"
+      ],
+      "input": "يُؤْمِنُونَ",
+      "expected": "يومنون",
+      "source": "tanzil uthmani 2:3 token 2"
+    },
+    {
+      "id": "v008",
+      "rules": [
+        "N1",
+        "N2",
+        "N5",
+        "N7"
+      ],
+      "input": "ٱلصَّلَوٰةَ",
+      "expected": "الصلوه",
+      "source": "tanzil uthmani 2:3 token 5",
+      "note": "Uthmani spelling; Simple Clean الصلاة gives الصلاه (documented limitation)"
+    },
+    {
+      "id": "v009",
+      "rules": [
+        "N1",
+        "N2",
+        "N4",
+        "N5"
+      ],
+      "input": "يَـٰٓأَيُّهَا",
+      "expected": "يايها",
+      "source": "tanzil uthmani 2:153 token 1",
+      "note": "Uthmani writes يا أيها as one word"
+    },
+    {
+      "id": "v010",
+      "rules": [
+        "N1",
+        "N3"
+      ],
+      "input": "ءَامَنُوا۟",
+      "expected": "ءامنوا",
+      "source": "tanzil uthmani 2:153 token 3",
+      "note": "standalone hamza is kept; small high rounded zero removed"
+    },
+    {
+      "id": "v011",
+      "rules": [
+        "N3"
+      ],
+      "input": "ۚ",
+      "expected": "",
+      "source": "tanzil uthmani 2:153 token 7",
+      "note": "a pause mark written as its own token"
+    },
+    {
+      "id": "v012",
+      "rules": [
+        "N1",
+        "N2",
+        "N4",
+        "N5"
+      ],
+      "input": "ٱلصَّـٰبِرِينَ",
+      "expected": "الصبرين",
+      "source": "tanzil uthmani 2:153 token 11"
+    },
+    {
+      "id": "v013",
+      "rules": [
+        "N1",
+        "N2",
+        "N3",
+        "N4",
+        "N5",
+        "N7",
+        "N12"
+      ],
+      "input": "يَـٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟ ٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ ۚ إِنَّ ٱللَّهَ مَعَ ٱلصَّـٰبِرِينَ",
+      "expected": "يايها الذين ءامنوا استعينوا بالصبر والصلوه ان الله مع الصبرين",
+      "source": "tanzil uthmani 2:153 (whole verse)"
+    },
+    {
+      "id": "v014",
+      "rules": [
+        "N1",
+        "N2",
+        "N3",
+        "N4",
+        "N5",
+        "N6",
+        "N12"
+      ],
+      "input": "ذَٰلِكَ ٱلْكِتَـٰبُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ",
+      "expected": "ذلك الكتب لا ريب فيه هدي للمتقين",
+      "source": "tanzil uthmani 2:2 (whole verse)",
+      "note": "two pause-mark tokens disappear"
+    },
+    {
+      "id": "v015",
+      "rules": [
+        "N1",
+        "N5",
+        "N6"
+      ],
+      "input": "ٱلْحَىُّ",
+      "expected": "الحي",
+      "source": "tanzil uthmani 2:255 token 6",
+      "note": "Uthmani writes final yeh as dotless ى"
+    },
+    {
+      "id": "v016",
+      "rules": [
+        "N1",
+        "N6"
+      ],
+      "input": "فِى",
+      "expected": "في",
+      "source": "tanzil uthmani 2:255 token 17"
+    },
+    {
+      "id": "v017",
+      "rules": [
+        "N1",
+        "N3",
+        "N4"
+      ],
+      "input": "يَـُٔودُهُۥ",
+      "expected": "يوده",
+      "source": "tanzil uthmani 2:255 token 53",
+      "note": "tatweel + combining hamza; Simple Clean يئوده gives ييوده (documented limitation)"
+    },
+    {
+      "id": "v018",
+      "rules": [
+        "N1",
+        "N6"
+      ],
+      "input": "بِشَىْءٍ",
+      "expected": "بشيء",
+      "source": "tanzil uthmani 2:255 token 40"
+    },
+    {
+      "id": "v019",
+      "rules": [
+        "N1",
+        "N3"
+      ],
+      "input": "عِندَهُۥٓ",
+      "expected": "عنده",
+      "source": "tanzil uthmani 2:255 token 27"
+    },
+    {
+      "id": "v020",
+      "rules": [
+        "N1",
+        "N7"
+      ],
+      "input": "بَرَآءَةٌ",
+      "expected": "براءه",
+      "source": "tanzil uthmani 9:1 token 1",
+      "note": "alef + maddah sign as two code points"
+    },
+    {
+      "id": "v021",
+      "rules": [
+        "N1",
+        "N3"
+      ],
+      "input": "وَرَسُولِهِۦٓ",
+      "expected": "ورسوله",
+      "source": "tanzil uthmani 9:1 token 4"
+    },
+    {
+      "id": "v022",
+      "rules": [
+        "N1",
+        "N3",
+        "N5",
+        "N12"
+      ],
+      "input": "كَلَّا لَا تُطِعْهُ وَٱسْجُدْ وَٱقْتَرِب ۩",
+      "expected": "كلا لا تطعه واسجد واقترب",
+      "source": "tanzil uthmani 96:19 (whole verse)",
+      "note": "ends with the sajdah sign ۩"
+    },
+    {
+      "id": "v023",
+      "rules": [
+        "N1",
+        "N3",
+        "N4",
+        "N5"
+      ],
+      "input": "ٱلنَّبِيِّـۧنَ",
+      "expected": "النبين",
+      "source": "tanzil uthmani 19:58 token 7",
+      "note": "small high yeh"
+    },
+    {
+      "id": "v024",
+      "rules": [
+        "N1",
+        "N2",
+        "N3",
+        "N4",
+        "N5",
+        "N8"
+      ],
+      "input": "أُو۟لَـٰٓئِكَ",
+      "expected": "اوليك",
+      "source": "tanzil uthmani 19:58 token 1"
+    },
+    {
+      "id": "v025",
+      "rules": [
+        "N1",
+        "N2",
+        "N5"
+      ],
+      "input": "وَإِسْرَٰٓءِيلَ",
+      "expected": "واسرءيل",
+      "source": "tanzil uthmani 19:58 token 18"
+    },
+    {
+      "id": "v026",
+      "rules": [
+        "N1",
+        "N8"
+      ],
+      "input": "بِسُؤَالِ",
+      "expected": "بسوال",
+      "source": "tanzil uthmani 38:24 token 4"
+    },
+    {
+      "id": "v027",
+      "rules": [
+        "N1",
+        "N3"
+      ],
+      "input": "دَاوُۥدُ",
+      "expected": "داود",
+      "source": "tanzil uthmani 38:24 token 27"
+    },
+    {
+      "id": "v028",
+      "rules": [
+        "N1",
+        "N5"
+      ],
+      "input": "ٱلْأَقْصَا",
+      "expected": "الاقصا",
+      "source": "tanzil uthmani 17:1 token 15"
+    },
+    {
+      "id": "v029",
+      "rules": [
+        "N1",
+        "N2",
+        "N5",
+        "N6"
+      ],
+      "input": "أَسْرَىٰ",
+      "expected": "اسري",
+      "source": "tanzil uthmani 17:1 token 7"
+    },
+    {
+      "id": "v030",
+      "rules": [
+        "N1",
+        "N5"
+      ],
+      "input": "أَحَدٌ",
+      "expected": "احد",
+      "source": "tanzil uthmani 112:1 token 8",
+      "note": "ayah 1 starts with the basmala in Tanzil's file"
+    },
+    {
+      "id": "v031",
+      "rules": [],
+      "input": "العالمين",
+      "expected": "العالمين",
+      "source": "tanzil simple-clean 1:2 token 4",
+      "note": "Simple Clean words without hamza/ta marbuta/alef maqsura are unchanged"
+    },
+    {
+      "id": "v032",
+      "rules": [
+        "N7"
+      ],
+      "input": "الصلاة",
+      "expected": "الصلاه",
+      "source": "tanzil simple-clean 2:3 token 5"
+    },
+    {
+      "id": "v033",
+      "rules": [
+        "N8"
+      ],
+      "input": "يؤمنون",
+      "expected": "يومنون",
+      "source": "tanzil simple-clean 2:3 token 2"
+    },
+    {
+      "id": "v034",
+      "rules": [
+        "N5"
+      ],
+      "input": "أيها",
+      "expected": "ايها",
+      "source": "tanzil simple-clean 2:153 token 2"
+    },
+    {
+      "id": "v035",
+      "rules": [
+        "N5"
+      ],
+      "input": "آمنوا",
+      "expected": "امنوا",
+      "source": "tanzil simple-clean 2:153 token 4"
+    },
+    {
+      "id": "v036",
+      "rules": [
+        "N5"
+      ],
+      "input": "إله",
+      "expected": "اله",
+      "source": "tanzil simple-clean 2:255 token 3"
+    },
+    {
+      "id": "v037",
+      "rules": [
+        "N8"
+      ],
+      "input": "يئوده",
+      "expected": "ييوده",
+      "source": "tanzil simple-clean 2:255 token 46"
+    },
+    {
+      "id": "v038",
+      "rules": [
+        "N5",
+        "N6"
+      ],
+      "input": "إلى",
+      "expected": "الي",
+      "source": "tanzil simple-clean 9:1 token 5"
+    },
+    {
+      "id": "v039",
+      "rules": [
+        "N5"
+      ],
+      "input": "بسم الله الرحمن الرحيم قل هو الله أحد",
+      "expected": "بسم الله الرحمن الرحيم قل هو الله احد",
+      "source": "tanzil simple-clean 112:1 (whole verse)"
+    },
+    {
+      "id": "v040",
+      "rules": [
+        "N5",
+        "N6"
+      ],
+      "input": "الأقصى",
+      "expected": "الاقصي",
+      "source": "tanzil simple-clean 17:1 token 15"
+    },
+    {
+      "id": "v041",
+      "rules": [],
+      "input": "داوود",
+      "expected": "داوود",
+      "source": "tanzil simple-clean 38:24 token 25"
+    },
+    {
+      "id": "v042",
+      "rules": [
+        "N4"
+      ],
+      "input": "صـــبر",
+      "expected": "صبر",
+      "note": "decorative tatweel"
+    },
+    {
+      "id": "v043",
+      "rules": [
+        "N5"
+      ],
+      "input": "آدم",
+      "expected": "ادم"
+    },
+    {
+      "id": "v044",
+      "rules": [
+        "N5"
+      ],
+      "input": "إبراهيم",
+      "expected": "ابراهيم"
+    },
+    {
+      "id": "v045",
+      "rules": [
+        "N6"
+      ],
+      "input": "على",
+      "expected": "علي",
+      "note": "known trade-off: على ('on') and علي are merged"
+    },
+    {
+      "id": "v046",
+      "rules": [
+        "N7"
+      ],
+      "input": "رحمة",
+      "expected": "رحمه"
+    },
+    {
+      "id": "v047",
+      "rules": [
+        "N8"
+      ],
+      "input": "سئل",
+      "expected": "سيل",
+      "note": "known trade-off: merges with سيل"
+    },
+    {
+      "id": "v048",
+      "rules": [],
+      "input": "سماء",
+      "expected": "سماء",
+      "note": "standalone hamza is not changed"
+    },
+    {
+      "id": "v049",
+      "rules": [
+        "N1",
+        "N2"
+      ],
+      "input": "هَٰذَا",
+      "expected": "هذا"
+    },
+    {
+      "id": "v050",
+      "rules": [
+        "N1"
+      ],
+      "input": "أ",
+      "expected": "ا",
+      "note": "decomposed hamza above: same result as N5 on أ"
+    },
+    {
+      "id": "v051",
+      "rules": [
+        "N1"
+      ],
+      "input": "ؤ",
+      "expected": "و",
+      "note": "decomposed hamza on waw: same result as N8 on ؤ"
+    },
+    {
+      "id": "v052",
+      "rules": [
+        "N1"
+      ],
+      "input": "ئ",
+      "expected": "ي",
+      "note": "decomposed hamza on yeh: same result as N8 on ئ"
+    },
+    {
+      "id": "v053",
+      "rules": [
+        "N3"
+      ],
+      "input": "محمدؐ",
+      "expected": "محمد",
+      "note": "combining honorific sign"
+    },
+    {
+      "id": "v054",
+      "rules": [
+        "N3"
+      ],
+      "input": "رقيباࣰ",
+      "expected": "رقيبا",
+      "note": "extended Quranic mark (open fathatan)"
+    },
+    {
+      "id": "v055",
+      "rules": [
+        "N3"
+      ],
+      "input": "۝٢٥٥",
+      "expected": "٢٥٥",
+      "note": "end-of-ayah sign removed; Arabic-Indic digits kept"
+    },
+    {
+      "id": "v056",
+      "rules": [
+        "N9"
+      ],
+      "input": "کتاب",
+      "expected": "كتاب",
+      "note": "Persian keheh"
+    },
+    {
+      "id": "v057",
+      "rules": [
+        "N9"
+      ],
+      "input": "یوم",
+      "expected": "يوم",
+      "note": "Persian yeh"
+    },
+    {
+      "id": "v058",
+      "rules": [
+        "N9"
+      ],
+      "input": "علے",
+      "expected": "علي",
+      "note": "yeh barree"
+    },
+    {
+      "id": "v059",
+      "rules": [
+        "N9"
+      ],
+      "input": "اللہ",
+      "expected": "الله",
+      "note": "heh goal"
+    },
+    {
+      "id": "v060",
+      "rules": [
+        "N9"
+      ],
+      "input": "ھو",
+      "expected": "هو",
+      "note": "heh doachashmee"
+    },
+    {
+      "id": "v061",
+      "rules": [
+        "N9"
+      ],
+      "input": "رحمۀ",
+      "expected": "رحمه",
+      "note": "heh with yeh above"
+    },
+    {
+      "id": "v062",
+      "rules": [
+        "N10"
+      ],
+      "input": "ﷲ",
+      "expected": "الله",
+      "note": "ligature allah"
+    },
+    {
+      "id": "v063",
+      "rules": [
+        "N10"
+      ],
+      "input": "ﻻ",
+      "expected": "لا",
+      "note": "lam-alef ligature"
+    },
+    {
+      "id": "v064",
+      "rules": [
+        "N10"
+      ],
+      "input": "ﺑﺴﻢ",
+      "expected": "بسم",
+      "note": "positional forms: beh initial, seen medial, meem final"
+    },
+    {
+      "id": "v065",
+      "rules": [
+        "N10",
+        "N6"
+      ],
+      "input": "ﷺ",
+      "expected": "صلي الله عليه وسلم",
+      "note": "ligature decomposes into four words"
+    },
+    {
+      "id": "v066",
+      "rules": [
+        "N10",
+        "N1",
+        "N12"
+      ],
+      "input": "ﹰ",
+      "expected": "",
+      "note": "isolated tanween form decomposes to space + mark"
+    },
+    {
+      "id": "v067",
+      "rules": [],
+      "input": "﷽",
+      "expected": "﷽",
+      "note": "the basmala ligature has no decomposition and is kept"
+    },
+    {
+      "id": "v068",
+      "rules": [
+        "N11"
+      ],
+      "input": "الحمد‌لله",
+      "expected": "الحمدلله",
+      "note": "zero-width non-joiner"
+    },
+    {
+      "id": "v069",
+      "rules": [
+        "N11"
+      ],
+      "input": "‏صبر",
+      "expected": "صبر",
+      "note": "right-to-left mark"
+    },
+    {
+      "id": "v070",
+      "rules": [
+        "N11"
+      ],
+      "input": "﻿بسم",
+      "expected": "بسم",
+      "note": "byte order mark"
+    },
+    {
+      "id": "v071",
+      "rules": [
+        "N11"
+      ],
+      "input": "؜صبر",
+      "expected": "صبر",
+      "note": "Arabic letter mark"
+    },
+    {
+      "id": "v072",
+      "rules": [
+        "N11"
+      ],
+      "input": "⁧صبر⁩",
+      "expected": "صبر",
+      "note": "bidi isolate"
+    },
+    {
+      "id": "v073",
+      "rules": [
+        "N7",
+        "N12"
+      ],
+      "input": "  الصبر   والصلاة  ",
+      "expected": "الصبر والصلاه"
+    },
+    {
+      "id": "v074",
+      "rules": [
+        "N7",
+        "N12"
+      ],
+      "input": "صبر\tو\nصلاة",
+      "expected": "صبر و صلاه",
+      "note": "tab and newline"
+    },
+    {
+      "id": "v075",
+      "rules": [
+        "N12"
+      ],
+      "input": " صبر　شكر ",
+      "expected": "صبر شكر",
+      "note": "no-break space and ideographic space"
+    },
+    {
+      "id": "v076",
+      "rules": [
+        "N12"
+      ],
+      "input": "   ",
+      "expected": ""
+    },
+    {
+      "id": "v077",
+      "rules": [],
+      "input": "",
+      "expected": ""
+    },
+    {
+      "id": "v078",
+      "rules": [
+        "N1"
+      ],
+      "input": "Sabr الصَّبْرِ 2:153",
+      "expected": "Sabr الصبر 2:153",
+      "note": "Latin text and digits pass through"
+    },
+    {
+      "id": "v079",
+      "rules": [],
+      "input": "sabır",
+      "expected": "sabır",
+      "note": "Turkish text is not changed (case folding is the FTS tokenizer's job)"
+    },
+    {
+      "id": "v080",
+      "rules": [],
+      "input": "ما الصبر؟",
+      "expected": "ما الصبر؟",
+      "note": "Arabic punctuation is kept"
+    },
+    {
+      "id": "v081",
+      "rules": [
+        "N1"
+      ],
+      "input": "مَآ",
+      "expected": "ما",
+      "note": "maddah above (U+0653) is in the harakat range"
+    }
+  ]
+}

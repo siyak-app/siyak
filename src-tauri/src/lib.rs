@@ -18,17 +18,21 @@ pub mod search;
 pub mod secrets;
 
 use std::fs;
-use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use rusqlite::Connection;
 use specta_typescript::Typescript;
 use tauri::Manager;
 use tauri::path::BaseDirectory;
 
+use crate::commands::packs::TauriEvents;
 use crate::db::Databases;
 use crate::db::content::Seed;
 use crate::error::{AppError, AppErrorCode, AppResult};
+use crate::net::{Net, UserDbLog};
+use crate::packs::manifest::{ManifestStore, PackSource};
+use crate::packs::service::{Packs, PacksConfig};
 
 /// First line of the generated bindings file.
 const BINDINGS_HEADER: &str =
@@ -41,12 +45,18 @@ const BINDINGS_HEADER: &str =
 /// the frontend shows as a translated message.
 pub struct AppState {
     databases: AppResult<Databases>,
+    packs: AppResult<Packs>,
 }
 
 impl AppState {
     /// Returns the open databases, or the error that prevented opening them.
     pub fn databases(&self) -> AppResult<&Databases> {
         self.databases.as_ref().map_err(Clone::clone)
+    }
+
+    /// Returns the pack service, or the error that prevented setting it up.
+    pub fn packs(&self) -> AppResult<&Packs> {
+        self.packs.as_ref().map_err(Clone::clone)
     }
 
     /// Locks the `content.db` connection.
@@ -93,18 +103,72 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(builder.invoke_handler())
         .setup(|app| {
-            let databases = open_databases(app);
-            if let Err(err) = &databases {
+            let state = open_state(app);
+            if let Err(err) = &state.databases {
                 eprintln!("database setup failed: {err}");
+            } else if let Err(err) = &state.packs {
+                eprintln!("pack setup failed: {err}");
             }
-            app.manage(AppState { databases });
+            app.manage(state);
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running the Tauri application");
 }
 
-fn open_databases(app: &tauri::App) -> AppResult<Databases> {
+/// Opens the databases, cleans up after interrupted pack jobs and sets up the
+/// pack service.
+fn open_state(app: &tauri::App) -> AppState {
+    let opened = data_dir(app).and_then(|dir| {
+        let seed = seed(app)?;
+        let databases = Databases::open(&dir, &seed)?;
+        Ok((dir, seed, databases))
+    });
+    let (data_dir, seed, databases) = match opened {
+        Ok(opened) => opened,
+        Err(err) => {
+            return AppState {
+                databases: Err(err.clone()),
+                packs: Err(err),
+            };
+        }
+    };
+    let cleaned =
+        lock(&databases.content).and_then(|conn| packs::install::cleanup(&conn, &data_dir));
+    if let Err(err) = cleaned {
+        eprintln!("cleaning up pack files failed: {err}");
+    }
+    let packs = open_packs(app, data_dir.clone(), data_dir.join(seed.file_name));
+    AppState {
+        databases: Ok(databases),
+        packs,
+    }
+}
+
+/// Environment variable that points debug builds at a local pack directory
+/// (e.g. `../siyak-data/dist`) instead of the published manifest.
+const PACK_SOURCE_VAR: &str = "SIYAK_PACK_SOURCE";
+
+fn open_packs(app: &tauri::App, data_dir: PathBuf, content_path: PathBuf) -> AppResult<Packs> {
+    let log = UserDbLog::spawn(&data_dir.join(db::user::FILE_NAME))?;
+    let net = Net::new(Arc::new(log))?;
+    let source = match std::env::var_os(PACK_SOURCE_VAR) {
+        Some(dir) if cfg!(debug_assertions) && !dir.is_empty() => PackSource::Local(dir.into()),
+        _ => PackSource::Remote,
+    };
+    Ok(Packs::new(
+        net,
+        ManifestStore::new(source, &data_dir),
+        PacksConfig {
+            data_dir,
+            content_path,
+            disk: packs::service::available_space,
+        },
+        Arc::new(TauriEvents(app.handle().clone())),
+    ))
+}
+
+fn data_dir(app: &tauri::App) -> AppResult<PathBuf> {
     let data_dir = app.path().app_data_dir().map_err(|err| {
         AppError::new(
             AppErrorCode::IoFailed,
@@ -117,7 +181,7 @@ fn open_databases(app: &tauri::App) -> AppResult<Databases> {
             format!("creating {}: {err}", data_dir.display()),
         )
     })?;
-    Databases::open(&data_dir, &seed(app)?)
+    Ok(data_dir)
 }
 
 /// Environment variable that picks the dataset of debug builds.

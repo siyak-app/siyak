@@ -24,3 +24,26 @@ export function parseAyahParam(raw: string): number | null {
   const ayah = Number(raw);
   return ayah <= MAX_AYAH ? ayah : null;
 }
+
+/** A verse range of a surah, e.g. the `153-157` of `/compare/2/153-157`. */
+export interface VerseRange {
+  from: number;
+  to: number;
+}
+
+/**
+ * Parses the `:range` segment of `/compare/:surah/:range`: `255` or `153-157`,
+ * or `null`. Whether the surah has those verses is checked by the screen.
+ */
+export function parseRangeParam(raw: string): VerseRange | null {
+  const [first, last, ...rest] = raw.split("-");
+  if (first === undefined || rest.length > 0) return null;
+  const from = parseAyahParam(first);
+  const to = last === undefined ? from : parseAyahParam(last);
+  return from === null || to === null || to < from ? null : { from, to };
+}
+
+/** The `:range` segment for a range: `255` for one verse, else `153-157`. */
+export function formatRangeParam({ from, to }: VerseRange): string {
+  return from === to ? String(from) : `${String(from)}-${String(to)}`;
+}

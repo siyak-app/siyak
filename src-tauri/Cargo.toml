@@ -41,6 +41,7 @@ semver = "1.0.28"
 fs4 = "1.1.0"
 # Rust side only: the webview gets no opener permission (spec §14.3).
 tauri-plugin-opener = "2.7.2"
+unicode-normalization = "0.1.26"
 
 [dev-dependencies]
 tempfile = "3.27.0"

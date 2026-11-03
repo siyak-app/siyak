@@ -1,5 +1,4 @@
 import {
-  BookOpenTextIcon,
   type LucideIcon,
   MessagesSquareIcon,
   NotebookPenIcon,
@@ -9,14 +8,14 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TafsirPanel } from "@/features/tafsir/TafsirPanel";
 import { surahName } from "@/features/reader/surahName";
 import { verseNumber, verseReference } from "@/features/reader/verseCopy";
 import { useSurahs } from "@/lib/queries";
 import { CONTEXT_TABS, type ContextTab } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
-const TAB_ICONS: Record<ContextTab, LucideIcon> = {
-  tafsir: BookOpenTextIcon,
+const TAB_ICONS: Record<Exclude<ContextTab, "tafsir">, LucideIcon> = {
   word: SpellCheckIcon,
   related: WaypointsIcon,
   notes: NotebookPenIcon,
@@ -28,7 +27,7 @@ const isContextTab = (value: string): value is ContextTab =>
 
 /**
  * Right pane: context for the selected verse or word (spec §13.2).
- * TODO(M4): tafsir. TODO(M5): word. TODO(M6): notes. TODO(M7): related. TODO(M8): chat.
+ * TODO(M5): word. TODO(M6): notes. TODO(M7): related. TODO(M8): chat.
  */
 export function ContextPanel() {
   const { t, i18n } = useTranslation();
@@ -64,7 +63,10 @@ export function ContextPanel() {
           </TabsTrigger>
         ))}
       </TabsList>
-      {CONTEXT_TABS.map((tab) => {
+      <TabsContent value="tafsir" className="flex min-h-0 flex-1 flex-col">
+        <TafsirPanel verse={selected} />
+      </TabsContent>
+      {CONTEXT_TABS.filter((tab) => tab !== "tafsir").map((tab) => {
         const Icon = TAB_ICONS[tab];
         return (
           <TabsContent

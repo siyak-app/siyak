@@ -13,6 +13,7 @@ use std::path::Path;
 use rusqlite::{Connection, Transaction, params};
 use serde::Deserialize;
 use siyak_lib::db::{content::MIGRATIONS, migrate};
+use siyak_lib::search::normalize;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -21,7 +22,7 @@ type VerseKey = (u16, u16);
 
 /// `content_meta.core_version` of the dev seed (spec §6.2). Raise it whenever
 /// the generated rows change, so existing dev `content.db` files are refreshed.
-const CORE_VERSION: u32 = 2;
+const CORE_VERSION: u32 = 3;
 
 /// Version of the Tanzil text in the fixtures, as in their copyright block.
 const TANZIL_VERSION: &str = "1.1";
@@ -97,9 +98,18 @@ pub fn build(root: &Path) -> Result<()> {
         "INSERT INTO content_meta (key, value) VALUES ('core_version', ?1), ('tanzil_version', ?2)",
         params![CORE_VERSION.to_string(), TANZIL_VERSION],
     )?;
-    // TODO(M4): fill verses_fts with normalize(text_clean) once the Rust port of
-    // the pipeline's normalizer exists (siyak-data docs/normalization.md). Until
-    // then the dev seed's index is empty; `SIYAK_DEV_DATA=full` has it filled.
+    // Filled with the app's port of the pipeline's normalizer, which is tested
+    // to reproduce core.db's index (siyak-data docs/normalization.md).
+    let clean: Vec<(u32, String)> = tx
+        .prepare("SELECT id, text_clean FROM verses ORDER BY id")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+    for (id, text) in &clean {
+        tx.execute(
+            "INSERT INTO verses_fts (rowid, text_norm) VALUES (?1, ?2)",
+            params![id, normalize(text)],
+        )?;
+    }
     tx.commit()?;
     conn.execute_batch("VACUUM;")?;
     drop(conn);

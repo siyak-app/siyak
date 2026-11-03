@@ -3,14 +3,14 @@
 //! On first launch the bundled seed database is copied into place (spec §5);
 //! afterwards only the app writes to this file. When the app ships a newer
 //! `core.db`, the core tables are refreshed in place (spec §6.2, ADR 0011).
-//! TODO(M3): pack installation writes translation/tafsir/morphology rows here.
+//! Pack installation writes its rows here through `crate::packs::install`.
 
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use super::{Migration, backup, connect, migrate, schema_version};
@@ -218,7 +218,7 @@ fn replace_core_tables(conn: &mut Connection) -> AppResult<()> {
 }
 
 /// Where a surah was revealed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum RevelationType {
     /// Revealed in Mecca.
@@ -310,6 +310,86 @@ pub struct VerseWithTranslations {
     /// Translations in the order they were requested; packs without a row
     /// for this verse are omitted.
     pub translations: Vec<VerseTranslation>,
+}
+
+/// An installed tafsir pack.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct TafsirInfo {
+    /// Pack id, e.g. `ar.jalalayn`.
+    pub id: String,
+    /// Title as published (`packs.title`).
+    pub title: String,
+    /// Title in the interface languages, from the pack's metadata.
+    pub titles: LocalizedTitle,
+    /// Author of the work.
+    pub author: Option<String>,
+    /// BCP 47 language of the text, used for the `lang` attribute.
+    pub lang: Option<String>,
+    /// Writing direction of the text, used for the `dir` attribute.
+    pub dir: TextDirection,
+    /// Attribution that must stay visible with the text (spec §6.5).
+    pub attribution: Option<String>,
+    /// Whether the pack has the author's introduction (spec §5.2).
+    pub has_introduction: bool,
+}
+
+/// A verse by its surah and number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+pub struct VerseRef {
+    /// Surah number.
+    pub surah: u16,
+    /// Verse number within the surah.
+    pub ayah: u16,
+}
+
+/// One paragraph of a tafsir passage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct TafsirParagraph {
+    /// Position within the passage, from 0.
+    pub idx: u32,
+    /// Text in the small HTML subset of spec §5.2; untrusted, the interface
+    /// renders only the allowed elements.
+    pub text: String,
+    /// Volume of the printed edition, if known.
+    pub part: Option<String>,
+    /// Page of the printed edition, if known.
+    pub page: Option<u32>,
+}
+
+/// A tafsir passage: commentary on a range of verses, or the introduction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct TafsirPassage {
+    /// Passage id in `content.db`.
+    pub id: u32,
+    /// First verse covered.
+    pub verse_from: VerseRef,
+    /// Last verse covered.
+    pub verse_to: VerseRef,
+    /// Paragraphs in order.
+    pub paragraphs: Vec<TafsirParagraph>,
+}
+
+/// Most verses compared at once: tafsir passages can be long.
+pub const MAX_COMPARE_VERSES: u32 = 50;
+
+/// The commentary of one tafsir on a range of verses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct CompareTafsir {
+    /// Tafsir pack id.
+    pub pack_id: String,
+    /// Passages overlapping the range, in verse order. A passage may begin
+    /// before the range or end after it.
+    pub passages: Vec<TafsirPassage>,
+}
+
+/// A range of verses with the chosen translations and tafsirs (spec §13.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct Compare {
+    /// The verses, at most [`MAX_COMPARE_VERSES`], with translations in the
+    /// requested order.
+    pub verses: Vec<VerseWithTranslations>,
+    /// The tafsirs in the requested order.
+    pub tafsirs: Vec<CompareTafsir>,
 }
 
 const SURAH_COLUMNS: &str =
@@ -484,6 +564,207 @@ pub fn get_verses(
     Ok(verses)
 }
 
+/// Lists the installed tafsir packs by id.
+pub fn list_tafsirs(conn: &Connection) -> AppResult<Vec<TafsirInfo>> {
+    let mut stmt = conn.prepare(
+        "SELECT p.id, p.title, p.meta_json, p.author, p.lang, p.attribution,
+                EXISTS (SELECT 1 FROM tafsir t WHERE t.pack_id = p.id AND t.kind = 'introduction')
+         FROM packs p WHERE p.type = 'tafsir' ORDER BY p.id",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let lang: Option<String> = row.get(4)?;
+        Ok(TafsirInfo {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            titles: localized_title(row.get::<_, Option<String>>(2)?.as_deref()),
+            author: row.get(3)?,
+            dir: text_direction(lang.as_deref()),
+            lang,
+            attribution: row.get(5)?,
+            has_introduction: row.get(6)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Returns the commentary of `pack_id` covering `verse_id`, or `None` if the
+/// tafsir has none for that verse (spec §5.2, gaps). The introduction is not
+/// commentary on 1:1: see [`get_tafsir_introduction`]. Fails with
+/// [`AppErrorCode::NotFound`] if the pack is not an installed tafsir.
+pub fn get_tafsir(
+    conn: &Connection,
+    verse_id: u32,
+    pack_id: &str,
+) -> AppResult<Option<TafsirPassage>> {
+    require_tafsir(conn, pack_id)?;
+    let id: Option<u32> = conn
+        .query_row(
+            "SELECT id FROM tafsir
+             WHERE pack_id = ?1 AND kind = 'commentary' AND verse_from <= ?2 AND verse_to >= ?2
+             ORDER BY verse_from DESC LIMIT 1",
+            (pack_id, verse_id),
+            |row| row.get(0),
+        )
+        .optional()?;
+    id.map(|id| tafsir_passage(conn, id)).transpose()
+}
+
+/// Returns the author's introduction of `pack_id`, if it has one.
+pub fn get_tafsir_introduction(
+    conn: &Connection,
+    pack_id: &str,
+) -> AppResult<Option<TafsirPassage>> {
+    require_tafsir(conn, pack_id)?;
+    let id: Option<u32> = conn
+        .query_row(
+            "SELECT id FROM tafsir WHERE pack_id = ?1 AND kind = 'introduction'
+             ORDER BY verse_from LIMIT 1",
+            [pack_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    id.map(|id| tafsir_passage(conn, id)).transpose()
+}
+
+/// Returns verses `from..=to` (at most [`MAX_COMPARE_VERSES`] of them) with
+/// the given translations and the commentary of the given tafsirs. Unknown pack
+/// ids are ignored and duplicates count once, as in [`get_verses`]. Fails with
+/// [`AppErrorCode::NotFound`] if the range holds no verse.
+pub fn get_compare(
+    conn: &Connection,
+    from: u32,
+    to: u32,
+    translation_ids: &[String],
+    tafsir_ids: &[String],
+) -> AppResult<Compare> {
+    let to = to.min(from.saturating_add(MAX_COMPARE_VERSES - 1));
+    let mut verses = conn
+        .prepare(
+            "SELECT id, surah, ayah, juz, text_uthmani FROM verses
+             WHERE id BETWEEN ?1 AND ?2 ORDER BY id",
+        )?
+        .query_map([from, to], |row| {
+            Ok(VerseWithTranslations {
+                id: row.get(0)?,
+                surah: row.get(1)?,
+                ayah: row.get(2)?,
+                juz: row.get(3)?,
+                text_uthmani: row.get(4)?,
+                translations: Vec::new(),
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    if verses.is_empty() {
+        return Err(AppError::new(
+            AppErrorCode::NotFound,
+            format!("verses {from}..={to}"),
+        ));
+    }
+
+    let index: HashMap<u32, usize> = verses.iter().enumerate().map(|(i, v)| (v.id, i)).collect();
+    let mut stmt = conn.prepare(
+        "SELECT t.verse_id, p.lang, t.text
+         FROM translations t
+         JOIN packs p ON p.id = t.pack_id
+         WHERE t.pack_id = ?1 AND t.verse_id BETWEEN ?2 AND ?3",
+    )?;
+    let mut seen = Vec::with_capacity(translation_ids.len());
+    for pack_id in translation_ids {
+        if seen.contains(&pack_id) {
+            continue;
+        }
+        seen.push(pack_id);
+        let rows = stmt.query_map((pack_id, from, to), |row| {
+            Ok((row.get::<_, u32>(0)?, row.get(1)?, row.get(2)?))
+        })?;
+        for row in rows {
+            let (verse_id, lang, text) = row?;
+            if let Some(verse) = index.get(&verse_id).and_then(|&i| verses.get_mut(i)) {
+                verse.translations.push(VerseTranslation {
+                    pack_id: pack_id.clone(),
+                    lang,
+                    text,
+                });
+            }
+        }
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT id FROM tafsir
+         WHERE pack_id = ?1 AND kind = 'commentary' AND verse_from <= ?3 AND verse_to >= ?2
+         ORDER BY verse_from",
+    )?;
+    let mut tafsirs: Vec<CompareTafsir> = Vec::with_capacity(tafsir_ids.len());
+    for pack_id in tafsir_ids {
+        if tafsirs.iter().any(|t| t.pack_id == *pack_id) || require_tafsir(conn, pack_id).is_err() {
+            continue;
+        }
+        let ids: Vec<u32> = stmt
+            .query_map((pack_id, from, to), |row| row.get(0))?
+            .collect::<Result<_, _>>()?;
+        tafsirs.push(CompareTafsir {
+            pack_id: pack_id.clone(),
+            passages: ids
+                .into_iter()
+                .map(|id| tafsir_passage(conn, id))
+                .collect::<AppResult<_>>()?,
+        });
+    }
+    Ok(Compare { verses, tafsirs })
+}
+
+fn require_tafsir(conn: &Connection, pack_id: &str) -> AppResult<()> {
+    let exists = conn
+        .query_row(
+            "SELECT 1 FROM packs WHERE id = ?1 AND type = 'tafsir'",
+            [pack_id],
+            |_| Ok(()),
+        )
+        .optional()?;
+    exists.ok_or_else(|| AppError::new(AppErrorCode::NotFound, format!("tafsir {pack_id}")))
+}
+
+fn tafsir_passage(conn: &Connection, id: u32) -> AppResult<TafsirPassage> {
+    let (verse_from, verse_to) = conn.query_row(
+        "SELECT a.surah, a.ayah, b.surah, b.ayah FROM tafsir t
+         JOIN verses a ON a.id = t.verse_from
+         JOIN verses b ON b.id = t.verse_to
+         WHERE t.id = ?1",
+        [id],
+        |row| {
+            Ok((
+                VerseRef {
+                    surah: row.get(0)?,
+                    ayah: row.get(1)?,
+                },
+                VerseRef {
+                    surah: row.get(2)?,
+                    ayah: row.get(3)?,
+                },
+            ))
+        },
+    )?;
+    let mut stmt = conn.prepare(
+        "SELECT idx, text, part, page FROM tafsir_paragraphs WHERE tafsir_id = ?1 ORDER BY idx",
+    )?;
+    let paragraphs = stmt
+        .query_map([id], |row| {
+            Ok(TafsirParagraph {
+                idx: row.get(0)?,
+                text: row.get(1)?,
+                part: row.get(2)?,
+                page: row.get(3)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(TafsirPassage {
+        id,
+        verse_from,
+        verse_to,
+        paragraphs,
+    })
+}
+
 /// Copies through a temporary file and renames it, so an interrupted copy
 /// never leaves a half-written `content.db` that would be opened next time.
 fn copy_seed(seed: &Path, dest: &Path) -> AppResult<()> {
@@ -642,8 +923,7 @@ mod tests {
         Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
     }
 
-    /// The dev seed has the schema the migrations create. Its verses_fts is
-    /// empty until search arrives (TODO(M4) in `xtask/src/dev_db.rs`).
+    /// The dev seed has the schema the migrations create.
     #[test]
     fn dev_db_matches_the_migrations() {
         let mut fresh = Connection::open_in_memory().unwrap();
@@ -701,6 +981,149 @@ mod tests {
     fn bundled_core() -> Connection {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/core.db");
         Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
+    }
+
+    /// Verses 1–7 are surah 1, 8–20 surah 2; `ar.test` has an introduction at
+    /// 1:1, nothing for 1:1 itself, one verse and a range.
+    fn tafsir_db() -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&mut conn, MIGRATIONS).unwrap();
+        conn.execute_batch(
+            "INSERT INTO surahs (number, name_ar, name_tr, name_en, revelation_type, ayah_count)
+               VALUES (1, 'a', 'b', 'c', 'meccan', 7), (2, 'a', 'b', 'c', 'medinan', 13);
+             INSERT INTO packs (id, type, lang, title, author, version, license, attribution,
+                                meta_json, installed_at, bundled)
+               VALUES ('ar.test', 'tafsir', 'ar', 'Test', 'Author', '1.0.0', 'PD', 'Source',
+                       '{\"title\": {\"tr\": \"Deneme\", \"en\": \"Test\"}}', 'x', 0),
+                      ('ar.plain', 'tafsir', NULL, 'Plain', NULL, '1.0.0', 'PD', NULL, NULL, 'x', 0),
+                      ('en.core', 'translation', 'en', 'Core', NULL, '1.0.0', 'PD', NULL, NULL, 'x', 1);",
+        )
+        .unwrap();
+        for id in 1..=20 {
+            let (surah, ayah) = if id <= 7 { (1, id) } else { (2, id - 7) };
+            conn.execute(
+                "INSERT INTO verses VALUES (?1, ?2, ?3, 1, 'u', 'c')",
+                (id, surah, ayah),
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO tafsir (id, pack_id, verse_from, verse_to, kind) VALUES
+               (10, 'ar.test', 1, 1, 'introduction'),
+               (11, 'ar.test', 2, 2, 'commentary'),
+               (12, 'ar.test', 8, 12, 'commentary');
+             INSERT INTO tafsir_paragraphs (tafsir_id, idx, text, part, page) VALUES
+               (10, 0, 'muqaddima', '1', 3),
+               (12, 1, 'second', NULL, NULL),
+               (12, 0, 'first', '1', 113);",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn list_tafsirs_reads_metadata_and_only_tafsirs() {
+        let tafsirs = list_tafsirs(&tafsir_db()).unwrap();
+        let ids: Vec<&str> = tafsirs.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, ["ar.plain", "ar.test"]);
+        let test = &tafsirs[1];
+        assert_eq!(test.titles.tr.as_deref(), Some("Deneme"));
+        assert_eq!(test.dir, TextDirection::Rtl);
+        assert_eq!(test.attribution.as_deref(), Some("Source"));
+        assert!(test.has_introduction);
+        assert!(!tafsirs[0].has_introduction);
+    }
+
+    #[test]
+    fn get_tafsir_returns_the_covering_range_with_ordered_paragraphs() {
+        let conn = tafsir_db();
+        for verse in [8, 10, 12] {
+            let passage = get_tafsir(&conn, verse, "ar.test").unwrap().unwrap();
+            assert_eq!(passage.id, 12);
+            assert_eq!(passage.verse_from, VerseRef { surah: 2, ayah: 1 });
+            assert_eq!(passage.verse_to, VerseRef { surah: 2, ayah: 5 });
+            let texts: Vec<&str> = passage.paragraphs.iter().map(|p| p.text.as_str()).collect();
+            assert_eq!(texts, ["first", "second"]);
+            assert_eq!(passage.paragraphs[0].page, Some(113));
+        }
+    }
+
+    #[test]
+    fn the_introduction_is_not_commentary_on_the_first_verse() {
+        let conn = tafsir_db();
+        assert_eq!(get_tafsir(&conn, 1, "ar.test").unwrap(), None);
+        let intro = get_tafsir_introduction(&conn, "ar.test").unwrap().unwrap();
+        assert_eq!(intro.paragraphs[0].text, "muqaddima");
+        assert_eq!(get_tafsir_introduction(&conn, "ar.plain").unwrap(), None);
+    }
+
+    #[test]
+    fn get_tafsir_reports_gaps_and_unknown_packs() {
+        let conn = tafsir_db();
+        assert_eq!(get_tafsir(&conn, 13, "ar.test").unwrap(), None);
+        for pack in ["ar.none", "en.core"] {
+            assert_eq!(
+                get_tafsir(&conn, 8, pack).unwrap_err().code,
+                AppErrorCode::NotFound
+            );
+        }
+    }
+
+    /// `tafsir_db` plus a translation of verses 8 and 10.
+    fn compare_db() -> Connection {
+        let conn = tafsir_db();
+        conn.execute_batch(
+            "INSERT INTO translations VALUES ('en.core', 8, 'eight'), ('en.core', 10, 'ten');",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn get_compare_returns_verses_translations_and_overlapping_passages() {
+        let conn = compare_db();
+        let ids = |ids: &[&str]| ids.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>();
+        let compare = get_compare(
+            &conn,
+            10,
+            13,
+            &ids(&["en.core", "en.none", "en.core"]),
+            &ids(&["ar.test", "ar.none", "ar.plain", "ar.test", "en.core"]),
+        )
+        .unwrap();
+        let verses: Vec<u32> = compare.verses.iter().map(|v| v.id).collect();
+        assert_eq!(verses, [10, 11, 12, 13]);
+        assert_eq!(compare.verses[0].translations[0].text, "ten");
+        assert!(compare.verses[1].translations.is_empty());
+        // Only installed tafsirs, once each; a translation id is not a tafsir.
+        let packs: Vec<&str> = compare.tafsirs.iter().map(|t| t.pack_id.as_str()).collect();
+        assert_eq!(packs, ["ar.test", "ar.plain"]);
+        // The passage of 8..=12 begins before the range and is returned whole.
+        let passages = &compare.tafsirs[0].passages;
+        assert_eq!(passages.len(), 1);
+        assert_eq!(passages[0].verse_from, VerseRef { surah: 2, ayah: 1 });
+        assert_eq!(passages[0].paragraphs.len(), 2);
+        assert!(compare.tafsirs[1].passages.is_empty());
+    }
+
+    #[test]
+    fn get_compare_leaves_out_the_introduction() {
+        let compare = get_compare(&compare_db(), 1, 2, &[], &["ar.test".to_owned()]).unwrap();
+        let ids: Vec<u32> = compare.tafsirs[0].passages.iter().map(|p| p.id).collect();
+        assert_eq!(ids, [11]);
+    }
+
+    #[test]
+    fn get_compare_limits_the_range_and_reports_an_empty_one() {
+        let conn = dev_db();
+        let compare = get_compare(&conn, 8, 6000, &[], &[]).unwrap();
+        assert_eq!(compare.verses.len(), MAX_COMPARE_VERSES as usize);
+        for (from, to) in [(5, 4), (7000, 7001)] {
+            assert_eq!(
+                get_compare(&conn, from, to, &[], &[]).unwrap_err().code,
+                AppErrorCode::NotFound
+            );
+        }
     }
 
     #[test]

@@ -16,6 +16,8 @@ const SAMPLE: Settings = {
   "layout.right_panel": { size: 320, collapsed: false, tab: "word" },
   experience_profile: "researcher",
   "reader.translations": ["tr.diyanet", "en.pickthall"],
+  "tafsir.active": "ar.jalalayn",
+  "compare.columns": ["en.pickthall", "ar.jalalayn"],
   "reader.actions": "labeled",
   "word.click": "panel",
   "word.underline": "dotted",

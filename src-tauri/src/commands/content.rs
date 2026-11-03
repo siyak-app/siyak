@@ -1,11 +1,13 @@
-//! Content commands: surahs and verses from `content.db`.
+//! Content commands: surahs, verses and tafsir from `content.db`.
 
 use serde::Serialize;
 use specta::Type;
 use tauri::State;
 
 use crate::AppState;
-use crate::db::content::{self, Surah, TranslationInfo, VerseWithTranslations};
+use crate::db::content::{
+    self, Compare, Surah, TafsirInfo, TafsirPassage, TranslationInfo, VerseWithTranslations,
+};
 use crate::error::{AppError, AppResult};
 
 /// The core data in use and whether refreshing it failed at startup (spec §6.2).
@@ -63,4 +65,47 @@ pub async fn get_verses(
     translation_ids: Vec<String>,
 ) -> AppResult<Vec<VerseWithTranslations>> {
     content::get_verses(&*state.content()?, surah, &translation_ids)
+}
+
+/// Lists the installed tafsir packs.
+#[tauri::command]
+#[specta::specta]
+pub async fn list_tafsirs(state: State<'_, AppState>) -> AppResult<Vec<TafsirInfo>> {
+    content::list_tafsirs(&*state.content()?)
+}
+
+/// Returns the commentary covering a verse (it may cover several), or `None`
+/// if this tafsir has no commentary for it.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_tafsir(
+    state: State<'_, AppState>,
+    verse_id: u32,
+    pack_id: String,
+) -> AppResult<Option<TafsirPassage>> {
+    content::get_tafsir(&*state.content()?, verse_id, &pack_id)
+}
+
+/// Returns the author's introduction of a tafsir, if it has one.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_tafsir_introduction(
+    state: State<'_, AppState>,
+    pack_id: String,
+) -> AppResult<Option<TafsirPassage>> {
+    content::get_tafsir_introduction(&*state.content()?, &pack_id)
+}
+
+/// Returns a range of verses (at most 50) with the given translations and the
+/// commentary of the given tafsirs, for the compare screen.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_compare(
+    state: State<'_, AppState>,
+    from: u32,
+    to: u32,
+    translation_ids: Vec<String>,
+    tafsir_ids: Vec<String>,
+) -> AppResult<Compare> {
+    content::get_compare(&*state.content()?, from, to, &translation_ids, &tafsir_ids)
 }

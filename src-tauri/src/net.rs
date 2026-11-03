@@ -63,6 +63,41 @@ impl NetLogSink for NoLog {
     fn record(&self, _host: &str, _purpose: Purpose, _status: Option<u16>, _bytes: u64) {}
 }
 
+/// Writes the connection log to `user.db` on a background thread with its own
+/// connection, so a request never waits for (or deadlocks on) the shared one.
+pub struct UserDbLog {
+    tx: std::sync::mpsc::Sender<(String, Purpose, Option<u16>, u64)>,
+}
+
+impl UserDbLog {
+    /// Starts the writer for the (already migrated) `user.db` at `path`.
+    pub fn spawn(path: &std::path::Path) -> AppResult<Self> {
+        let conn = crate::db::connect(path)?;
+        conn.busy_timeout(Duration::from_secs(5))?;
+        let (tx, rx) = std::sync::mpsc::channel::<(String, Purpose, Option<u16>, u64)>();
+        std::thread::Builder::new()
+            .name("network-log".into())
+            .spawn(move || {
+                for (host, purpose, status, bytes) in rx {
+                    let result =
+                        crate::db::user::log_request(&conn, &host, purpose.as_str(), status, bytes);
+                    if let Err(err) = result {
+                        eprintln!("writing the connection log failed: {err}");
+                    }
+                }
+            })
+            .map_err(|err| AppError::new(AppErrorCode::IoFailed, err.to_string()))?;
+        Ok(Self { tx })
+    }
+}
+
+impl NetLogSink for UserDbLog {
+    fn record(&self, host: &str, purpose: Purpose, status: Option<u16>, bytes: u64) {
+        // Fails only once the writer thread has gone, i.e. at exit.
+        let _ = self.tx.send((host.to_owned(), purpose, status, bytes));
+    }
+}
+
 /// The hosts (and schemes) requests may go to.
 #[derive(Debug, Clone)]
 pub struct AllowList {
@@ -464,6 +499,29 @@ mod tests {
             log.0.lock().unwrap().clone(),
             [("127.0.0.1".to_owned(), "manifest", None, 0)]
         );
+    }
+
+    #[test]
+    fn user_db_log_writes_entries_in_the_background() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("user.db");
+        drop(crate::db::user::open(&path).unwrap());
+        let log = UserDbLog::spawn(&path).unwrap();
+        log.record("github.com", Purpose::Pack, Some(200), 42);
+        drop(log);
+        let conn = crate::db::connect(&path).unwrap();
+        for _ in 0..100 {
+            let entries = crate::db::user::network_log(&conn, 10).unwrap();
+            if let [entry] = entries.as_slice() {
+                assert_eq!(
+                    (entry.host.as_str(), entry.status),
+                    ("github.com", Some(200))
+                );
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("the entry was not written");
     }
 
     #[tokio::test]

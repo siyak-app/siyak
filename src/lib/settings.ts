@@ -62,6 +62,10 @@ export interface Settings {
   experience_profile: ExperienceProfile | null;
   /** Ids of the translation packs shown in the reader, in display order. */
   "reader.translations": string[];
+  /** Id of the tafsir pack shown in the context panel; `null` for the first installed. */
+  "tafsir.active": string | null;
+  /** Pack ids of the compare screen's columns, in order; `null` until first chosen. */
+  "compare.columns": string[] | null;
   /** Verse actions as icons on hover, or always visible with labels. */
   "reader.actions": "hover" | "labeled";
   /** Word click: a small card, or the full analysis in the right panel (M5). */
@@ -138,6 +142,17 @@ export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
     default: ["en.pickthall"],
     validate: (value): value is string[] =>
       Array.isArray(value) && value.every((id) => typeof id === "string"),
+  },
+  "tafsir.active": {
+    default: null,
+    validate: nullable((value): value is string => typeof value === "string"),
+  },
+  "compare.columns": {
+    default: null,
+    validate: nullable(
+      (value): value is string[] =>
+        Array.isArray(value) && value.every((id) => typeof id === "string"),
+    ),
   },
   "reader.actions": { default: "hover", validate: isOneOf(["hover", "labeled"]) },
   "word.click": { default: "card", validate: isOneOf(["card", "panel"]) },

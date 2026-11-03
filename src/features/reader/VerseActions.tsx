@@ -1,4 +1,11 @@
-import { CheckIcon, CopyIcon, HashIcon, LanguagesIcon, type LucideIcon } from "lucide-react";
+import {
+  CheckIcon,
+  Columns2Icon,
+  CopyIcon,
+  HashIcon,
+  LanguagesIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -23,16 +30,17 @@ interface Action {
 }
 
 /**
- * Copy actions for one verse. `hover` shows icon buttons with tooltips while
+ * Actions for one verse: copying and comparing. `hover` shows icon buttons with tooltips while
  * the verse is hovered or focused; `labeled` always shows them with their
  * labels (`reader.actions`, spec §13.2). Only actions that exist today are
- * offered.
+ * offered, including opening the verse on the compare screen.
  */
 export function VerseActions({
   verse,
   surahName,
   titles,
   mode,
+  onCompare,
 }: {
   verse: VerseWithTranslations;
   /** The surah's name in the interface language, for the reference. */
@@ -40,6 +48,8 @@ export function VerseActions({
   /** Title per shown translation pack id. */
   titles: Readonly<Record<string, string>>;
   mode: Settings["reader.actions"];
+  /** Opens the verse on the compare screen. */
+  onCompare?: (verse: VerseWithTranslations) => void;
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState<ActionId | null>(null);
@@ -87,9 +97,23 @@ export function VerseActions({
     }
   };
 
+  const compareLabel = t("verse_actions.compare");
   if (mode === "labeled") {
     return (
       <div className="-ms-2 flex flex-wrap gap-1">
+        {onCompare && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground"
+            onClick={() => {
+              onCompare(verse);
+            }}
+          >
+            <Columns2Icon aria-hidden />
+            {compareLabel}
+          </Button>
+        )}
         {actions.map((action) => {
           const Icon = copied === action.id ? CheckIcon : action.icon;
           return (
@@ -114,6 +138,24 @@ export function VerseActions({
       data-copied={copied !== null || undefined}
       className="flex flex-col gap-0.5 opacity-0 transition-opacity group-focus-within/verse:opacity-100 group-hover/verse:opacity-100 data-copied:opacity-100 motion-reduce:transition-none"
     >
+      {onCompare && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={compareLabel}
+              className="text-muted-foreground"
+              onClick={() => {
+                onCompare(verse);
+              }}
+            >
+              <Columns2Icon aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">{compareLabel}</TooltipContent>
+        </Tooltip>
+      )}
       {actions.map((action) => {
         const Icon = copied === action.id ? CheckIcon : action.icon;
         return (
