@@ -28,7 +28,7 @@ pub const PRIMARY_MANIFEST_URL: &str = "https://quran.kemalozyon.com/data/manife
 
 /// Fallback manifest address: the latest data release.
 pub const FALLBACK_MANIFEST_URL: &str =
-    "https://github.com/siyak/siyak-data/releases/latest/download/manifest.json";
+    "https://github.com/siyak-app/siyak-data/releases/latest/download/manifest.json";
 
 /// Largest manifest document accepted.
 pub const MAX_MANIFEST_BYTES: usize = 2 << 20;
@@ -965,7 +965,7 @@ pub(crate) mod tests {
             "title": { "tr": format!("{id} tr"), "en": format!("{id} en") },
             "author": "Author", "version": version, "min_app_version": "0.1.0",
             "size": 100, "installed_size": 1000, "sha256": "a".repeat(64),
-            "url": format!("https://github.com/siyak/siyak-data/releases/download/t/{id}.{ext}.zst"),
+            "url": format!("https://github.com/siyak-app/siyak-data/releases/download/t/{id}.{ext}.zst"),
             "license": "Public domain",
             "license_terms": { "tr": ["koşul"], "en": ["term"] },
             "attribution": "Source", "citation": { "type": "tafsir", "url": "https://example.org", "year": 1 }

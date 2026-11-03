@@ -8,7 +8,7 @@ edition = "2024"
 rust-version = "1.99"
 license = "MIT OR Apache-2.0"
 authors = ["Kemal Özyön and Siyak contributors"]
-repository = "https://github.com/siyak/siyak"
+repository = "https://github.com/siyak-app/siyak"
 homepage = "https://quran.kemalozyon.com"
 
 # See https://tauri.app/concept/size/#cargo-configuration

@@ -10,12 +10,12 @@ bilgisayarda bunun 15 dakikadan kısa sürmesi.
 
 Güncel ve eksiksiz talimatlar — Windows, macOS ve Linux için gereksinimler, kurulum, kontroller ve
 kurallar — deponun
-[katkı rehberinde](https://github.com/siyak/siyak/blob/main/CONTRIBUTING.tr.md).
+[katkı rehberinde](https://github.com/siyak-app/siyak/blob/main/CONTRIBUTING.tr.md).
 
 Kısaca, gereksinimler kurulduktan sonra:
 
 ```sh
-git clone https://github.com/siyak/siyak.git
+git clone https://github.com/siyak-app/siyak.git
 cd siyak
 pnpm install
 pnpm tauri dev

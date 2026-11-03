@@ -562,7 +562,7 @@ mod tests {
         let source_dir = tempfile::tempdir().unwrap();
         std::fs::write(source_dir.path().join("en.test.sqlite.zst"), body()).unwrap();
         let entry = pack_entry(
-            "https://github.com/siyak/siyak-data/releases/download/t/en.test.sqlite.zst",
+            "https://github.com/siyak-app/siyak-data/releases/download/t/en.test.sqlite.zst",
             &body(),
         );
         let dir = tempfile::tempdir().unwrap();

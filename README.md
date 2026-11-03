@@ -22,7 +22,7 @@ simple for readers and reveals depth for researchers. Everything runs on your co
 
 With the [prerequisites](CONTRIBUTING.md#prerequisites) for your OS installed:
 
-1. `git clone https://github.com/siyak/siyak.git`
+1. `git clone https://github.com/siyak-app/siyak.git`
 2. `cd siyak`
 3. `pnpm install`
 4. `pnpm tauri dev`

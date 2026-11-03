@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Content is only distributed when its redistribution rights are confirmed (spec §1). Sources are built into packs in the [siyak-data](https://github.com/siyak/siyak-data) repository.
+        Content is only distributed when its redistribution rights are confirmed (spec §1). Sources are built into packs in the [siyak-data](https://github.com/siyak-app/siyak-data) repository.
   - type: dropdown
     id: kind
     attributes:

@@ -74,7 +74,7 @@ Windows, macOS, Linux.
 | Dil politikası | Kod, tanımlayıcılar, yorumlar, commit'ler, PR'lar: **yalnızca İngilizce**. Dokümantasyon ve web sitesi: **Türkçe + İngilizce** (§16.1) |
 | Web sitesi | Landing page + dokümantasyon tek site: Astro + Starlight, uygulama repo'sunda `website/`, GitHub Pages, `quran.kemalozyon.com` |
 | Ad | **Siyak** (tefsir usulündeki siyak-sibak: ayeti bağlamıyla okumak). Landing page sloganı: "Ayeti bağlamıyla okuyun" / "Read every verse in context" |
-| Kimlikler | GitHub organizasyonu `siyak`; repo'lar `siyak`, `siyak-data`, `.github`; Tauri identifier ve keychain servisi `com.kemalozyon.siyak` |
+| Kimlikler | GitHub organizasyonu `siyak-app`; repo'lar `siyak`, `siyak-data`, `.github`; Tauri identifier ve keychain servisi `com.kemalozyon.siyak` |
 | GitHub | Ayrı bir organizasyon; kişisel hesap değil |
 | Gömülü adresler | Manifest ve updater için birincil adres `quran.kemalozyon.com`, yedek GitHub Releases (§6.3, §15.1) |
 
@@ -113,7 +113,7 @@ Windows, macOS, Linux.
 
 ## 4. Repo yapısı
 
-Tüm repo'lar ayrı bir GitHub organizasyonu altında durur: `github.com/siyak` (ad alınmışsa yedek: `siyak-app`). İki ana repo ve bir organizasyon repo'su vardır:
+Tüm repo'lar ayrı bir GitHub organizasyonu altında durur: `github.com/siyak-app` (`github.com/siyak` ilgisiz bir hesaba ait). İki ana repo ve bir organizasyon repo'su vardır:
 
 1. **Uygulama repo'su** (`siyak`): Tauri uygulaması, landing page ve dokümantasyon sitesi (`website/`). Lisans: `MIT OR Apache-2.0`. Release'leri installer'lar ve `latest.json` içerir.
 2. **`siyak-data`**: Veri paketlerini üreten pipeline ve paket release'leri. Pipeline kodu `MIT OR Apache-2.0`; her veri kaynağı kendi lisansıyla, `sources/<kaynak>/LICENSE` altında. `releases/latest` linkleri uygulama ve veri sürümleri arasında karışmasın diye ayrı tutulur.
@@ -554,7 +554,7 @@ Tüm SQLite paketleri zstd ile sıkıştırılmış dağıtılır ve bir `pack_i
 ### 6.3 Manifest
 Adresler (uygulamaya gömülü, sırayla denenir):
 1. **Birincil:** `https://quran.kemalozyon.com/data/manifest.json`
-2. **Yedek:** `https://github.com/siyak/siyak-data/releases/latest/download/manifest.json`
+2. **Yedek:** `https://github.com/siyak-app/siyak-data/releases/latest/download/manifest.json`
 
 Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride yeniden adlandırma eski uygulama sürümlerini kırmaz. Web sitesi workflow'u, her yeni veri release'inde (`repository_dispatch` ile tetiklenir) ve her site deploy'unda `siyak-data`'nun son release'inden `manifest.json` ve `pricing.json`'u `website/public/data/` altına kopyalar. Manifest içindeki paket `url`'leri değişmez (immutable) release asset adresleridir; paket dosyaları GitHub Releases'tan indirilir.
 
@@ -574,7 +574,7 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
       "min_app_version": "0.1.0",
       "size": 1900000,
       "sha256": "…",
-      "url": "https://github.com/siyak/siyak-data/releases/download/data-2026.10.0/en.pickthall.sqlite",
+      "url": "https://github.com/siyak-app/siyak-data/releases/download/data-2026.10.0/en.pickthall.sqlite",
       "license": "Public domain",
       "license_terms": null,
       "attribution": null,
@@ -966,7 +966,7 @@ Referans mockup: "Okuma Ekranı Mockup" canvas'ı (sade ve araştırma varsayıl
 ### 15.1 Uygulama
 - `v*` tag'i push'lanınca `tauri-apps/tauri-action` ile Windows (NSIS/MSI), macOS (universal `.dmg`) ve Linux (`.AppImage`, `.deb`) build'leri alınır; taslak release oluşturulur, `latest.json` ve provenance yüklenir.
 - Updater imza anahtarı `tauri signer generate` ile üretilir; özel anahtar uygulama repo'sunun Secrets'ında tutulur (organizasyon secret'ı değil).
-- Updater endpoint'leri (sırayla denenir): `https://quran.kemalozyon.com/updates/latest.json`, ardından `https://github.com/siyak/siyak/releases/latest/download/latest.json`. Web sitesi, release workflow'u tamamlandığında `latest.json`'u kopyalar.
+- Updater endpoint'leri (sırayla denenir): `https://quran.kemalozyon.com/updates/latest.json`, ardından `https://github.com/siyak-app/siyak/releases/latest/download/latest.json`. Web sitesi, release workflow'u tamamlandığında `latest.json`'u kopyalar.
 - OS kod imzalama v1'de opsiyonel (§18). İmzasızsa indirme sayfasında SmartScreen/Gatekeeper talimatı bulunur.
 - ONNX Runtime native kütüphanesi her platform için bundle'a dahil edilir.
 

@@ -17,8 +17,8 @@ export default defineConfig({
         en: { label: "English", lang: "en" },
         tr: { label: "Türkçe", lang: "tr" },
       },
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/siyak/siyak" }],
-      editLink: { baseUrl: "https://github.com/siyak/siyak/edit/main/website/" },
+      social: [{ icon: "github", label: "GitHub", href: "https://github.com/siyak-app/siyak" }],
+      editLink: { baseUrl: "https://github.com/siyak-app/siyak/edit/main/website/" },
       sidebar: [
         {
           label: "Development",

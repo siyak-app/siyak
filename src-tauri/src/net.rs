@@ -376,7 +376,7 @@ mod tests {
     fn production_allow_list_is_https_only_and_exact() {
         let allow = AllowList::production();
         assert!(allow.permits(&url("https://quran.kemalozyon.com/data/manifest.json")));
-        assert!(allow.permits(&url("https://GitHub.com/siyak/siyak-data/releases")));
+        assert!(allow.permits(&url("https://GitHub.com/siyak-app/siyak-data/releases")));
         assert!(allow.permits(&url(
             "https://release-assets.githubusercontent.com/github-production-release-asset/1"
         )));

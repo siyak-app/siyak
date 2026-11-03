@@ -64,7 +64,7 @@ the publisher."_ Siyak is non-commercial, and Pickthall's translation is in the 
 ## Real data (`core.db`)
 
 `src-tauri/resources/core.db` is the complete database built by
-[`siyak-data`](https://github.com/siyak/siyak-data) (all 6,236 verses, the bundled translations,
+[`siyak-data`](https://github.com/siyak-app/siyak-data) (all 6,236 verses, the bundled translations,
 the Tanzil notices). Release builds bundle it and copy it to `content.db` on first launch.
 
 | Field             | Value                                                              |

@@ -58,7 +58,7 @@ Container" or GitHub Codespaces). It has Rust, Node, pnpm and the Linux librarie
 ## Setup
 
 ```sh
-git clone https://github.com/siyak/siyak.git
+git clone https://github.com/siyak-app/siyak.git
 cd siyak
 pnpm install
 pnpm tauri dev
@@ -76,7 +76,7 @@ Deleting that directory resets the app.
 
 Debug builds use the small development dataset. Release builds bundle
 `src-tauri/resources/core.db`, the complete data built by
-[`siyak-data`](https://github.com/siyak/siyak-data). Its origin is recorded in
+[`siyak-data`](https://github.com/siyak-app/siyak-data). Its origin is recorded in
 [`dev-data/README.md`](dev-data/README.md#real-data-coredb): currently siyak-data commit
 `72bc795`, sha256 `76ed118ad4be…`, `core_version` 1. Maintainers update it with
 `cargo xtask sync-core`.
@@ -161,20 +161,20 @@ if the change is user-facing.
 
 ## Ways to contribute
 
-| Path                                                                     | Where                                             | Guide                                                                 |
-| ------------------------------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------------------- |
-| Code                                                                     | this repository                                   | this file, issues labelled `good first issue`                         |
-| New translation or tafsir sources, license research                      | [siyak-data](https://github.com/siyak/siyak-data) | `docs/adding-a-source.md` there, the "New source proposal" issue form |
-| Interface translation (a new language)                                   | `src/i18n/`                                       | `docs/translating.md` (coming)                                        |
-| Reviewing Turkish labels and term translations; reporting QAC tag errors | issues and Discussions                            | the "Translation or term correction" and "QAC tag error" issue forms  |
-| Documentation                                                            | `website/`                                        | the "Edit this page" link on every page                               |
+| Path                                                                     | Where                                                 | Guide                                                                 |
+| ------------------------------------------------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------- |
+| Code                                                                     | this repository                                       | this file, issues labelled `good first issue`                         |
+| New translation or tafsir sources, license research                      | [siyak-data](https://github.com/siyak-app/siyak-data) | `docs/adding-a-source.md` there, the "New source proposal" issue form |
+| Interface translation (a new language)                                   | `src/i18n/`                                           | `docs/translating.md` (coming)                                        |
+| Reviewing Turkish labels and term translations; reporting QAC tag errors | issues and Discussions                                | the "Translation or term correction" and "QAC tag error" issue forms  |
+| Documentation                                                            | `website/`                                            | the "Edit this page" link on every page                               |
 
 Issues and Discussions are welcome in Turkish or English.
 
 ## Community files
 
 The Code of Conduct, the security policy (how to report vulnerabilities privately) and support
-information live in the organization's [`.github` repository](https://github.com/siyak/.github) and
+information live in the organization's [`.github` repository](https://github.com/siyak-app/.github) and
 apply to every Siyak repository.
 
 ## License of contributions

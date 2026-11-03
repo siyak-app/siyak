@@ -8,12 +8,12 @@ this takes less than 15 minutes on a prepared machine.
 
 The full, maintained instructions — prerequisites for Windows, macOS and Linux, setup, checks and
 conventions — are in the repository's
-[CONTRIBUTING guide](https://github.com/siyak/siyak/blob/main/CONTRIBUTING.md).
+[CONTRIBUTING guide](https://github.com/siyak-app/siyak/blob/main/CONTRIBUTING.md).
 
 In short, once the prerequisites are installed:
 
 ```sh
-git clone https://github.com/siyak/siyak.git
+git clone https://github.com/siyak-app/siyak.git
 cd siyak
 pnpm install
 pnpm tauri dev

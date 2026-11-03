@@ -27,7 +27,7 @@ bilgisayarınızda çalışır.
 
 İşletim sisteminize uygun [gereksinimler](CONTRIBUTING.tr.md#gereksinimler) kuruluyken:
 
-1. `git clone https://github.com/siyak/siyak.git`
+1. `git clone https://github.com/siyak-app/siyak.git`
 2. `cd siyak`
 3. `pnpm install`
 4. `pnpm tauri dev`

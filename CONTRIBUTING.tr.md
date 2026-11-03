@@ -60,7 +60,7 @@ Container" ya da GitHub Codespaces). Rust, Node, pnpm ve Linux kütüphaneleri h
 ## Kurulum
 
 ```sh
-git clone https://github.com/siyak/siyak.git
+git clone https://github.com/siyak-app/siyak.git
 cd siyak
 pnpm install
 pnpm tauri dev
@@ -78,7 +78,7 @@ uygulamayı sıfırlar.
 ### Kuran verisi
 
 Debug derlemeler küçük geliştirme veri setini kullanır. Release derlemeler,
-[`siyak-data`](https://github.com/siyak/siyak-data) tarafından üretilen tam veriyi,
+[`siyak-data`](https://github.com/siyak-app/siyak-data) tarafından üretilen tam veriyi,
 `src-tauri/resources/core.db`'yi içerir. Kaynağı [`dev-data/README.md`](dev-data/README.md#real-data-coredb)
 dosyasında kayıtlıdır: şu an siyak-data commit'i `72bc795`, sha256 `76ed118ad4be…`,
 `core_version` 1. Bakımcılar onu `cargo xtask sync-core` ile günceller.
@@ -164,20 +164,20 @@ kullanıcıya dönükse iki dilde rehber güncellemesi.
 
 ## Katkı yolları
 
-| Yol                                                                                                            | Nerede                                            | Rehber                                                               |
-| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------- |
-| Kod                                                                                                            | bu depo                                           | bu dosya, `good first issue` etiketli issue'lar                      |
-| Yeni meal veya tefsir kaynakları, lisans araştırması                                                           | [siyak-data](https://github.com/siyak/siyak-data) | oradaki `docs/adding-a-source.md`, "New source proposal" issue formu |
-| Arayüz çevirisi (yeni bir dil)                                                                                 | `src/i18n/`                                       | `docs/translating.md` (yakında)                                      |
-| Morfoloji etiketlerinin Türkçe karşılıklarını ve terim çevirilerini gözden geçirme; QAC etiket hatası bildirme | issue'lar ve Discussions                          | "Translation or term correction" ve "QAC tag error" issue formları   |
-| Dokümantasyon                                                                                                  | `website/`                                        | her sayfadaki "Bu sayfayı düzenle" bağlantısı                        |
+| Yol                                                                                                            | Nerede                                                | Rehber                                                               |
+| -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Kod                                                                                                            | bu depo                                               | bu dosya, `good first issue` etiketli issue'lar                      |
+| Yeni meal veya tefsir kaynakları, lisans araştırması                                                           | [siyak-data](https://github.com/siyak-app/siyak-data) | oradaki `docs/adding-a-source.md`, "New source proposal" issue formu |
+| Arayüz çevirisi (yeni bir dil)                                                                                 | `src/i18n/`                                           | `docs/translating.md` (yakında)                                      |
+| Morfoloji etiketlerinin Türkçe karşılıklarını ve terim çevirilerini gözden geçirme; QAC etiket hatası bildirme | issue'lar ve Discussions                              | "Translation or term correction" ve "QAC tag error" issue formları   |
+| Dokümantasyon                                                                                                  | `website/`                                            | her sayfadaki "Bu sayfayı düzenle" bağlantısı                        |
 
 Issue'lar ve Discussions'ta Türkçe ya da İngilizce yazabilirsiniz.
 
 ## Topluluk dosyaları
 
 Davranış kuralları, güvenlik politikası (açıkların gizlice nasıl bildirileceği) ve destek bilgileri
-organizasyonun [`.github` deposunda](https://github.com/siyak/.github) durur ve tüm Siyak depoları
+organizasyonun [`.github` deposunda](https://github.com/siyak-app/.github) durur ve tüm Siyak depoları
 için geçerlidir.
 
 ## Katkıların lisansı

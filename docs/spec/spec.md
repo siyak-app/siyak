@@ -73,7 +73,7 @@ Windows, macOS, Linux.
 | Language policy | Code, identifiers, comments, commits, PRs: **English only**. Documentation and website: **Turkish + English** (§16.1) |
 | Website | Landing page + documentation in one site: Astro + Starlight in `website/` of the app repository, GitHub Pages, `quran.kemalozyon.com` |
 | Name | **Siyak** (from *siyāq-sibāq* in tafsir methodology: reading a verse in its context). Landing page tagline: "Ayeti bağlamıyla okuyun" / "Read every verse in context" |
-| Identifiers | GitHub organization `siyak`; repositories `siyak`, `siyak-data`, `.github`; Tauri identifier and keychain service `com.kemalozyon.siyak` |
+| Identifiers | GitHub organization `siyak-app`; repositories `siyak`, `siyak-data`, `.github`; Tauri identifier and keychain service `com.kemalozyon.siyak` |
 | GitHub | A dedicated organization, not a personal account |
 | Embedded URLs | Primary address for the manifest and the updater is `quran.kemalozyon.com`, with GitHub Releases as fallback (§6.3, §15.1) |
 
@@ -112,7 +112,7 @@ Windows, macOS, Linux.
 
 ## 4. Repository structure
 
-All repositories live under a dedicated GitHub organization: `github.com/siyak` (fallback if the name is taken: `siyak-app`). There are two main repositories and one organization repository:
+All repositories live under a dedicated GitHub organization: `github.com/siyak-app` (`github.com/siyak` belongs to an unrelated account). There are two main repositories and one organization repository:
 
 1. **App repository** (`siyak`): the Tauri application, plus the landing page and documentation site (`website/`). License: `MIT OR Apache-2.0`. Its releases contain the installers and `latest.json`.
 2. **`siyak-data`**: the pipeline that builds data packs, and the pack releases. Pipeline code is `MIT OR Apache-2.0`; every data source keeps its own license under `sources/<source>/LICENSE`. It is a separate repository so that `releases/latest` links never mix app and data versions.
@@ -553,7 +553,7 @@ All SQLite packs are distributed zstd-compressed and carry a `pack_info` table; 
 ### 6.3 Manifest
 Addresses (embedded in the app, tried in order):
 1. **Primary:** `https://quran.kemalozyon.com/data/manifest.json`
-2. **Fallback:** `https://github.com/siyak/siyak-data/releases/latest/download/manifest.json`
+2. **Fallback:** `https://github.com/siyak-app/siyak-data/releases/latest/download/manifest.json`
 
 The primary address is independent of the GitHub organization and repository names, so a future rename never breaks older app versions. On every new data release (triggered via `repository_dispatch`) and on every site deploy, the website workflow copies `manifest.json` and `pricing.json` from the latest `siyak-data` release into `website/public/data/`. The pack `url`s inside the manifest are immutable release-asset addresses; pack files are downloaded from GitHub Releases.
 
@@ -573,7 +573,7 @@ The primary address is independent of the GitHub organization and repository nam
       "min_app_version": "0.1.0",
       "size": 1900000,
       "sha256": "…",
-      "url": "https://github.com/siyak/siyak-data/releases/download/data-2026.10.0/en.pickthall.sqlite",
+      "url": "https://github.com/siyak-app/siyak-data/releases/download/data-2026.10.0/en.pickthall.sqlite",
       "license": "Public domain",
       "license_terms": null,
       "attribution": null,
@@ -965,7 +965,7 @@ Reference mockup: the "Okuma Ekranı Mockup" canvas (reader and researcher defau
 ### 15.1 Application
 - Pushing a `v*` tag runs `tauri-apps/tauri-action`, building for Windows (NSIS/MSI), macOS (universal `.dmg`) and Linux (`.AppImage`, `.deb`); a draft release is created, and `latest.json` and provenance are uploaded.
 - The updater signing key is generated with `tauri signer generate`; the private key is stored in the app repository's secrets (not as an organization secret).
-- Updater endpoints (tried in order): `https://quran.kemalozyon.com/updates/latest.json`, then `https://github.com/siyak/siyak/releases/latest/download/latest.json`. The website copies `latest.json` when the release workflow completes.
+- Updater endpoints (tried in order): `https://quran.kemalozyon.com/updates/latest.json`, then `https://github.com/siyak-app/siyak/releases/latest/download/latest.json`. The website copies `latest.json` when the release workflow completes.
 - OS code signing is optional in v1 (§18). If builds are unsigned, the download page includes SmartScreen/Gatekeeper instructions.
 - The ONNX Runtime native library is bundled for each platform.
 

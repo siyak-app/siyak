@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions and ideas (Discussions)
-    url: https://github.com/siyak/siyak/discussions
+    url: https://github.com/siyak-app/siyak/discussions
     about: Ask a question or share an idea before it becomes an actionable issue. Turkish or English.
   - name: Report a security vulnerability
-    url: https://github.com/siyak/siyak/security/advisories/new
+    url: https://github.com/siyak-app/siyak/security/advisories/new
     about: Please report vulnerabilities privately, not as a public issue.
