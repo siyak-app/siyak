@@ -1,7 +1,8 @@
-import { type LucideIcon, MessagesSquareIcon, NotebookPenIcon, WaypointsIcon } from "lucide-react";
+import { type LucideIcon, MessagesSquareIcon, WaypointsIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NotesPanel } from "@/features/notes/NotesPanel";
 import { TafsirPanel } from "@/features/tafsir/TafsirPanel";
 import { surahName } from "@/features/reader/surahName";
 import { verseNumber, verseReference } from "@/features/reader/verseCopy";
@@ -11,11 +12,10 @@ import { CONTEXT_TABS, type ContextTab } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
 /** The tabs that have no content yet. */
-const LATER_TABS = ["related", "notes", "chat"] as const;
+const LATER_TABS = ["related", "chat"] as const;
 
 const TAB_ICONS: Record<(typeof LATER_TABS)[number], LucideIcon> = {
   related: WaypointsIcon,
-  notes: NotebookPenIcon,
   chat: MessagesSquareIcon,
 };
 
@@ -24,7 +24,7 @@ const isContextTab = (value: string): value is ContextTab =>
 
 /**
  * Right pane: context for the selected verse or word (spec §13.2).
- * TODO(M6): notes. TODO(M7): related. TODO(M8): chat.
+ * TODO(M7): related. TODO(M8): chat.
  */
 export function ContextPanel() {
   const { t, i18n } = useTranslation();
@@ -65,6 +65,9 @@ export function ContextPanel() {
       </TabsContent>
       <TabsContent value="word" className="flex min-h-0 flex-1 flex-col">
         <WordPanel verse={selected} />
+      </TabsContent>
+      <TabsContent value="notes" className="flex min-h-0 flex-1 flex-col">
+        <NotesPanel verse={selected} />
       </TabsContent>
       {LATER_TABS.map((tab) => {
         const Icon = TAB_ICONS[tab];

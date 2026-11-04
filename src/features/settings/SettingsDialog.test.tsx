@@ -42,6 +42,14 @@ vi.mock("@/lib/queries", () => ({
     isPending: false,
     isError: false,
   }),
+  useCitationStyles: () => ({
+    data: [
+      { id: "isnad", name: "İSNAD" },
+      { id: "apa", name: "APA" },
+    ],
+  }),
+  useExportUserData: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  useImportUserData: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
   appErrorCode: () => undefined,
 }));
 
@@ -95,11 +103,11 @@ describe("SettingsDialog", () => {
   describe("display & behaviour", () => {
     it("disables the settings of features that do not exist yet", () => {
       const dialog = open("Display & behaviour");
-      expect(within(dialog).getAllByText("Available in a later version")).toHaveLength(3);
+      expect(within(dialog).getAllByText("Available in a later version")).toHaveLength(2);
       expect(screen.getByRole("radio", { name: "Shows a small card" })).toBeDisabled();
       expect(screen.getByRole("radio", { name: "Dotted underline" })).toBeDisabled();
       expect(screen.getByRole("checkbox", { name: "Show search mode chips" })).toBeEnabled();
-      expect(screen.getByRole("checkbox", { name: /Copy citation/ })).toBeDisabled();
+      expect(screen.getByRole("checkbox", { name: /Copy citation/ })).toBeEnabled();
       expect(screen.getByRole("radio", { name: /Always visible/ })).toBeEnabled();
     });
 

@@ -14,13 +14,25 @@ import {
   commands,
   type AppError,
   type AppErrorCode,
+  type BookmarkedVerse,
   type Catalog,
+  type CitationRef,
+  type CitationStyle,
+  type Collection,
+  type CollectionInput,
+  type CollectionSummary,
   type Compare,
   type Concordance,
   type ConcordanceTarget,
   type CoreStatus,
+  type ImportMode,
+  type ImportReport,
+  type ItemRef,
+  type MarkdownLabels,
   type MorphologyPack,
   type NetworkLogEntry,
+  type Note,
+  type NoteInput,
   type QueryClass,
   type RootSearch,
   type SearchFilters,
@@ -31,6 +43,7 @@ import {
   type TafsirPassage,
   type TranslationInfo,
   type VacuumSizes,
+  type VerseIdRange,
   type VerseWithTranslations,
   type VerseWord,
   type WordDetail,
@@ -103,6 +116,38 @@ export interface ConcordanceVariables {
   translationId: string | null;
   /** Most verses to return. */
   limit: number;
+}
+
+/** Variables of {@link useAddCollectionItem}. */
+export interface AddCollectionItemVariables {
+  /** The collection to add to. */
+  collectionId: number;
+  /** What to add. */
+  item: ItemRef;
+  /** Short note on the item. */
+  annotation: string | null;
+}
+
+/** Variables of {@link useMoveCollectionItem}. */
+export interface MoveCollectionItemVariables {
+  /** The item's collection, whose cached order changes at once. */
+  collectionId: number;
+  /** The item. */
+  id: number;
+  /** Its new position, from 0. */
+  toIndex: number;
+}
+
+/** Variables of {@link useExportCollectionMarkdown}. */
+export interface ExportMarkdownVariables {
+  /** The collection. */
+  id: number;
+  /** The translations to include. */
+  translationIds: string[];
+  /** The words of the file, in the interface language. */
+  labels: MarkdownLabels;
+  /** Citation style of the bibliography. */
+  style: string;
 }
 
 /** Query keys, exported so callers can invalidate or prefill caches. */
@@ -495,6 +540,180 @@ export function useNetworkLog(limit = 100) {
   });
 }
 
+/** Everything derived from the user's bookmarks, notes and collections. */
+const USER_DATA_KEYS = [["bookmarks"], ["notes"], ["collections"], ["collection"]] as const;
+
+function invalidateKeys(
+  queryClient: ReturnType<typeof useQueryClient>,
+  keys: readonly (readonly string[])[],
+) {
+  return Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+}
+
+/** Every bookmark with its verse, newest first. */
+export function useBookmarks(translationIds: readonly string[]) {
+  return useQuery<BookmarkedVerse[]>({
+    queryKey: ["bookmarks", translationIds],
+    queryFn: () => unwrap(commands.listBookmarks([...translationIds])),
+  });
+}
+
+/** Bookmarks a verse by id, or removes its bookmark; resolves to whether it now has one. */
+export function useToggleBookmark() {
+  const queryClient = useQueryClient();
+  return useMutation<boolean, Error, number>({
+    mutationFn: (verseId) => unwrap(commands.toggleBookmark(verseId)),
+    onSettled: () => invalidateKeys(queryClient, [["bookmarks"]]),
+  });
+}
+
+/** The notes touching `range`, or all of them with `null`. */
+export function useNotes(range: VerseIdRange | null, enabled = true) {
+  return useQuery<Note[]>({
+    queryKey: ["notes", range],
+    queryFn: () => unwrap(commands.listNotes(range)),
+    enabled,
+  });
+}
+
+/** Creates or replaces a note. */
+export function useUpsertNote() {
+  const queryClient = useQueryClient();
+  return useMutation<Note, Error, NoteInput>({
+    mutationFn: (note) => unwrap(commands.upsertNote(note)),
+    onSettled: () => invalidateKeys(queryClient, [["notes"], ["collection"]]),
+  });
+}
+
+/** Deletes a note and its place in any collection. */
+export function useDeleteNote() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, number>({
+    mutationFn: (id) => unwrap(commands.deleteNote(id)),
+    onSettled: () => invalidateKeys(queryClient, [["notes"], ["collections"], ["collection"]]),
+  });
+}
+
+/** Every collection, the most recently changed first. */
+export function useCollections() {
+  return useQuery<CollectionSummary[]>({
+    queryKey: ["collections"],
+    queryFn: () => unwrap(commands.listCollections()),
+  });
+}
+
+/** A collection with the content of its items. */
+export function useCollection(id: number, translationIds: readonly string[]) {
+  return useQuery<Collection>({
+    queryKey: ["collection", id, translationIds],
+    queryFn: () => unwrap(commands.getCollection(id, [...translationIds])),
+  });
+}
+
+/** Creates or changes a collection. */
+export function useUpsertCollection() {
+  const queryClient = useQueryClient();
+  return useMutation<CollectionSummary, Error, CollectionInput>({
+    mutationFn: (collection) => unwrap(commands.upsertCollection(collection)),
+    onSettled: () => invalidateKeys(queryClient, [["collections"], ["collection"]]),
+  });
+}
+
+/** Deletes a collection. */
+export function useDeleteCollection() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, number>({
+    mutationFn: (id) => unwrap(commands.deleteCollection(id)),
+    onSettled: () => invalidateKeys(queryClient, [["collections"]]),
+  });
+}
+
+/** Adds an item at the end of a collection. */
+export function useAddCollectionItem() {
+  const queryClient = useQueryClient();
+  return useMutation<number, Error, AddCollectionItemVariables>({
+    mutationFn: ({ collectionId, item, annotation }) =>
+      unwrap(commands.addCollectionItem(collectionId, item, annotation)),
+    onSettled: () => invalidateKeys(queryClient, [["collections"], ["collection"]]),
+  });
+}
+
+/** Changes an item's annotation. */
+export function useUpdateCollectionItem() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, { id: number; annotation: string | null }>({
+    mutationFn: ({ id, annotation }) => unwrap(commands.updateCollectionItem(id, annotation)),
+    onSettled: () => invalidateKeys(queryClient, [["collections"], ["collection"]]),
+  });
+}
+
+/** Moves an item; the cached order changes at once, so a drag does not jump back. */
+export function useMoveCollectionItem() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, MoveCollectionItemVariables>({
+    mutationFn: ({ id, toIndex }) => unwrap(commands.moveCollectionItem(id, toIndex)),
+    onMutate: async ({ collectionId, id, toIndex }) => {
+      const queryKey = ["collection", collectionId];
+      await queryClient.cancelQueries({ queryKey });
+      queryClient.setQueriesData<Collection>({ queryKey }, (collection) => {
+        const moved = collection?.items.find((item) => item.id === id);
+        if (!collection || !moved) return collection;
+        const items = collection.items.filter((item) => item.id !== id);
+        items.splice(toIndex, 0, moved);
+        return { ...collection, items };
+      });
+    },
+    onSettled: () => invalidateKeys(queryClient, [["collections"], ["collection"]]),
+  });
+}
+
+/** Removes an item from its collection. */
+export function useRemoveCollectionItem() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, number>({
+    mutationFn: (id) => unwrap(commands.removeCollectionItem(id)),
+    onSettled: () => invalidateKeys(queryClient, [["collections"], ["collection"]]),
+  });
+}
+
+/** The available citation styles. */
+export function useCitationStyles() {
+  return useQuery<CitationStyle[]>({
+    queryKey: ["citation-styles"],
+    queryFn: () => unwrap(commands.listCitationStyles()),
+    staleTime: Infinity,
+  });
+}
+
+/** Citation text for a reference, asked for when the user copies it. */
+export function fetchCitation(reference: CitationRef, style: string): Promise<string> {
+  return unwrap(commands.formatCitation(reference, style));
+}
+
+/** Saves a collection as Markdown; resolves to the path, or `null` if cancelled. */
+export function useExportCollectionMarkdown() {
+  return useMutation<string | null, Error, ExportMarkdownVariables>({
+    mutationFn: ({ id, translationIds, labels, style }) =>
+      unwrap(commands.exportCollectionMarkdown(id, translationIds, labels, style)),
+  });
+}
+
+/** Saves the backup; resolves to the path, or `null` if cancelled. */
+export function useExportUserData() {
+  return useMutation<string | null>({
+    mutationFn: () => unwrap(commands.exportUserData()),
+  });
+}
+
+/** Imports a backup the user picks; resolves to the report, or `null` if cancelled. */
+export function useImportUserData() {
+  const queryClient = useQueryClient();
+  return useMutation<ImportReport | null, Error, ImportMode>({
+    mutationFn: (mode) => unwrap(commands.importUserData(mode)),
+    onSettled: () => invalidateKeys(queryClient, USER_DATA_KEYS),
+  });
+}
+
 /** Refreshes everything that depends on the installed packs. */
 export function invalidateContent(queryClient: ReturnType<typeof useQueryClient>) {
   return Promise.all(
@@ -512,6 +731,8 @@ export function invalidateContent(queryClient: ReturnType<typeof useQueryClient>
       ["word"] as const,
       ["concordance"] as const,
       ["search-roots"] as const,
+      ["bookmarks"] as const,
+      ["collection"] as const,
       queryKeys.networkLog,
     ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
   );

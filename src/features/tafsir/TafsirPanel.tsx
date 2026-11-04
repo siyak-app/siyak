@@ -10,6 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AddToCollectionButton } from "@/features/collections/AddToCollectionButton";
+import { CopyCitationButton } from "@/features/collections/CopyCitationButton";
 import { packTitle } from "@/features/packs/packFormat";
 import type { TafsirInfo, TafsirPassage } from "@/lib/bindings";
 import { useSurahs, useTafsir, useTafsirIntroduction, useTafsirs } from "@/lib/queries";
@@ -138,6 +140,7 @@ function CommentaryOf({ tafsir, verseId }: { tafsir: TafsirInfo; verseId: number
     <Passage
       tafsir={tafsir}
       passage={passage.data}
+      verseId={verseId}
       note={isRange ? t("tafsir.covers", { range: verseRange(from, to) }) : null}
     />
   );
@@ -157,21 +160,37 @@ function Passage({
   tafsir,
   passage,
   note,
+  verseId,
 }: {
   tafsir: TafsirInfo;
   passage: TafsirPassage;
   note: string | null;
+  /** The verse being read, for commentary: an introduction belongs to no verse. */
+  verseId?: number;
 }) {
   const { t } = useTranslation();
+  const citationAction = useUiStore((state) => state.preferences["reader.citation_action"]);
   return (
-    <section
-      key={passage.id}
-      tabIndex={0}
-      aria-label={t("tafsir.text_label")}
-      className="min-h-0 flex-1 overflow-y-auto rounded-md p-1 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-    >
-      {note && <p className="pb-2 text-xs text-muted-foreground">{note}</p>}
-      <TafsirParagraphs tafsir={tafsir} passage={passage} />
-    </section>
+    <>
+      {verseId !== undefined && (
+        <div className="flex flex-wrap gap-1">
+          <AddToCollectionButton item={{ kind: "tafsir", pack_id: tafsir.id, verse: verseId }} />
+          {citationAction && (
+            <CopyCitationButton
+              reference={{ kind: "tafsir", pack_id: tafsir.id, verse: verseId }}
+            />
+          )}
+        </div>
+      )}
+      <section
+        key={passage.id}
+        tabIndex={0}
+        aria-label={t("tafsir.text_label")}
+        className="min-h-0 flex-1 overflow-y-auto rounded-md p-1 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        {note && <p className="pb-2 text-xs text-muted-foreground">{note}</p>}
+        <TafsirParagraphs tafsir={tafsir} passage={passage} />
+      </section>
+    </>
   );
 }

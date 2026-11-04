@@ -1,10 +1,14 @@
 import {
+  BookmarkIcon,
   CheckIcon,
   Columns2Icon,
   CopyIcon,
+  FolderPlusIcon,
   HashIcon,
   LanguagesIcon,
   type LucideIcon,
+  NotebookPenIcon,
+  QuoteIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,27 +17,33 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { announce } from "@/lib/announce";
 import type { VerseWithTranslations } from "@/lib/bindings";
+import { fetchCitation } from "@/lib/queries";
 import type { Settings } from "@/lib/settings";
+import { useUiStore } from "@/stores/ui";
 
 import { translationsText, verseReference } from "./verseCopy";
+import { openNoteEditor } from "./verseSelection";
 
 /** How long a pressed action shows its check mark. */
 const COPIED_MS = 1500;
 
-type ActionId = "copy_arabic" | "copy_translation" | "copy_reference";
-
 interface Action {
-  id: ActionId;
+  id: string;
   icon: LucideIcon;
   label: string;
-  text: () => string;
+  /** Text to copy, if this action copies. */
+  text?: () => string | Promise<string>;
+  /** What the action does, if it does not copy. */
+  run?: () => void;
+  /** Filled icon: the action's state is on. */
+  active?: boolean;
 }
 
 /**
- * Actions for one verse: copying and comparing. `hover` shows icon buttons with tooltips while
- * the verse is hovered or focused; `labeled` always shows them with their
- * labels (`reader.actions`, spec §13.2). Only actions that exist today are
- * offered, including opening the verse on the compare screen.
+ * Actions for one verse: bookmarking, notes, collections, comparing and
+ * copying. `hover` shows icon buttons with tooltips while the verse is hovered
+ * or focused; `labeled` always shows them with their labels (`reader.actions`,
+ * spec §13.2). An action whose handler is not given is not offered.
  */
 export function VerseActions({
   verse,
@@ -41,6 +51,8 @@ export function VerseActions({
   titles,
   mode,
   onCompare,
+  bookmarked = false,
+  onBookmark,
 }: {
   verse: VerseWithTranslations;
   /** The surah's name in the interface language, for the reference. */
@@ -50,9 +62,16 @@ export function VerseActions({
   mode: Settings["reader.actions"];
   /** Opens the verse on the compare screen. */
   onCompare?: (verse: VerseWithTranslations) => void;
+  /** Whether the verse has a bookmark. */
+  bookmarked?: boolean;
+  /** Toggles the verse's bookmark. */
+  onBookmark?: (verse: VerseWithTranslations) => void;
 }) {
   const { t } = useTranslation();
-  const [copied, setCopied] = useState<ActionId | null>(null);
+  const citationAction = useUiStore((state) => state.preferences["reader.citation_action"]);
+  const citationStyle = useUiStore((state) => state.preferences["reader.citation_style"]);
+  const openCollectionPicker = useUiStore((state) => state.openCollectionPicker);
+  const [copied, setCopied] = useState<string | null>(null);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => {
@@ -63,14 +82,50 @@ export function VerseActions({
     };
   }, [copied]);
 
-  const actions: Action[] = [
-    {
-      id: "copy_arabic",
-      icon: CopyIcon,
-      label: t("verse_actions.copy_arabic"),
-      text: () => verse.text_uthmani,
-    },
-  ];
+  const actions: Action[] = [];
+  if (onBookmark) {
+    actions.push({
+      id: "bookmark",
+      icon: BookmarkIcon,
+      label: t(bookmarked ? "verse_actions.remove_bookmark" : "verse_actions.add_bookmark"),
+      active: bookmarked,
+      run: () => {
+        onBookmark(verse);
+      },
+    });
+    actions.push({
+      id: "note",
+      icon: NotebookPenIcon,
+      label: t("verse_actions.note"),
+      run: () => {
+        openNoteEditor({ surah: verse.surah, ayah: verse.ayah });
+      },
+    });
+    actions.push({
+      id: "collection",
+      icon: FolderPlusIcon,
+      label: t("collections.add"),
+      run: () => {
+        openCollectionPicker({ kind: "verse_range", from: verse.id, to: verse.id });
+      },
+    });
+  }
+  if (onCompare) {
+    actions.push({
+      id: "compare",
+      icon: Columns2Icon,
+      label: t("verse_actions.compare"),
+      run: () => {
+        onCompare(verse);
+      },
+    });
+  }
+  actions.push({
+    id: "copy_arabic",
+    icon: CopyIcon,
+    label: t("verse_actions.copy_arabic"),
+    text: () => verse.text_uthmani,
+  });
   if (verse.translations.length > 0) {
     actions.push({
       id: "copy_translation",
@@ -85,10 +140,31 @@ export function VerseActions({
     label: t("verse_actions.copy_reference"),
     text: () => verseReference(surahName, verse),
   });
+  if (citationAction) {
+    actions.push({
+      id: "copy_citation",
+      icon: QuoteIcon,
+      label: t("verse_actions.copy_citation"),
+      text: () =>
+        fetchCitation(
+          {
+            kind: "verses",
+            from: verse.id,
+            to: verse.id,
+            translation_ids: verse.translations.map((translation) => translation.pack_id),
+          },
+          citationStyle,
+        ),
+    });
+  }
 
   const run = async (action: Action) => {
+    if (action.run) {
+      action.run();
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(action.text());
+      await navigator.clipboard.writeText((await action.text?.()) ?? "");
       setCopied(action.id);
       announce(t("verse_actions.copied"));
     } catch (error) {
@@ -97,38 +173,26 @@ export function VerseActions({
     }
   };
 
-  const compareLabel = t("verse_actions.compare");
+  const iconOf = (action: Action) => {
+    const Icon = copied === action.id ? CheckIcon : action.icon;
+    return <Icon aria-hidden className={action.active ? "fill-current text-primary" : undefined} />;
+  };
+
   if (mode === "labeled") {
     return (
       <div className="-ms-2 flex flex-wrap gap-1">
-        {onCompare && (
+        {actions.map((action) => (
           <Button
+            key={action.id}
             variant="ghost"
             size="xs"
             className="text-muted-foreground"
-            onClick={() => {
-              onCompare(verse);
-            }}
+            onClick={() => void run(action)}
           >
-            <Columns2Icon aria-hidden />
-            {compareLabel}
+            {iconOf(action)}
+            {action.label}
           </Button>
-        )}
-        {actions.map((action) => {
-          const Icon = copied === action.id ? CheckIcon : action.icon;
-          return (
-            <Button
-              key={action.id}
-              variant="ghost"
-              size="xs"
-              className="text-muted-foreground"
-              onClick={() => void run(action)}
-            >
-              <Icon aria-hidden />
-              {action.label}
-            </Button>
-          );
-        })}
+        ))}
       </div>
     );
   }
@@ -136,45 +200,24 @@ export function VerseActions({
   return (
     <div
       data-copied={copied !== null || undefined}
-      className="flex flex-col gap-0.5 opacity-0 transition-opacity group-focus-within/verse:opacity-100 group-hover/verse:opacity-100 data-copied:opacity-100 motion-reduce:transition-none"
+      className="grid grid-cols-2 gap-0.5 opacity-0 transition-opacity group-focus-within/verse:opacity-100 group-hover/verse:opacity-100 data-copied:opacity-100 motion-reduce:transition-none"
     >
-      {onCompare && (
-        <Tooltip>
+      {actions.map((action) => (
+        <Tooltip key={action.id}>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="icon-xs"
-              aria-label={compareLabel}
+              aria-label={action.label}
               className="text-muted-foreground"
-              onClick={() => {
-                onCompare(verse);
-              }}
+              onClick={() => void run(action)}
             >
-              <Columns2Icon aria-hidden />
+              {iconOf(action)}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="left">{compareLabel}</TooltipContent>
+          <TooltipContent side="left">{action.label}</TooltipContent>
         </Tooltip>
-      )}
-      {actions.map((action) => {
-        const Icon = copied === action.id ? CheckIcon : action.icon;
-        return (
-          <Tooltip key={action.id}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={action.label}
-                className="text-muted-foreground"
-                onClick={() => void run(action)}
-              >
-                <Icon aria-hidden />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">{action.label}</TooltipContent>
-          </Tooltip>
-        );
-      })}
+      ))}
     </div>
   );
 }

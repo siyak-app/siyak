@@ -78,6 +78,8 @@ export interface Settings {
   "search.mode_chips": boolean;
   /** "Copy citation" verse action (M6). */
   "reader.citation_action": boolean;
+  /** Citation style of copied citations and bibliographies: a style id from the core. */
+  "reader.citation_style": string;
   "typography.arabic": Typography;
   "typography.translation": Typography;
   /** Where the reader was last, opened on the next launch. */
@@ -160,6 +162,10 @@ export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
   "ui.technical_terms": { default: "tooltip", validate: isOneOf(["tooltip", "inline"]) },
   "search.mode_chips": { default: false, validate: isBoolean },
   "reader.citation_action": { default: false, validate: isBoolean },
+  "reader.citation_style": {
+    default: "isnad",
+    validate: (value): value is string => typeof value === "string" && value !== "",
+  },
   "typography.arabic": {
     default: { size: 28, line_height: 2.2 },
     validate: isTypography(TYPOGRAPHY_LIMITS.arabic),

@@ -70,6 +70,13 @@ pub enum AppErrorCode {
     TermsNotAcknowledged,
     /// Installing this morphology pack replaces the installed one and needs confirmation.
     MorphologyReplaceRequired,
+    /// A request names something that cannot exist: an empty note or title, a
+    /// reversed verse range, an unknown citation style.
+    InvalidInput,
+    /// The chosen file is not a Siyak backup.
+    BackupInvalid,
+    /// The backup was written by a newer app version than this one.
+    BackupUnsupported,
 }
 
 /// Error returned by every command: `{ code, message }` on the frontend.

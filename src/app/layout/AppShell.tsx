@@ -7,6 +7,8 @@ import { type PanelSize, usePanelRef } from "react-resizable-panels";
 import { LiveAnnouncer } from "@/components/LiveAnnouncer";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { AddToCollectionDialog } from "@/features/collections/AddToCollectionDialog";
+import { LibraryNav } from "@/features/collections/LibraryNav";
 import { CommandPalette } from "@/features/command-palette/CommandPalette";
 import { ContextPanel } from "@/features/context-panel/ContextPanel";
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog";
@@ -124,7 +126,12 @@ export function AppShell() {
           }}
           className="bg-muted/30"
         >
-          <SurahList />
+          <div className="flex h-full flex-col">
+            <LibraryNav />
+            <div className="min-h-0 flex-1">
+              <SurahList />
+            </div>
+          </div>
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel id="content" minSize="30%">
@@ -151,6 +158,7 @@ export function AppShell() {
         </ResizablePanel>
       </ResizablePanelGroup>
       <OnboardingDialog />
+      <AddToCollectionDialog />
       <LiveAnnouncer />
     </div>
   );

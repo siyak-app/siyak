@@ -5,6 +5,7 @@ import { Term } from "@/components/Term";
 import { Button } from "@/components/ui/button";
 import { useApplyProfile } from "@/features/profile/useApplyProfile";
 import { TranslationChooser } from "@/features/reader/TranslationPicker";
+import { useCitationStyles } from "@/lib/queries";
 import { CONTEXT_TABS, type ExperienceProfile } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
@@ -151,9 +152,28 @@ export function DisplaySettings() {
           onChange={(value) => {
             setPreference("reader.citation_action", value);
           }}
-          unavailable
         />
+        {preferences["reader.citation_action"] && <CitationStyleField />}
       </div>
     </div>
+  );
+}
+
+/** The style of copied citations and of bibliographies. */
+function CitationStyleField() {
+  const { t } = useTranslation();
+  const style = useUiStore((state) => state.preferences["reader.citation_style"]);
+  const setPreference = useUiStore((state) => state.setPreference);
+  const styles = useCitationStyles();
+  if (!styles.data) return null;
+  return (
+    <RadioField
+      legend={t("settings.citation_style")}
+      value={style}
+      options={styles.data.map(({ id, name }) => ({ value: id, label: name }))}
+      onChange={(value) => {
+        setPreference("reader.citation_style", value);
+      }}
+    />
   );
 }

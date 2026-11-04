@@ -15,8 +15,16 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { announce } from "@/lib/announce";
 import type { VerseWithTranslations } from "@/lib/bindings";
-import { useSurah, useTranslations, useVerses } from "@/lib/queries";
+import {
+  useBookmarks,
+  useNotes,
+  useSurah,
+  useToggleBookmark,
+  useTranslations,
+  useVerses,
+} from "@/lib/queries";
 import type { ContextTab } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
@@ -24,7 +32,7 @@ import { recallTopAyah, rememberTopAyah } from "./scrollMemory";
 import { SurahHeader } from "./SurahHeader";
 import { surahName } from "./surahName";
 import { translationTitle } from "./translationTitle";
-import { hasTextSelection, openContextPanel } from "./verseSelection";
+import { hasTextSelection, openContextPanel, openNoteEditor } from "./verseSelection";
 import { type ShownPack, VerseItem } from "./VerseItem";
 import { estimateVerseHeight } from "./verseLayout";
 
@@ -91,6 +99,50 @@ function openInPanel(verse: VerseWithTranslations, tab?: ContextTab) {
   openContextPanel(tab);
 }
 
+/** The reader's request for bookmarks: only which verses have one. */
+const NO_TRANSLATIONS: readonly string[] = [];
+
+/** Toggles a verse's bookmark and says what happened. Stable, as verses are memoized. */
+function useBookmarkVerse() {
+  const { t } = useTranslation();
+  const { mutate } = useToggleBookmark();
+  return useCallback(
+    (verse: VerseWithTranslations) => {
+      mutate(verse.id, {
+        onSuccess: (bookmarked) => {
+          announce(
+            t(bookmarked ? "verse_actions.bookmark_added" : "verse_actions.bookmark_removed"),
+          );
+        },
+      });
+    },
+    [mutate, t],
+  );
+}
+
+/** The verses of this surah with a bookmark, and those a note touches. */
+function useVerseMarks(items: readonly VerseWithTranslations[]) {
+  const bookmarks = useBookmarks(NO_TRANSLATIONS);
+  const first = items[0]?.id;
+  const last = items.at(-1)?.id;
+  const range = first !== undefined && last !== undefined ? { from: first, to: last } : null;
+  const notes = useNotes(range, range !== null);
+  const bookmarked = useMemo(
+    () => new Set(bookmarks.data?.map((bookmark) => bookmark.verse.id)),
+    [bookmarks.data],
+  );
+  const noted = useMemo(() => {
+    const ids = new Set<number>();
+    for (const note of notes.data ?? []) {
+      const from = Math.max(note.verse_from, first ?? note.verse_from);
+      const to = Math.min(note.verse_to, last ?? note.verse_to);
+      for (let id = from; id <= to; id += 1) ids.add(id);
+    }
+    return ids;
+  }, [notes.data, first, last]);
+  return { bookmarked, noted };
+}
+
 /** Opens a verse on the compare screen. Stable, as verses are memoized. */
 function useCompareVerse() {
   const navigate = useNavigate();
@@ -110,7 +162,7 @@ function useCompareVerse() {
  * ↑/↓ move between verses, Home/End jump to the first or last, scrolling
  * the virtualized list as needed; Enter or a click opens the verse in the
  * context panel, `t` opens it on the Tafsir tab, `w` on the Word tab and `c`
- * on the compare screen. Keys and clicks on a verse's buttons and words keep
+ * on the compare screen; `b` toggles its bookmark and `n` starts a note. Keys and clicks on a verse's buttons and words keep
  * their usual meaning, and a click that ends a text selection selects nothing, so text
  * can still be selected and copied.
  */
@@ -142,6 +194,7 @@ function useVerseFocus(
   };
 
   const compareVerse = useCompareVerse();
+  const bookmarkVerse = useBookmarkVerse();
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
     if (target.tagName !== "ARTICLE" || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -156,6 +209,8 @@ function useVerseFocus(
     else if (event.key === "t") openInPanel(verse, "tafsir");
     else if (event.key === "w") openInPanel(verse, "word");
     else if (event.key === "c") compareVerse(verse);
+    else if (event.key === "b") bookmarkVerse(verse);
+    else if (event.key === "n") openNoteEditor({ surah: verse.surah, ayah: verse.ayah });
     else return;
     event.preventDefault();
   };
@@ -224,12 +279,14 @@ function useReadingPosition(
 
 function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined }) {
   const compareVerse = useCompareVerse();
+  const bookmarkVerse = useBookmarkVerse();
   const { t, i18n } = useTranslation();
   const info = useSurah(surah);
   const selected = useUiStore((state) => state.preferences["reader.translations"]);
   const installed = useTranslations();
   const verses = useVerses(surah, selected);
   const items = useMemo(() => verses.data ?? [], [verses.data]);
+  const { bookmarked, noted } = useVerseMarks(items);
 
   const shown = useMemo(() => {
     const byId = new Map((installed.data ?? []).map((pack) => [pack.id, pack]));
@@ -344,6 +401,9 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
                   highlighted={verse.ayah === highlighted}
                   tabStop={row.index === focus.tabStop}
                   onCompare={compareVerse}
+                  bookmarked={bookmarked.has(verse.id)}
+                  noted={noted.has(verse.id)}
+                  onBookmark={bookmarkVerse}
                 />
               </div>
             );

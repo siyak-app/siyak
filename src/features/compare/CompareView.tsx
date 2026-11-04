@@ -3,6 +3,7 @@ import { BookOpenIcon } from "lucide-react";
 import { type SyntheticEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AddVerseButton } from "@/features/collections/AddToCollectionButton";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,6 +109,11 @@ function CompareScreen({
           to={to}
         />
         <span className="flex-1" />
+        <AddVerseButton
+          verse={{ surah: surah.number, ayah: from }}
+          through={to}
+          label={t("collections.add")}
+        />
         <Button asChild variant="ghost" size="sm">
           <Link to="/read/$surah/$ayah" params={{ surah: surah.number, ayah: from }}>
             <BookOpenIcon aria-hidden />

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Surah } from "@/lib/bindings";
 
-import { editionPage, verseIdOf, verseRange } from "./tafsirRefs";
+import { editionPage, verseIdOf, verseOfId, verseRange } from "./tafsirRefs";
 
 const surahs = [
   { number: 1, ayah_count: 7 },
@@ -31,5 +31,23 @@ describe("editionPage", () => {
     expect(editionPage(null, 113)).toBe("113");
     expect(editionPage("1", null)).toBe("1");
     expect(editionPage(null, null)).toBeNull();
+  });
+});
+
+describe("verseOfId", () => {
+  it("finds a verse by its global id", () => {
+    expect(verseOfId(surahs, 1)).toEqual({ surah: 1, ayah: 1 });
+    expect(verseOfId(surahs, 7)).toEqual({ surah: 1, ayah: 7 });
+    expect(verseOfId(surahs, 8)).toEqual({ surah: 2, ayah: 1 });
+  });
+
+  it("is the inverse of verseIdOf", () => {
+    const position = verseOfId(surahs, 100);
+    expect(position && verseIdOf(surahs, position)).toBe(100);
+  });
+
+  it("knows no verse outside the Quran", () => {
+    expect(verseOfId(surahs, 0)).toBeNull();
+    expect(verseOfId(surahs, 494)).toBeNull();
   });
 });

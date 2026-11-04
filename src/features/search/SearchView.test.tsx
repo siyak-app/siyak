@@ -133,7 +133,7 @@ describe("SearchView", () => {
   });
 
   it("searches translations in All mode and links to the verse", () => {
-    render(<SearchView q="patience" mode="all" />);
+    render(<SearchView q="patience" mode="all" />, { wrapper: TooltipProvider });
     expect(searches[0]).toMatchObject({ scope: "translations", limit: 5, packIds: [] });
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute("href", "/read/2/153");
@@ -145,7 +145,7 @@ describe("SearchView", () => {
   it("searches the Arabic text for Arabic queries, right to left", () => {
     classified = { kind: "arabic" };
     results = { total: 1, hits: [ARABIC] };
-    render(<SearchView q="الصابرين" mode="all" />);
+    render(<SearchView q="الصابرين" mode="all" />, { wrapper: TooltipProvider });
     expect(searches[0]?.scope).toBe("arabic");
     const mark = screen.getByText("الصابرين", { selector: "mark" });
     expect(mark.parentElement).toHaveAttribute("dir", "rtl");
@@ -154,7 +154,7 @@ describe("SearchView", () => {
 
   it("offers the full list when All shows only the first results", () => {
     results = { total: 40, hits: [TRANSLATION] };
-    render(<SearchView q="patience" mode="all" />);
+    render(<SearchView q="patience" mode="all" />, { wrapper: TooltipProvider });
     expect(screen.getByRole("link", { name: "See all 40 results" })).toHaveAttribute(
       "href",
       "/search?q=patience&mode=text",
@@ -163,7 +163,7 @@ describe("SearchView", () => {
 
   it("filters and lengthens the list in Text mode", () => {
     results = { total: 60, hits: [TRANSLATION] };
-    render(<SearchView q="patience" mode="text" />);
+    render(<SearchView q="patience" mode="text" />, { wrapper: TooltipProvider });
     expect(screen.getByRole("status")).toHaveTextContent("Results: 60");
     expect(searches.at(-1)).toMatchObject({ limit: 50 });
 
@@ -189,19 +189,19 @@ describe("SearchView", () => {
   it("has no translation filter for the Arabic text", () => {
     classified = { kind: "arabic" };
     results = { total: 1, hits: [ARABIC] };
-    render(<SearchView q="الصابرين" mode="text" />);
+    render(<SearchView q="الصابرين" mode="text" />, { wrapper: TooltipProvider });
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("says when nothing was found", () => {
     results = { total: 0, hits: [] };
-    render(<SearchView q="zzz" mode="all" />);
+    render(<SearchView q="zzz" mode="all" />, { wrapper: TooltipProvider });
     expect(screen.getByText(/Nothing found/)).toBeInTheDocument();
   });
 
   it("does not search for references, bad references, roots or nothing", () => {
     classified = { kind: "reference", surah: 2, ayah: 255, ayah_to: null };
-    const { unmount } = render(<SearchView q="2:255" mode="all" />);
+    const { unmount } = render(<SearchView q="2:255" mode="all" />, { wrapper: TooltipProvider });
     expect(screen.getByRole("link", { name: "Go to 2:255" })).toHaveAttribute(
       "href",
       "/read/2/255",
@@ -209,28 +209,30 @@ describe("SearchView", () => {
     unmount();
 
     classified = { kind: "invalid_reference", reason: "ayah_out_of_range" };
-    const second = render(<SearchView q="2:999" mode="all" />);
+    const second = render(<SearchView q="2:999" mode="all" />, { wrapper: TooltipProvider });
     expect(screen.getByText("That surah has no such verse.")).toBeInTheDocument();
     second.unmount();
 
     classified = { kind: "latin_root" };
-    const third = render(<SearchView q="x-y-z" mode="all" />);
+    const third = render(<SearchView q="x-y-z" mode="all" />, { wrapper: TooltipProvider });
     expect(screen.getByText(/No root or dictionary form matches/)).toBeInTheDocument();
     third.unmount();
 
     classified = { kind: "empty" };
-    render(<SearchView q="" mode="all" />);
+    render(<SearchView q="" mode="all" />, { wrapper: TooltipProvider });
     expect(screen.getByText(/Type a word/)).toBeInTheDocument();
     expect(searches).toEqual([]);
   });
 
   it("shows mode chips only when the setting is on", () => {
-    const { unmount } = render(<SearchView q="patience" mode="all" />);
+    const { unmount } = render(<SearchView q="patience" mode="all" />, {
+      wrapper: TooltipProvider,
+    });
     expect(screen.queryByRole("group", { name: "Search mode" })).not.toBeInTheDocument();
     unmount();
 
     useUiStore.getState().setPreference("search.mode_chips", true);
-    render(<SearchView q="patience" mode="all" />);
+    render(<SearchView q="patience" mode="all" />, { wrapper: TooltipProvider });
     fireEvent.click(screen.getByRole("button", { name: "Text" }));
     expect(navigate).toHaveBeenCalledWith({
       to: "/search",

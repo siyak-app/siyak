@@ -6,8 +6,11 @@
 //!
 //! Commands are `async` so Tauri runs them off the main (UI) thread.
 
+pub mod collections;
 pub mod content;
+pub mod export;
 pub mod morphology;
+pub mod notes;
 pub mod packs;
 pub mod search;
 pub mod settings;
@@ -52,6 +55,24 @@ pub fn builder() -> Builder<tauri::Wry> {
             packs::acknowledge_pack_terms,
             packs::get_network_log,
             packs::open_pack_source,
+            notes::toggle_bookmark,
+            notes::list_bookmarks,
+            notes::upsert_note,
+            notes::delete_note,
+            notes::list_notes,
+            collections::list_collections,
+            collections::get_collection,
+            collections::upsert_collection,
+            collections::delete_collection,
+            collections::add_collection_item,
+            collections::update_collection_item,
+            collections::move_collection_item,
+            collections::remove_collection_item,
+            export::list_citation_styles,
+            export::format_citation,
+            export::export_collection_markdown,
+            export::export_user_data,
+            export::import_user_data,
         ])
         // Event payloads and names: emitted with `Emitter::emit`, not commands.
         .typ::<PackProgress>()

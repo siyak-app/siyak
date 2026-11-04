@@ -7,7 +7,11 @@ import {
   redirect,
 } from "@tanstack/react-router";
 
+import { BookmarksView } from "@/features/bookmarks/BookmarksView";
+import { CollectionView } from "@/features/collections/CollectionView";
+import { CollectionsView } from "@/features/collections/CollectionsView";
 import { CompareView } from "@/features/compare/CompareView";
+import { NotesView } from "@/features/notes/NotesView";
 import { ReaderView } from "@/features/reader/ReaderView";
 import { SurahNotFound } from "@/features/reader/SurahNotFound";
 import { parseSearchParams } from "@/features/search/searchParams";
@@ -127,6 +131,46 @@ export const concordanceRoute = createRoute({
   },
 });
 
+/** `/bookmarks`: every bookmarked verse. */
+const bookmarksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/bookmarks",
+  component: BookmarksView,
+});
+
+/** `/notes`: every note. */
+const notesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/notes",
+  component: NotesView,
+});
+
+/** `/collections`: the list of research collections (spec §13.3). */
+const collectionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/collections",
+  component: CollectionsView,
+});
+
+/** `/collections/:id`: one collection. */
+export const collectionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/collections/$id",
+  params: {
+    parse: ({ id }) => {
+      const parsed = parseIdParam(id);
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router signals 404 by throwing
+      if (parsed === null) throw notFound();
+      return { id: parsed };
+    },
+    stringify: ({ id }) => ({ id: String(id) }),
+  },
+  component: function CollectionRoute() {
+    const { id } = collectionRoute.useParams();
+    return <CollectionView key={id} id={id} />;
+  },
+});
+
 /**
  * Hash history: the app is served from local files inside the webview, where
  * there is no server to answer deep paths on reload.
@@ -139,6 +183,10 @@ export const router = createRouter({
     compareRoute,
     searchRoute,
     concordanceRoute,
+    bookmarksRoute,
+    notesRoute,
+    collectionsRoute,
+    collectionRoute,
   ]),
   history: createHashHistory(),
   defaultNotFoundComponent: SurahNotFound,

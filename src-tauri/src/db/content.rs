@@ -5,7 +5,7 @@
 //! `core.db`, the core tables are refreshed in place (spec §6.2, ADR 0011).
 //! Pack installation writes its rows here through `crate::packs::install`.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -664,18 +664,15 @@ pub fn get_tafsir_introduction(
     id.map(|id| tafsir_passage(conn, id)).transpose()
 }
 
-/// Returns verses `from..=to` (at most [`MAX_COMPARE_VERSES`] of them) with
-/// the given translations and the commentary of the given tafsirs. Unknown pack
-/// ids are ignored and duplicates count once, as in [`get_verses`]. Fails with
+/// Returns verses `from..=to` with the given translations. Unknown pack ids are
+/// ignored and duplicates count once, as in [`get_verses`]. Fails with
 /// [`AppErrorCode::NotFound`] if the range holds no verse.
-pub fn get_compare(
+pub fn get_verse_range(
     conn: &Connection,
     from: u32,
     to: u32,
     translation_ids: &[String],
-    tafsir_ids: &[String],
-) -> AppResult<Compare> {
-    let to = to.min(from.saturating_add(MAX_COMPARE_VERSES - 1));
+) -> AppResult<Vec<VerseWithTranslations>> {
     let mut verses = conn
         .prepare(
             "SELECT id, surah, ayah, juz, text_uthmani FROM verses
@@ -727,6 +724,115 @@ pub fn get_compare(
             }
         }
     }
+    Ok(verses)
+}
+
+/// Every verse's position, to turn `verse_id`s into `surah:ayah` and back
+/// (`user.db` stores ids, and it has no `verses` table to join with).
+#[derive(Debug, Clone, Default)]
+pub struct VerseIndex {
+    by_id: HashMap<u32, VerseRef>,
+    by_ref: HashMap<(u16, u16), u32>,
+}
+
+impl VerseIndex {
+    /// Reads the positions of all verses.
+    pub fn load(conn: &Connection) -> AppResult<Self> {
+        let mut index = Self::default();
+        let mut stmt = conn.prepare("SELECT id, surah, ayah FROM verses")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, u32>(0)?, row.get::<_, u16>(1)?, row.get(2)?))
+        })?;
+        for row in rows {
+            let (id, surah, ayah) = row?;
+            index.by_id.insert(id, VerseRef { surah, ayah });
+            index.by_ref.insert((surah, ayah), id);
+        }
+        Ok(index)
+    }
+
+    /// The position of a verse.
+    pub fn verse(&self, id: u32) -> Option<VerseRef> {
+        self.by_id.get(&id).copied()
+    }
+
+    /// The id of a verse.
+    pub fn id(&self, surah: u16, ayah: u16) -> Option<u32> {
+        self.by_ref.get(&(surah, ayah)).copied()
+    }
+
+    /// Fails with [`AppErrorCode::InvalidInput`] unless `from..=to` are verses, in order.
+    pub fn check_range(&self, from: u32, to: u32) -> AppResult<()> {
+        if from > to || self.verse(from).is_none() || self.verse(to).is_none() {
+            return Err(AppError::new(
+                AppErrorCode::InvalidInput,
+                format!("verse range {from}..={to}"),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// A pack's citation metadata: its `citation_json` fields (spec §11.2), with
+/// the pack's own author and title where the metadata has none.
+pub fn pack_citation(conn: &Connection, pack_id: &str) -> AppResult<Option<PackCitation>> {
+    Ok(conn
+        .query_row(
+            "SELECT type, title, author, citation_json FROM packs WHERE id = ?1",
+            [pack_id],
+            |row| {
+                let citation: Option<String> = row.get(3)?;
+                let mut fields: BTreeMap<String, String> = citation
+                    .and_then(|json| serde_json::from_str::<serde_json::Value>(&json).ok())
+                    .as_ref()
+                    .map(crate::packs::manifest::citation_fields)
+                    .unwrap_or_default();
+                fields.entry("title".to_owned()).or_insert(row.get(1)?);
+                if let Some(author) = row.get::<_, Option<String>>(2)? {
+                    fields.entry("author".to_owned()).or_insert(author);
+                }
+                Ok(PackCitation {
+                    kind: row.get(0)?,
+                    fields,
+                })
+            },
+        )
+        .optional()?)
+}
+
+/// What [`pack_citation`] returns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackCitation {
+    /// The pack type: `translation`, `tafsir` or `morphology`.
+    pub kind: String,
+    /// Citation fields by name, e.g. `author`, `title`, `publisher`.
+    pub fields: BTreeMap<String, String>,
+}
+
+/// Where the Quran text came from, `(title, url)`, as its notice names it.
+pub fn quran_text_source(conn: &Connection) -> AppResult<Option<(String, Option<String>)>> {
+    Ok(conn
+        .query_row(
+            "SELECT title, url FROM notices WHERE id = 'tanzil.text.uthmani'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?)
+}
+
+/// Returns verses `from..=to` (at most [`MAX_COMPARE_VERSES`] of them) with
+/// the given translations and the commentary of the given tafsirs. Unknown pack
+/// ids are ignored and duplicates count once, as in [`get_verses`]. Fails with
+/// [`AppErrorCode::NotFound`] if the range holds no verse.
+pub fn get_compare(
+    conn: &Connection,
+    from: u32,
+    to: u32,
+    translation_ids: &[String],
+    tafsir_ids: &[String],
+) -> AppResult<Compare> {
+    let to = to.min(from.saturating_add(MAX_COMPARE_VERSES - 1));
+    let verses = get_verse_range(conn, from, to, translation_ids)?;
 
     let mut stmt = conn.prepare(
         "SELECT id FROM tafsir

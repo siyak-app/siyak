@@ -7,6 +7,7 @@ import {
   type Settings,
   type VersePosition,
 } from "@/lib/settings";
+import type { ItemRef } from "@/lib/bindings";
 
 /**
  * UI preferences: the settings of `@/lib/settings`, keyed by their `user.db`
@@ -37,12 +38,18 @@ interface UiState {
   selectedWord: number | null;
   /** Whether the Packs dialog is open; other screens may open it. Not persisted. */
   packsDialogOpen: boolean;
+  /** What the "Add to collection" dialog is adding, if it is open. Not persisted. */
+  collectionPicker: ItemRef | null;
+  /** The next Notes tab to show should focus its editor (the `n` key). Not persisted. */
+  noteFocusPending: boolean;
   hydrate: (preferences: UiPreferences) => void;
   setPreference: <K extends PreferenceKey>(key: K, value: UiPreferences[K]) => void;
   setPreferences: (values: Partial<UiPreferences>) => void;
   selectVerse: (verse: VersePosition | null) => void;
   selectWord: (verse: VersePosition, wordId: number) => void;
   setPacksDialogOpen: (open: boolean) => void;
+  openCollectionPicker: (item: ItemRef | null) => void;
+  setNoteFocusPending: (pending: boolean) => void;
 }
 
 /**
@@ -55,6 +62,8 @@ export const useUiStore = create<UiState>()((set) => ({
   selectedVerse: null,
   selectedWord: null,
   packsDialogOpen: false,
+  collectionPicker: null,
+  noteFocusPending: false,
   hydrate: (preferences) => {
     set({ hydrated: true, preferences });
   },
@@ -76,5 +85,11 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setPacksDialogOpen: (open) => {
     set({ packsDialogOpen: open });
+  },
+  openCollectionPicker: (item) => {
+    set({ collectionPicker: item });
+  },
+  setNoteFocusPending: (pending) => {
+    set({ noteFocusPending: pending });
   },
 }));

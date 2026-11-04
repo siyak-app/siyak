@@ -325,6 +325,26 @@ fn lemma_info(conn: &Connection, id: u32) -> AppResult<LemmaInfo> {
     })
 }
 
+/// A root by its text (`ر ح م`); `None` if the installed pack lacks it or none is installed.
+pub fn root_by_text(conn: &Connection, root: &str) -> AppResult<Option<RootInfo>> {
+    let id = conn
+        .query_row("SELECT id FROM roots WHERE root = ?1", [root], |row| {
+            row.get(0)
+        })
+        .optional()?;
+    id.map(|id| root_info(conn, id)).transpose()
+}
+
+/// A lemma by its text; `None` if the installed pack lacks it or none is installed.
+pub fn lemma_by_text(conn: &Connection, lemma: &str) -> AppResult<Option<LemmaInfo>> {
+    let id = conn
+        .query_row("SELECT id FROM lemmas WHERE lemma = ?1", [lemma], |row| {
+            row.get(0)
+        })
+        .optional()?;
+    id.map(|id| lemma_info(conn, id)).transpose()
+}
+
 /// `column` is one of two constants, never user input.
 fn count_words(conn: &Connection, column: &str, id: u32) -> AppResult<u32> {
     Ok(conn.query_row(

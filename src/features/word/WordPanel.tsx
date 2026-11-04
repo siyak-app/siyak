@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Term } from "@/components/Term";
 import { Button } from "@/components/ui/button";
+import { AddToCollectionButton } from "@/features/collections/AddToCollectionButton";
 import { verseIdOf } from "@/features/tafsir/tafsirRefs";
 import type { WordDetail, WordSegment } from "@/lib/bindings";
 import { useMorphologyPack, useSurahs, useVerseWords, useWord } from "@/lib/queries";
@@ -193,6 +194,22 @@ function Occurrences({ word }: { word: WordDetail }) {
           {lemmas.length > 1 && ` · ${lemma.lemma}`}
         </Link>
       ))}
+      <div className="flex flex-wrap gap-1 pt-1">
+        {roots.map((root) => (
+          <AddToCollectionButton
+            key={root.id}
+            item={{ kind: "root", root: root.root }}
+            label={t("collections.add_root", { root: root.root })}
+          />
+        ))}
+        {lemmas.map((lemma) => (
+          <AddToCollectionButton
+            key={lemma.id}
+            item={{ kind: "lemma", lemma: lemma.lemma }}
+            label={t("collections.add_lemma", { lemma: lemma.lemma.replace(/\d+$/u, "") })}
+          />
+        ))}
+      </div>
     </nav>
   );
 }

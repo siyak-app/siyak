@@ -835,7 +835,7 @@ Kalıcı uyarı: "Yanıtlar yapay zekâ tarafından üretilir, hata içerebilir;
 
 ### 11.2 Dışa aktarma
 - **Markdown:** Koleksiyon başlığı ve açıklaması; her öğe için Arapça metin, seçili meal(ler), kullanıcının notları ve kaynakça. Dosya kaydetme diyaloğu Rust tarafından açılır.
-- **Atıf metni:** Ayet ve meal/tefsir için kopyalanabilir atıf. Paketlerin `citation` meta verisinden üretilir. Şablonlar ayrı dosyalarda tutulur (`export/citation/*.tmpl`), böylece yeni stil eklemek kod değişikliği gerektirmez. v1 stilleri: §18'de netleşecek.
+- **Atıf metni:** Ayet ve meal/tefsir için kopyalanabilir atıf. Paketlerin `citation` meta verisinden üretilir. Şablonlar ayrı dosyalarda tutulur (`export/citation/*.tmpl`), böylece yeni stil eklemek kod değişikliği gerektirmez. v1 stilleri: İSNAD ve APA (geçici, §18).
 - **JSON yedek:** Yer imleri, notlar, koleksiyonlar ve tefsir çeviri cache'i. Sohbet geçmişi ve API anahtarları dahil edilmez.
 
 ```json
@@ -850,7 +850,7 @@ Kalıcı uyarı: "Yanıtlar yapay zekâ tarafından üretilir, hata içerebilir;
 }
 ```
 
-Taşınabilirlik için dışa aktarmada `verse_id` yerine `sure:ayet` kullanılır. İçe aktarma `merge` veya `replace` modunda çalışır ve bir rapor döner.
+Taşınabilirlik için dışa aktarmada `verse_id` yerine `sure:ayet` kullanılır. `note` ögesi, notların taşınabilir bir kimliği olmadığı için nota dosyadaki `notes` listesindeki sırasıyla başvurur (`{ "note": 3 }`). Notlar, koleksiyonlar ve ögeler zaman damgalarını, tefsir çevirileri de `target_lang` ve `created_at` alanlarını taşır; böylece yedek kaydettiğini geri getirir. İçe aktarma `merge` veya `replace` modunda çalışır ve bir rapor döner; aynı dosyayı iki kez birleştirmek bir şey eklemez, `replace` ise önce `user.db` dosyasının bir kopyasını yanında tutar.
 
 ---
 
@@ -868,7 +868,7 @@ Tüm komutlar `Result<T, AppError>` döner (`{ code, message }`). Tipler `specta
 | Paketler | `fetch_manifest(force?)`, `install_pack(id)`, `install_bundle(id)`, `cancel_install(id)`, `uninstall_pack(id)` |
 | Kullanıcı | `toggle_bookmark`, `list_bookmarks`, `upsert_note`, `delete_note`, `list_notes(range?)` |
 | Koleksiyon | `list_collections`, `get_collection`, `upsert_collection`, `delete_collection`, `add_collection_item`, `update_collection_item`, `move_collection_item`, `remove_collection_item` |
-| Dışa aktarma | `export_collection_markdown(id)`, `format_citation(ref, style)`, `export_user_data()`, `import_user_data(mode)` |
+| Dışa aktarma | `export_collection_markdown(id, translation_ids[], labels, style)`, `list_citation_styles()`, `format_citation(ref, style)`, `export_user_data()`, `import_user_data(mode)` |
 | AI | `set_api_key`, `delete_api_key`, `has_api_key`, `list_models(provider)`, `chat_send(…, channel)`, `list_chat_sessions`, `get_chat_session`, `delete_chat_session`, `get_usage_summary(period)` |
 | Sistem | `get_settings`, `set_setting`, `get_network_log(limit)` |
 
@@ -1126,7 +1126,7 @@ Sıralama mantığı: Açık kaynak altyapısı en başta kurulur (M0), çünkü
 | 4 | **MASAQ değerlendirmesi** (§5.3.1): lemma bilgisi var mı, Tanzil ile hizalama, QAC ile örneklem karşılaştırması; son sürümün lisans ifadesinin netleştirilmesi | İkinci morfoloji paketi, i'rab katmanı |
 | 5 | **Kurtubî izni:** Tarteel'den QUL #23'ün kökeni ve yeniden dağıtım izni (§6.6). Talep gönderildi mi, yanıt geldi mi? | `ar.qurtubi` paketinin yayını |
 | 6 | **Türkçe meal kaynağı:** `core.db` için Elmalılı Hamdi Yazır'ın orijinal (sadeleştirilmemiş) mealinin ve tefsiri *Hak Dini Kur'an Dili*'nin temiz, dijital ve lisansı net bir kaynağı | Gömülü Türkçe meal (§6.2), Türkçe tefsir katmanı |
-| 7 | v1 atıf stilleri (örn. İSNAD, APA, Chicago) ve her paket için gerekli `citation` alanları | §11.2 |
+| 7 | v1 atıf stilleri: İSNAD ve APA geçici olarak uygulandı, stil kılavuzlarına göre gözden geçirilecek. Chicago ve her paket için gerekli `citation` alanları hâlâ açık | §11.2 |
 | 8 | Küratörlü bir çapraz referans veri seti var mı, lisansı uygun mu? | §7.6 üçüncü kaynak |
 | 9 | OS kod imzalama v1'de yapılacak mı? (Apple Developer Program yıllık ücretli; Windows sertifikası ayrıca ücretli) | Kurulum deneyimi |
 | 10 | KFGQPC Uthmanic Script HAFS gibi alternatif Arapça fontların gömme lisansı | Font seçenekleri |

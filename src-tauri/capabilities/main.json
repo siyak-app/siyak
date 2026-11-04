@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Main window. Grants only the app's own commands, listening to the app's events and no plugin permissions (no fs, http or shell), see spec §14.3.",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "allow-list-surahs",
     "allow-get-surah",
@@ -32,6 +34,24 @@
     "allow-acknowledge-pack-terms",
     "allow-get-network-log",
     "allow-open-pack-source",
+    "allow-toggle-bookmark",
+    "allow-list-bookmarks",
+    "allow-upsert-note",
+    "allow-delete-note",
+    "allow-list-notes",
+    "allow-list-collections",
+    "allow-get-collection",
+    "allow-upsert-collection",
+    "allow-delete-collection",
+    "allow-add-collection-item",
+    "allow-update-collection-item",
+    "allow-move-collection-item",
+    "allow-remove-collection-item",
+    "allow-list-citation-styles",
+    "allow-format-citation",
+    "allow-export-collection-markdown",
+    "allow-export-user-data",
+    "allow-import-user-data",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

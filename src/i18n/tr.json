@@ -18,7 +18,11 @@
     "surahs": "Sureler",
     "filter_label": "Sureleri süz",
     "filter_placeholder": "Numara veya ad",
-    "no_matches": "Eşleşen sure yok."
+    "no_matches": "Eşleşen sure yok.",
+    "library": "Kitaplığınız",
+    "bookmarks": "Yer imleri",
+    "notes": "Notlar",
+    "collections": "Koleksiyonlar"
   },
   "reader": {
     "meccan": "Mekkî",
@@ -47,7 +51,15 @@
     "copy_reference": "Referansı kopyala",
     "copied": "Kopyalandı",
     "copy_failed": "Panoya kopyalanamadı.",
-    "compare": "Karşılaştır"
+    "compare": "Karşılaştır",
+    "add_bookmark": "Yer imi ekle",
+    "remove_bookmark": "Yer imini kaldır",
+    "bookmark_added": "Yer imi eklendi",
+    "bookmark_removed": "Yer imi kaldırıldı",
+    "bookmarked": "Yer imi var",
+    "has_note": "Notu var",
+    "note": "Not",
+    "copy_citation": "Atıf metnini kopyala"
   },
   "context_panel": {
     "label": "Bağlam paneli",
@@ -132,7 +144,22 @@
     "network_purpose_pack": "Paket indirme",
     "network_purpose_update": "Uygulama güncellemesi",
     "network_purpose_chat": "Sohbet",
-    "network_purpose_translate": "Çeviri"
+    "network_purpose_translate": "Çeviri",
+    "citation_style": "Atıf biçimi",
+    "tab_data": "Veriler",
+    "backup_title": "Yedek",
+    "backup_hint": "Yer imleri, notlar, koleksiyonlar ve kaydedilen tefsir çevirileri. API anahtarları ve sohbet geçmişi dahil değildir.",
+    "backup_export": "Yedek al…",
+    "backup_saved": "Kaydedildi: {{path}}",
+    "import_title": "Yedekten geri yükle",
+    "import_merge": "Mevcut verilere ekle…",
+    "import_merge_hint": "Her şeyi korur ve yeni olanları ekler. Aynı dosyayı iki kez yüklemek bir şey eklemez.",
+    "import_replace": "Her şeyin yerine koy…",
+    "import_replace_hint": "Önce yer imlerinizi, notlarınızı ve koleksiyonlarınızı siler. Önceki verilerin bir kopyası veritabanının yanında tutulur.",
+    "import_replace_confirm": "Evet, verilerimin yerine koy",
+    "import_report": "Eklenen: {{bookmarks}} yer imi, {{notes}} not, {{collections}} koleksiyon, {{items}} koleksiyon ögesi, {{translations}} tefsir çevirisi.",
+    "import_skipped_one": "{{count}} kayıt alınmadı: ayeti veya paketi burada yok.",
+    "import_skipped_other": "{{count}} kayıt alınmadı: ayetleri veya paketleri burada yok."
   },
   "compare": {
     "loading": "Yükleniyor…",
@@ -388,7 +415,10 @@
     "disk_space_insufficient": "Bu paket için diskte yeterli boş alan yok.",
     "install_cancelled": "Kurulum iptal edildi.",
     "terms_not_acknowledged": "İndirmeden önce lütfen paketin kullanım koşullarını okuyup kabul edin.",
-    "morphology_replace_required": "Bu morfoloji paketini kurmak, kurulu olanın yerini alır. Lütfen onaylayın."
+    "morphology_replace_required": "Bu morfoloji paketini kurmak, kurulu olanın yerini alır. Lütfen onaylayın.",
+    "invalid_input": "Bu giriş geçerli değil.",
+    "backup_invalid": "Bu dosya bir Siyak yedeği değil.",
+    "backup_unsupported": "Bu yedek uygulamanın daha yeni bir sürümüyle alınmış. Uygulamayı güncelleyip yeniden deneyin."
   },
   "term": {
     "lemma": {
@@ -437,5 +467,81 @@
     "packs_note": "İndirmeler arka planda sürer; paketleri istediğiniz zaman Paketler ekranından yönetebilirsiniz.",
     "packs_later": "Şimdi değil",
     "packs_continue": "Devam"
+  },
+  "bookmarks": {
+    "title": "Yer imleri",
+    "empty": "Henüz yer imi yok. Bir ayette b tuşuna basın ya da yer imi düğmesini kullanın."
+  },
+  "notes": {
+    "title": "Notlar",
+    "empty": "Henüz not yok. Yazmak için bir ayette n tuşuna basın.",
+    "select_verse": "Notlarını görmek ve yazmak için bir ayet seçin.",
+    "none_for_verse": "Bu ayette henüz not yok.",
+    "label": "Notlarınız",
+    "new": "Yeni not",
+    "body": "Not metni",
+    "placeholder": "Notunuzu yazın. Markdown kullanabilirsiniz.",
+    "through": "Şu ayete kadar",
+    "save": "Notu kaydet",
+    "cancel": "Vazgeç",
+    "edit": "Düzenle",
+    "delete": "Sil",
+    "delete_confirm": "Evet, sil",
+    "save_hint": "Ctrl veya ⌘ + Enter ile kaydedilir.",
+    "open_verse": "{{reference}} ayetini aç"
+  },
+  "collections": {
+    "title": "Koleksiyonlar",
+    "intro": "Bir araştırma konusu, bir koleksiyon: ayetler, notlar, kökler ve tefsir parçaları, sizin seçtiğiniz sırayla.",
+    "empty": "Henüz koleksiyon yok.",
+    "new_title": "Yeni koleksiyonun adı",
+    "create": "Oluştur",
+    "item_count_one": "{{count}} öge",
+    "item_count_other": "{{count}} öge",
+    "add": "Koleksiyona ekle",
+    "add_root": "{{root}} kökünü koleksiyona ekle",
+    "add_lemma": "{{lemma}} sözcüğünü koleksiyona ekle",
+    "adding": "Eklenen: {{what}}",
+    "choose": "Bir koleksiyon seçin",
+    "annotation": "Bu öge için kısa not (isteğe bağlı)",
+    "added": "“{{title}}” koleksiyonuna eklendi.",
+    "open": "Koleksiyonu aç",
+    "close": "Kapat",
+    "none_yet": "Henüz koleksiyonunuz yok. İlkine aşağıdan bir ad verin.",
+    "create_and_add": "Oluştur ve ekle",
+    "back": "Tüm koleksiyonlar",
+    "rename": "Adı ve açıklamayı düzenle",
+    "name": "Ad",
+    "description": "Açıklama (Markdown, isteğe bağlı)",
+    "save": "Kaydet",
+    "cancel": "Vazgeç",
+    "delete": "Koleksiyonu sil",
+    "delete_confirm": "Evet, sil",
+    "export": "Markdown olarak dışa aktar…",
+    "exported": "Kaydedildi: {{path}}",
+    "no_items": "Burada henüz bir şey yok. Okurken, ararken ya da bir sözcükte “Koleksiyona ekle”yi kullanın.",
+    "items": "Koleksiyonun ögeleri",
+    "drag": "{{item}} ögesini taşı",
+    "move_up": "Yukarı taşı",
+    "move_down": "Aşağı taşı",
+    "remove": "Koleksiyondan çıkar",
+    "annotation_label": "Kısa not",
+    "annotation_placeholder": "Kısa bir not ekleyin…",
+    "note_item": "Not",
+    "tafsir_item": "Tefsir",
+    "unavailable": "Bu içerik şu anda yok. Paketi kaldırılmış olabilir.",
+    "note_gone": "Bu not silinmiş.",
+    "drag_instructions": "Bir ögeyi almak için boşluk veya enter tuşuna basın. Ok tuşlarıyla taşıyın; bırakmak için boşluk veya enter, vazgeçmek için escape tuşuna basın.",
+    "drag_start": "{{position}}. öge alındı.",
+    "drag_over": "{{position}}. öge şimdi {{over}}. sıranın üzerinde.",
+    "drag_end": "Öge {{over}}. sıraya bırakıldı.",
+    "drag_cancel": "Taşıma iptal edildi."
+  },
+  "markdown": {
+    "notes": "Notlar",
+    "bibliography": "Kaynakça",
+    "occurrences": "Geçtiği yer sayısı",
+    "source": "Kaynak",
+    "quran_text": "Kur'an metni"
   }
 }

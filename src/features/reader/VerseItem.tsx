@@ -1,3 +1,4 @@
+import { BookmarkIcon, NotebookPenIcon } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,6 +27,9 @@ export const VerseItem = memo(function VerseItem({
   highlighted = false,
   tabStop = false,
   onCompare,
+  bookmarked = false,
+  noted = false,
+  onBookmark,
 }: {
   verse: VerseWithTranslations;
   /** The shown translation packs by id. */
@@ -38,6 +42,12 @@ export const VerseItem = memo(function VerseItem({
   tabStop?: boolean;
   /** Opens the verse on the compare screen. */
   onCompare?: (verse: VerseWithTranslations) => void;
+  /** Whether the verse has a bookmark. */
+  bookmarked?: boolean;
+  /** Whether one of the user's notes touches the verse. */
+  noted?: boolean;
+  /** Toggles the verse's bookmark. */
+  onBookmark?: (verse: VerseWithTranslations) => void;
 }) {
   const { t } = useTranslation();
   const mode = useUiStore((state) => state.preferences["reader.actions"]);
@@ -53,6 +63,8 @@ export const VerseItem = memo(function VerseItem({
       titles={titles}
       mode={mode}
       onCompare={onCompare}
+      bookmarked={bookmarked}
+      onBookmark={onBookmark}
     />
   );
   return (
@@ -63,12 +75,28 @@ export const VerseItem = memo(function VerseItem({
       data-selected={selected || undefined}
       className="group/verse flex gap-4 rounded-lg border-b border-border px-2 py-6 outline-none focus-visible:ring-2 focus-visible:ring-ring data-highlighted:animate-verse-highlight data-selected:bg-muted/60"
     >
-      <span
-        aria-hidden
-        className="mt-2 flex size-7 shrink-0 items-center justify-center rounded-full border text-xs text-muted-foreground tabular-nums"
-      >
-        {verse.ayah}
-      </span>
+      <div className="mt-2 flex shrink-0 flex-col items-center gap-1.5">
+        <span
+          aria-hidden
+          className="flex size-7 items-center justify-center rounded-full border text-xs text-muted-foreground tabular-nums"
+        >
+          {verse.ayah}
+        </span>
+        {bookmarked && (
+          <BookmarkIcon
+            role="img"
+            aria-label={t("verse_actions.bookmarked")}
+            className="size-3.5 fill-current text-primary"
+          />
+        )}
+        {noted && (
+          <NotebookPenIcon
+            role="img"
+            aria-label={t("verse_actions.has_note")}
+            className="size-3.5 text-muted-foreground"
+          />
+        )}
+      </div>
       <div className="min-w-0 flex-1 space-y-3">
         <VerseArabic verse={verse} />
         {verse.translations.map((translation) => (

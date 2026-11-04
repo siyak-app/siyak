@@ -71,6 +71,9 @@ const versesOf = (number: number, count: number, ids: readonly string[]): VerseW
 let current: { surah: number; ayah?: number } = { surah: 1 };
 
 const navigate = vi.fn();
+const toggleBookmark = vi.fn();
+let bookmarks: { verse: { id: number } }[] = [];
+let notes: { verse_from: number; verse_to: number }[] = [];
 vi.mock("@tanstack/react-router", () => ({
   useParams: () => current,
   useNavigate: () => navigate,
@@ -97,6 +100,11 @@ vi.mock("@/lib/queries", () => ({
     isPending: false,
     isError: false,
   }),
+  useBookmarks: () => ({ data: bookmarks }),
+  useNotes: () => ({ data: notes }),
+  useToggleBookmark: () => ({ mutate: toggleBookmark }),
+  useSurahs: () => ({ data: Object.values(SURAHS) }),
+  fetchCitation: vi.fn(),
   appErrorCode: () => undefined,
 }));
 
@@ -353,6 +361,58 @@ describe("ReaderView", () => {
         to: "/compare/$surah/$range",
         params: { surah: 1, range: { from: 3, to: 3 } },
       });
+    });
+
+    it("toggles the bookmark with b and says so", () => {
+      toggleBookmark.mockClear();
+      toggleBookmark.mockImplementation(
+        (_id: number, options: { onSuccess: (bookmarked: boolean) => void }) => {
+          options.onSuccess(true);
+        },
+      );
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:3" });
+      verse.focus();
+      fireEvent.keyDown(verse, { key: "b" });
+      expect(toggleBookmark).toHaveBeenCalledWith(1003, expect.anything());
+      expect(useAnnouncement.getState().message).toBe("Bookmark added");
+    });
+
+    it("starts a note on the Notes tab with n", () => {
+      useUiStore.getState().setPreference("layout.right_panel", {
+        ...DEFAULT_PREFERENCES["layout.right_panel"],
+        collapsed: true,
+      });
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:3" });
+      verse.focus();
+      fireEvent.keyDown(verse, { key: "n" });
+      const state = useUiStore.getState();
+      expect(state.selectedVerse).toEqual({ surah: 1, ayah: 3 });
+      expect(state.noteFocusPending).toBe(true);
+      expect(state.preferences["layout.right_panel"]).toMatchObject({
+        collapsed: false,
+        tab: "notes",
+      });
+    });
+
+    it("marks verses with a bookmark or a note", () => {
+      bookmarks = [{ verse: { id: 1002 } }];
+      notes = [{ verse_from: 1003, verse_to: 1004 }];
+      show(1);
+      const marks = (ayah: number) => {
+        const verse = within(screen.getByRole("article", { name: `Verse 1:${String(ayah)}` }));
+        return [
+          verse.queryByRole("img", { name: "Bookmarked" }) !== null,
+          verse.queryByRole("img", { name: "Has a note" }) !== null,
+        ];
+      };
+      expect(marks(2)).toEqual([true, false]);
+      expect(marks(3)).toEqual([false, true]);
+      expect(marks(4)).toEqual([false, true]);
+      expect(marks(5)).toEqual([false, false]);
+      bookmarks = [];
+      notes = [];
     });
 
     it("opens the verse in the context panel on Enter", () => {

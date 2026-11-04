@@ -116,6 +116,69 @@ export const commands = {
 	 *  from the webview.
 	 */
 	openPackSource: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("open_pack_source", { id })),
+	/**  Bookmarks the verse, or removes its bookmark. Returns whether it is now bookmarked. */
+	toggleBookmark: (verseId: number) => typedError<boolean, AppError>(__TAURI_INVOKE("toggle_bookmark", { verseId })),
+	/**  Every bookmark with its verse, newest first. */
+	listBookmarks: (translationIds: string[]) => typedError<BookmarkedVerse[], AppError>(__TAURI_INVOKE("list_bookmarks", { translationIds })),
+	/**  Creates or replaces a note and returns it. */
+	upsertNote: (note: NoteInput) => typedError<Note, AppError>(__TAURI_INVOKE("upsert_note", { note })),
+	/**  Deletes a note and its place in any collection. */
+	deleteNote: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("delete_note", { id })),
+	/**  The notes touching `range`, or all of them with the most recently changed first. */
+	listNotes: (range: {
+	/**  First verse. */
+	from: number,
+	/**  Last verse. */
+	to: number,
+} | null) => typedError<Note[], AppError>(__TAURI_INVOKE("list_notes", { range })),
+	/**  Every collection, the most recently changed first. */
+	listCollections: () => typedError<CollectionSummary[], AppError>(__TAURI_INVOKE("list_collections")),
+	/**  A collection with the content of its items, verses with the given translations. */
+	getCollection: (id: number, translationIds: string[]) => typedError<Collection, AppError>(__TAURI_INVOKE("get_collection", { id, translationIds })),
+	/**  Creates or changes a collection and returns it. */
+	upsertCollection: (collection: CollectionInput) => typedError<CollectionSummary, AppError>(__TAURI_INVOKE("upsert_collection", { collection })),
+	/**  Deletes a collection and its items; the notes themselves stay. */
+	deleteCollection: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("delete_collection", { id })),
+	/**  Adds an item at the end of a collection and returns its id. */
+	addCollectionItem: (collectionId: number, item: ItemRef, annotation: string | null) => typedError<number, AppError>(__TAURI_INVOKE("add_collection_item", { collectionId, item, annotation })),
+	/**  Changes an item's annotation. */
+	updateCollectionItem: (id: number, annotation: string | null) => typedError<null, AppError>(__TAURI_INVOKE("update_collection_item", { id, annotation })),
+	/**  Moves an item to `to_index` in its collection (0 is first). */
+	moveCollectionItem: (id: number, toIndex: number) => typedError<null, AppError>(__TAURI_INVOKE("move_collection_item", { id, toIndex })),
+	/**  Removes an item from its collection. */
+	removeCollectionItem: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("remove_collection_item", { id })),
+	/**  The available citation styles. */
+	listCitationStyles: () => typedError<CitationStyle[], AppError>(__TAURI_INVOKE("list_citation_styles")),
+	/**  Citation text for verses or a tafsir passage, one source per line. */
+	formatCitation: (reference: CitationRef, style: string) => typedError<string, AppError>(__TAURI_INVOKE("format_citation", { reference, style })),
+	/**
+	 *  Saves a collection as Markdown where the user chooses. Returns the path, or
+	 *  `None` if the user cancelled.
+	 */
+	exportCollectionMarkdown: (id: number, translationIds: string[], labels: MarkdownLabels, style: string) => typedError<string | null, AppError>(__TAURI_INVOKE("export_collection_markdown", { id, translationIds, labels, style })),
+	/**
+	 *  Saves the backup where the user chooses. Returns the path, or `None` if the
+	 *  user cancelled.
+	 */
+	exportUserData: () => typedError<string | null, AppError>(__TAURI_INVOKE("export_user_data")),
+	/**
+	 *  Asks for a backup file and imports it. Returns the report, or `None` if the
+	 *  user cancelled.
+	 */
+	importUserData: (mode: ImportMode) => typedError<{
+	/**  Bookmarks added. */
+	bookmarks: number,
+	/**  Notes added. */
+	notes: number,
+	/**  Collections added. */
+	collections: number,
+	/**  Collection items added, also to collections that already existed. */
+	items: number,
+	/**  Tafsir translations added. */
+	tafsir_translations: number,
+	/**  Entries left out: unknown verses, tafsirs that are not installed, unreadable items. */
+	skipped: number,
+} | null, AppError>(__TAURI_INVOKE("import_user_data", { mode })),
 };
 
 /* Constants */
@@ -197,7 +260,24 @@ export type AppErrorCode =
 /**  The pack's terms must be acknowledged before its first download. */
 "terms_not_acknowledged" | 
 /**  Installing this morphology pack replaces the installed one and needs confirmation. */
-"morphology_replace_required";
+"morphology_replace_required" | 
+/**
+ *  A request names something that cannot exist: an empty note or title, a
+ *  reversed verse range, an unknown citation style.
+ */
+"invalid_input" | 
+/**  The chosen file is not a Siyak backup. */
+"backup_invalid" | 
+/**  The backup was written by a newer app version than this one. */
+"backup_unsupported";
+
+/**  A bookmark with its verse. */
+export type BookmarkedVerse = {
+	/**  The verse with the requested translations. */
+	verse: VerseWithTranslations,
+	/**  UTC time, `YYYY-MM-DDTHH:MM:SSZ`. */
+	created_at: string,
+};
 
 /**  One bundle of the Packs screen and of the first-launch card. */
 export type BundleView = {
@@ -231,6 +311,77 @@ export type Catalog = {
 	packs: PackView[],
 	/**  Bundles. */
 	bundles: BundleView[],
+};
+
+/**  What to cite. */
+export type CitationRef = 
+/**  Verses, with a line for the Quran and one per translation. */
+{ kind: "verses"; 
+/**  First verse, by global id. */
+from: number; 
+/**  Last verse, by global id. */
+to: number; 
+/**  The translations to cite. */
+translation_ids: string[] } | 
+/**  The commentary of a tafsir on a verse. */
+{ kind: "tafsir"; 
+/**  Tafsir pack id. */
+pack_id: string; 
+/**  Global id of the verse. */
+verse: number };
+
+/**  A citation style. */
+export type CitationStyle = {
+	/**  Stable id, the template's file name. */
+	id: string,
+	/**  Name to show. */
+	name: string,
+};
+
+/**  A collection with its items in order. */
+export type Collection = {
+	/**  The collection. */
+	summary: CollectionSummary,
+	/**  The items in the user's order. */
+	items: CollectionItem[],
+};
+
+/**  A collection to create (no `id`) or rename. */
+export type CollectionInput = {
+	/**  The collection to change, or `None` for a new one. */
+	id: number | null,
+	/**  Title; must not be blank. */
+	title: string,
+	/**  Markdown description. */
+	description: string | null,
+};
+
+/**  An item with its content. */
+export type CollectionItem = {
+	/**  Item id. */
+	id: number,
+	/**  What the item refers to. */
+	item: ItemRef,
+	/**  Short note on this item. */
+	annotation: string | null,
+	/**  The content it refers to. */
+	content: ItemContent,
+};
+
+/**  A collection without its items. */
+export type CollectionSummary = {
+	/**  Collection id. */
+	id: number,
+	/**  Title. */
+	title: string,
+	/**  Markdown description. */
+	description: string | null,
+	/**  Number of items. */
+	item_count: number,
+	/**  UTC time, `YYYY-MM-DDTHH:MM:SSZ`. */
+	created_at: string,
+	/**  UTC time, `YYYY-MM-DDTHH:MM:SSZ`. */
+	updated_at: string,
 };
 
 /**  A range of verses with the chosen translations and tafsirs (spec §13.3). */
@@ -317,6 +468,29 @@ export type CoreStatus = {
 	refresh_error: AppError | null,
 };
 
+/**  How an import treats what is already there. */
+export type ImportMode = 
+/**  Keep everything and add what is new. Importing the same file twice adds nothing. */
+"merge" | 
+/**  Delete bookmarks, notes, collections and the translation cache first. */
+"replace";
+
+/**  What an import did. */
+export type ImportReport = {
+	/**  Bookmarks added. */
+	bookmarks: number,
+	/**  Notes added. */
+	notes: number,
+	/**  Collections added. */
+	collections: number,
+	/**  Collection items added, also to collections that already existed. */
+	items: number,
+	/**  Tafsir translations added. */
+	tafsir_translations: number,
+	/**  Entries left out: unknown verses, tafsirs that are not installed, unreadable items. */
+	skipped: number,
+};
+
 /**
  *  Why a query that looks like a verse reference leads nowhere. The values are
  *  the `command_palette.errors` keys of the interface.
@@ -326,6 +500,63 @@ export type InvalidReference =
 "surah_out_of_range" | 
 /**  The surah has no such verse, or the range is reversed. */
 "ayah_out_of_range";
+
+/**  The content an item refers to, as it is now. */
+export type ItemContent = 
+/**  The verses, with the requested translations. */
+{ kind: "verse_range"; 
+/**  The verses in order. */
+verses: VerseWithTranslations[] } | 
+/**  The note, unless it has gone. */
+{ kind: "note"; 
+/**  The note. */
+note: Note | null } | 
+/**  The root, if the installed morphology pack has it. */
+{ kind: "root"; 
+/**  The root. */
+root: RootInfo | null } | 
+/**  The lemma, if the installed morphology pack has it. */
+{ kind: "lemma"; 
+/**  The lemma. */
+lemma: LemmaInfo | null } | 
+/**  The commentary, if the pack is installed and covers the verse. */
+{ kind: "tafsir"; 
+/**  The verse the item was added on. */
+verse: VerseRef | null; 
+/**  The tafsir pack. */
+tafsir: TafsirInfo | null; 
+/**  The passage covering the verse. */
+passage: TafsirPassage | null };
+
+/**
+ *  What a collection item refers to. Stored in `collection_items` as `kind`
+ *  and `ref_json` (the other fields), e.g. `{"from":262,"to":263}` (spec §5.5).
+ */
+export type ItemRef = 
+/**  A verse or a range of verses, by global id. */
+{ kind: "verse_range"; 
+/**  First verse. */
+from: number; 
+/**  Last verse. */
+to: number } | 
+/**  One of the user's notes. */
+{ kind: "note"; 
+/**  Note id. */
+id: number } | 
+/**  A root, e.g. `ر ح م`. */
+{ kind: "root"; 
+/**  Root text. */
+root: string } | 
+/**  A lemma, as in the morphology pack. */
+{ kind: "lemma"; 
+/**  Lemma text. */
+lemma: string } | 
+/**  The commentary of a tafsir on a verse. */
+{ kind: "tafsir"; 
+/**  Tafsir pack id. */
+pack_id: string; 
+/**  Global id of the verse. */
+verse: number };
 
 /**  What the app is doing with a pack right now. */
 export type JobView = 
@@ -374,6 +605,28 @@ export type LocalizedTitle = {
 	en: string | null,
 };
 
+/**  The interface's words for the Markdown file. */
+export type MarkdownLabels = {
+	/**  Interface language: picks the surah names and pack titles. */
+	language: string,
+	/**  Heading of the notes under a verse. */
+	notes: string,
+	/**  Heading of the bibliography. */
+	bibliography: string,
+	/**  Label of a root item. */
+	root: string,
+	/**  Label of a lemma item. */
+	lemma: string,
+	/**  Label of the occurrence count. */
+	occurrences: string,
+	/**  Label of the data source of a root or lemma. */
+	source: string,
+	/**  Shown for an item whose pack is not installed. */
+	unavailable: string,
+	/**  Label of the Quran text source in the bibliography. */
+	quran_text: string,
+};
+
 /**  The installed morphology pack (spec §5.3.1: its source is shown with the data). */
 export type MorphologyPack = {
 	/**  Pack id, e.g. `morphology.qac`. */
@@ -394,6 +647,38 @@ export type NetworkLogEntry = {
 	status: number | null,
 	/**  Response body bytes received (a float: 64-bit integers do not cross IPC). */
 	bytes: number | null,
+};
+
+/**  A note on a verse or a range of verses. */
+export type Note = {
+	/**  Note id. */
+	id: number,
+	/**  Global id of the first verse. */
+	verse_from: number,
+	/**  Global id of the last verse; the same as `verse_from` for a single verse. */
+	verse_to: number,
+	/**  The first verse. */
+	from: VerseRef,
+	/**  The last verse. */
+	to: VerseRef,
+	/**  Markdown. */
+	body: string,
+	/**  UTC time, `YYYY-MM-DDTHH:MM:SSZ`. */
+	created_at: string,
+	/**  UTC time, `YYYY-MM-DDTHH:MM:SSZ`. */
+	updated_at: string,
+};
+
+/**  A note to create (no `id`) or replace. */
+export type NoteInput = {
+	/**  The note to replace, or `None` for a new one. */
+	id: number | null,
+	/**  Global id of the first verse. */
+	verse_from: number,
+	/**  Global id of the last verse. */
+	verse_to: number,
+	/**  Markdown; must not be blank. */
+	body: string,
 };
 
 /**  A pack was installed. */
@@ -694,6 +979,14 @@ export type VacuumSizes = {
 	before: number | null,
 	/**  After. */
 	after: number | null,
+};
+
+/**  A range of global verse ids. */
+export type VerseIdRange = {
+	/**  First verse. */
+	from: number,
+	/**  Last verse. */
+	to: number,
 };
 
 /**  A verse by its surah and number. */

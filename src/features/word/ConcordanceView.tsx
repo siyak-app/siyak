@@ -1,4 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import {
+  AddToCollectionButton,
+  AddVerseButton,
+} from "@/features/collections/AddToCollectionButton";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -66,6 +70,15 @@ export function ConcordanceContent({
         <p role="status" className="text-sm text-muted-foreground">
           {t("concordance.summary", { count: occurrences, verses: verseCount })}
         </p>
+        <div>
+          <AddToCollectionButton
+            item={
+              lemma
+                ? { kind: "lemma", lemma: lemma.lemma }
+                : { kind: "root", root: root?.root ?? "" }
+            }
+          />
+        </div>
       </header>
       {(root !== null || lemmas.length > 1) && (
         <nav aria-label={t("concordance.narrow")} className="grid gap-1.5">
@@ -134,34 +147,37 @@ function VerseHit({ verse }: { verse: ConcordanceVerse }) {
   const surahs = useSurahs();
   const surah = surahs.data?.find((item) => item.number === verse.surah);
   return (
-    <Link
-      to="/read/$surah/$ayah"
-      params={{ surah: verse.surah, ayah: verse.ayah }}
-      className="grid gap-1 rounded-lg border p-3 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-    >
-      <span className="text-xs text-muted-foreground">
-        {surah
-          ? verseReference(surahName(surah, i18n.resolvedLanguage), verse)
-          : verseNumber(verse)}
-      </span>
-      <span dir="rtl" lang="ar" className="font-quran text-xl leading-loose">
-        {verse.words.map((word, index) => (
-          // The words of a verse never change order.
-          <span key={index}>
-            {index > 0 && " "}
-            {word.matched ? (
-              <mark className="rounded-sm bg-primary/15 text-foreground">{word.text_ar}</mark>
-            ) : (
-              word.text_ar
-            )}
-          </span>
-        ))}
-      </span>
-      {verse.translation && (
-        <span lang={verse.translation.lang ?? undefined} dir="auto" className="translation-text">
-          {verse.translation.text}
+    <div className="relative">
+      <AddVerseButton verse={verse} className="absolute end-2 top-2" />
+      <Link
+        to="/read/$surah/$ayah"
+        params={{ surah: verse.surah, ayah: verse.ayah }}
+        className="grid gap-1 rounded-lg border p-3 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <span className="text-xs text-muted-foreground">
+          {surah
+            ? verseReference(surahName(surah, i18n.resolvedLanguage), verse)
+            : verseNumber(verse)}
         </span>
-      )}
-    </Link>
+        <span dir="rtl" lang="ar" className="font-quran text-xl leading-loose">
+          {verse.words.map((word, index) => (
+            // The words of a verse never change order.
+            <span key={index}>
+              {index > 0 && " "}
+              {word.matched ? (
+                <mark className="rounded-sm bg-primary/15 text-foreground">{word.text_ar}</mark>
+              ) : (
+                word.text_ar
+              )}
+            </span>
+          ))}
+        </span>
+        {verse.translation && (
+          <span lang={verse.translation.lang ?? undefined} dir="auto" className="translation-text">
+            {verse.translation.text}
+          </span>
+        )}
+      </Link>
+    </div>
   );
 }

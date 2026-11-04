@@ -1,9 +1,17 @@
-import type { ContextTab } from "@/lib/settings";
+import type { ContextTab, VersePosition } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
 /** Whether the user has selected some text (a click then only ends the selection). */
 export function hasTextSelection(): boolean {
   return (window.getSelection()?.toString() ?? "") !== "";
+}
+
+/** Opens the Notes tab on a verse, ready to type a note. */
+export function openNoteEditor(verse: VersePosition) {
+  const { selectVerse, setNoteFocusPending } = useUiStore.getState();
+  selectVerse(verse);
+  setNoteFocusPending(true);
+  openContextPanel("notes");
 }
 
 /** Opens the context panel, on `tab` if given. */

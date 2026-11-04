@@ -24,6 +24,7 @@ const SAMPLE: Settings = {
   "ui.technical_terms": "inline",
   "search.mode_chips": true,
   "reader.citation_action": true,
+  "reader.citation_style": "apa",
   "typography.arabic": { size: 32, line_height: 2.4 },
   "typography.translation": { size: 18, line_height: 1.8 },
   "reader.last_position": { surah: 2, ayah: 255 },

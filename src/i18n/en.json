@@ -18,7 +18,11 @@
     "surahs": "Surahs",
     "filter_label": "Filter surahs",
     "filter_placeholder": "Number or name",
-    "no_matches": "No surah matches."
+    "no_matches": "No surah matches.",
+    "library": "Your library",
+    "bookmarks": "Bookmarks",
+    "notes": "Notes",
+    "collections": "Collections"
   },
   "reader": {
     "meccan": "Meccan",
@@ -47,7 +51,15 @@
     "copy_reference": "Copy reference",
     "copied": "Copied",
     "copy_failed": "Could not copy to the clipboard.",
-    "compare": "Compare"
+    "compare": "Compare",
+    "add_bookmark": "Add bookmark",
+    "remove_bookmark": "Remove bookmark",
+    "bookmark_added": "Bookmark added",
+    "bookmark_removed": "Bookmark removed",
+    "bookmarked": "Bookmarked",
+    "has_note": "Has a note",
+    "note": "Note",
+    "copy_citation": "Copy citation"
   },
   "context_panel": {
     "label": "Context panel",
@@ -132,7 +144,22 @@
     "network_purpose_pack": "Pack download",
     "network_purpose_update": "App update",
     "network_purpose_chat": "Chat",
-    "network_purpose_translate": "Translation"
+    "network_purpose_translate": "Translation",
+    "citation_style": "Citation style",
+    "tab_data": "Data",
+    "backup_title": "Backup",
+    "backup_hint": "Bookmarks, notes, collections and saved tafsir translations. API keys and chat history are not included.",
+    "backup_export": "Save a backup…",
+    "backup_saved": "Saved to {{path}}",
+    "import_title": "Restore from a backup",
+    "import_merge": "Add to what is here…",
+    "import_merge_hint": "Keeps everything and adds what is new. Importing the same file twice adds nothing.",
+    "import_replace": "Replace everything…",
+    "import_replace_hint": "Deletes your bookmarks, notes and collections first. A copy of the previous data is kept next to the database.",
+    "import_replace_confirm": "Yes, replace my data",
+    "import_report": "Added: {{bookmarks}} bookmarks, {{notes}} notes, {{collections}} collections, {{items}} collection items, {{translations}} tafsir translations.",
+    "import_skipped_one": "{{count}} entry was left out: its verse or pack is not available here.",
+    "import_skipped_other": "{{count}} entries were left out: their verses or packs are not available here."
   },
   "compare": {
     "loading": "Loading…",
@@ -388,7 +415,10 @@
     "disk_space_insufficient": "There is not enough free disk space for this pack.",
     "install_cancelled": "The installation was cancelled.",
     "terms_not_acknowledged": "Please read and accept the pack's terms before downloading it.",
-    "morphology_replace_required": "Installing this morphology pack replaces the one already installed. Please confirm."
+    "morphology_replace_required": "Installing this morphology pack replaces the one already installed. Please confirm.",
+    "invalid_input": "That entry is not valid.",
+    "backup_invalid": "This file is not a Siyak backup.",
+    "backup_unsupported": "This backup was made by a newer version of the app. Update the app and try again."
   },
   "term": {
     "lemma": {
@@ -437,5 +467,81 @@
     "packs_note": "Downloads continue in the background; you can manage packs any time from the Packs screen.",
     "packs_later": "Not now",
     "packs_continue": "Continue"
+  },
+  "bookmarks": {
+    "title": "Bookmarks",
+    "empty": "No bookmarks yet. Press b on a verse, or use its bookmark button."
+  },
+  "notes": {
+    "title": "Notes",
+    "empty": "No notes yet. Press n on a verse to write one.",
+    "select_verse": "Select a verse to see and write its notes.",
+    "none_for_verse": "No notes on this verse yet.",
+    "label": "Your notes",
+    "new": "New note",
+    "body": "Note text",
+    "placeholder": "Write a note. Markdown is supported.",
+    "through": "Through verse",
+    "save": "Save note",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "delete_confirm": "Yes, delete",
+    "save_hint": "Ctrl or ⌘ + Enter saves.",
+    "open_verse": "Open {{reference}}"
+  },
+  "collections": {
+    "title": "Collections",
+    "intro": "One research topic, one collection: verses, notes, roots and tafsir passages in the order you choose.",
+    "empty": "No collections yet.",
+    "new_title": "New collection name",
+    "create": "Create",
+    "item_count_one": "{{count}} item",
+    "item_count_other": "{{count}} items",
+    "add": "Add to collection",
+    "add_root": "Add root {{root}} to a collection",
+    "add_lemma": "Add {{lemma}} to a collection",
+    "adding": "Adding {{what}}",
+    "choose": "Choose a collection",
+    "annotation": "Short note on this item (optional)",
+    "added": "Added to “{{title}}”.",
+    "open": "Open the collection",
+    "close": "Close",
+    "none_yet": "You have no collections yet. Name your first one below.",
+    "create_and_add": "Create and add",
+    "back": "All collections",
+    "rename": "Edit name and description",
+    "name": "Name",
+    "description": "Description (Markdown, optional)",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete collection",
+    "delete_confirm": "Yes, delete it",
+    "export": "Export as Markdown…",
+    "exported": "Saved to {{path}}",
+    "no_items": "Nothing here yet. Use “Add to collection” while reading, searching or on a word.",
+    "items": "Items of the collection",
+    "drag": "Reorder {{item}}",
+    "move_up": "Move up",
+    "move_down": "Move down",
+    "remove": "Remove from the collection",
+    "annotation_label": "Short note",
+    "annotation_placeholder": "Add a short note…",
+    "note_item": "Note",
+    "tafsir_item": "Tafsir",
+    "unavailable": "This content is not available. Its pack may have been removed.",
+    "note_gone": "This note has been deleted.",
+    "drag_instructions": "To pick up an item, press space or enter. Move it with the arrow keys, press space or enter to drop it, or escape to cancel.",
+    "drag_start": "Picked up item {{position}}.",
+    "drag_over": "Item {{position}} is now over position {{over}}.",
+    "drag_end": "Item dropped at position {{over}}.",
+    "drag_cancel": "Move cancelled."
+  },
+  "markdown": {
+    "notes": "Notes",
+    "bibliography": "Bibliography",
+    "occurrences": "Occurrences",
+    "source": "Source",
+    "quran_text": "Quran text"
   }
 }

@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { AddVerseButton } from "@/features/collections/AddToCollectionButton";
 import { ArrowRightIcon } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -333,30 +334,33 @@ function Hit({ hit }: { hit: SearchHit }) {
   const reference = surah ? verseReference(surahName(surah, language), hit) : verseNumber(hit);
   const isArabic = hit.pack_id === null;
   return (
-    <Link
-      to="/read/$surah/$ayah"
-      params={{ surah: hit.surah, ayah: hit.ayah }}
-      className="grid gap-1 rounded-lg border p-3 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-    >
-      <span className="text-xs text-muted-foreground">
-        {pack ? `${reference} · ${translationTitle(pack, language)}` : reference}
-      </span>
-      <span
-        dir={isArabic ? "rtl" : (pack?.dir ?? "auto")}
-        lang={isArabic ? "ar" : (pack?.lang ?? undefined)}
-        className={isArabic ? "font-quran text-xl leading-loose" : "translation-text"}
+    <div className="relative">
+      <AddVerseButton verse={hit} className="absolute end-2 top-2" />
+      <Link
+        to="/read/$surah/$ayah"
+        params={{ surah: hit.surah, ayah: hit.ayah }}
+        className="grid gap-1 rounded-lg border p-3 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
-        {hit.parts.map((part, index) =>
-          part.matched ? (
-            // The parts of one result never change order.
-            <mark key={index} className="rounded-sm bg-primary/15 text-foreground">
-              {part.text}
-            </mark>
-          ) : (
-            <span key={index}>{part.text}</span>
-          ),
-        )}
-      </span>
-    </Link>
+        <span className="text-xs text-muted-foreground">
+          {pack ? `${reference} · ${translationTitle(pack, language)}` : reference}
+        </span>
+        <span
+          dir={isArabic ? "rtl" : (pack?.dir ?? "auto")}
+          lang={isArabic ? "ar" : (pack?.lang ?? undefined)}
+          className={isArabic ? "font-quran text-xl leading-loose" : "translation-text"}
+        >
+          {hit.parts.map((part, index) =>
+            part.matched ? (
+              // The parts of one result never change order.
+              <mark key={index} className="rounded-sm bg-primary/15 text-foreground">
+                {part.text}
+              </mark>
+            ) : (
+              <span key={index}>{part.text}</span>
+            ),
+          )}
+        </span>
+      </Link>
+    </div>
   );
 }

@@ -4,6 +4,7 @@
 //! access live entirely in this crate (spec §3). See `ARCHITECTURE.md` for the
 //! module map.
 
+pub mod collections;
 pub mod commands;
 pub mod db;
 pub mod embed;
@@ -12,6 +13,7 @@ pub mod export;
 pub mod llm;
 pub mod morphology;
 pub mod net;
+pub mod notes;
 pub mod packs;
 pub mod related;
 pub mod search;
@@ -101,6 +103,8 @@ pub fn run() {
 
     let builder = commands::builder();
     tauri::Builder::default()
+        // The dialogs are opened from Rust; the webview has no permission for them (spec §14.3).
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .setup(|app| {
             let state = open_state(app);

@@ -24,6 +24,9 @@
     "changelog": "git-cliff --output CHANGELOG.md"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-query": "^5.104.5",
     "@tanstack/react-router": "^1.170.45",
     "@tanstack/react-virtual": "^3.14.21",
@@ -37,6 +40,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-i18next": "^17.1.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.14.7",
     "zustand": "^5.0.15"
   },

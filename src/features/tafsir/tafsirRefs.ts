@@ -11,9 +11,20 @@ export function verseIdOf(surahs: readonly Surah[], verse: VersePosition): numbe
     .reduce((id, surah) => id + surah.ayah_count, verse.ayah);
 }
 
+/** The position of a global verse id; `null` if there is no such verse. */
+export function verseOfId(surahs: readonly Surah[], id: number): VersePosition | null {
+  let rest = id;
+  for (const surah of surahs) {
+    if (rest <= surah.ayah_count) return rest >= 1 ? { surah: surah.number, ayah: rest } : null;
+    rest -= surah.ayah_count;
+  }
+  return null;
+}
+
 /** A verse range such as "2:153–157"; ranges normally stay within a surah. */
 export function verseRange(from: VerseRef, to: VerseRef): string {
   const start = `${String(from.surah)}:${String(from.ayah)}`;
+  if (from.surah === to.surah && from.ayah === to.ayah) return start;
   if (from.surah !== to.surah) return `${start}–${String(to.surah)}:${String(to.ayah)}`;
   return `${start}–${String(to.ayah)}`;
 }

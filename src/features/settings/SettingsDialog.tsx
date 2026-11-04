@@ -15,13 +15,14 @@ import type { LanguagePreference } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
 import { AppearanceSettings } from "./AppearanceSettings";
+import { BackupSettings } from "./BackupSettings";
 import { DisplaySettings } from "./DisplaySettings";
 import { RadioField } from "./fields";
 import { PrivacySettings } from "./PrivacySettings";
 
 const LANGUAGES: readonly LanguagePreference[] = ["system", "tr", "en"];
 
-/** Settings: appearance, display & behaviour, the interface language and privacy. */
+/** Settings: appearance, display & behaviour, the interface language, data and privacy. */
 export function SettingsDialog() {
   const { t } = useTranslation();
   return (
@@ -41,6 +42,7 @@ export function SettingsDialog() {
             <TabsTrigger value="appearance">{t("settings.tab_appearance")}</TabsTrigger>
             <TabsTrigger value="display">{t("settings.tab_display")}</TabsTrigger>
             <TabsTrigger value="language">{t("settings.tab_language")}</TabsTrigger>
+            <TabsTrigger value="data">{t("settings.tab_data")}</TabsTrigger>
             <TabsTrigger value="privacy">{t("settings.tab_privacy")}</TabsTrigger>
           </TabsList>
           <div className="-mx-1 min-h-0 overflow-y-auto px-1 pt-3">
@@ -52,6 +54,9 @@ export function SettingsDialog() {
             </TabsContent>
             <TabsContent value="language">
               <LanguageSettings />
+            </TabsContent>
+            <TabsContent value="data">
+              <BackupSettings />
             </TabsContent>
             <TabsContent value="privacy">
               <PrivacySettings />
