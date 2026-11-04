@@ -860,9 +860,9 @@ Tüm komutlar `Result<T, AppError>` döner (`{ code, message }`). Tipler `specta
 
 | Alan | Komutlar |
 |---|---|
-| İçerik | `list_surahs`, `get_verses(surah, translation_ids[])`, `get_verse_words(verse_id)`, `get_compare(from, to, translation_ids[], tafsir_ids[])` |
+| İçerik | `list_surahs`, `get_verses(surah, translation_ids[])` (morfoloji paketi kuruluysa her ayetin kelimeleriyle), `get_verse_words(verse_id)`, `get_compare(from, to, translation_ids[], tafsir_ids[])` |
 | Tefsir | `list_tafsirs`, `get_tafsir(verse_id, pack_id)`, `get_tafsir_introduction(pack_id)`, `estimate_tafsir_translation(tafsir_id, paragraph_idx?, mode)`, `translate_tafsir(…, channel)` |
-| Morfoloji | `get_word(word_id)`, `concordance(root_id \| lemma_id, limit, offset)`, `search_roots(query)` |
+| Morfoloji | `get_morphology_pack`, `get_word(word_id)`, `concordance(root_id \| lemma_id, translation_id?, limit, offset)`, `search_roots(query)` |
 | Arama | `classify_query(query)`, `search_text(query, scope, pack_ids[], filters, limit)`, `search_semantic(query, limit)`, `semantic_status()` |
 | Çapraz ref. | `related_verses(verse_id)` → `{ semantic[], shared_roots[] }` |
 | Paketler | `fetch_manifest(force?)`, `install_pack(id)`, `install_bundle(id)`, `cancel_install(id)`, `uninstall_pack(id)` |

@@ -25,6 +25,18 @@ export function parseAyahParam(raw: string): number | null {
   return ayah <= MAX_AYAH ? ayah : null;
 }
 
+/** Parses the `:kind` segment of `/concordance/:kind/:id`, or `null`. */
+export function parseConcordanceKind(raw: string): "root" | "lemma" | null {
+  return raw === "root" || raw === "lemma" ? raw : null;
+}
+
+/** Parses the `:id` segment of `/concordance/:kind/:id`; whether it exists is the screen's to say. */
+export function parseIdParam(raw: string): number | null {
+  if (!POSITIVE_INTEGER.test(raw)) return null;
+  const id = Number(raw);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
 /** A verse range of a surah, e.g. the `153-157` of `/compare/2/153-157`. */
 export interface VerseRange {
   from: number;

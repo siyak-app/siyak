@@ -16,7 +16,8 @@ rules must not be broken. The full design, including features that are not built
 │ commands/ ──▶ db/ ──▶ content.db + user.db (SQLite)         │
 │ commands/packs ──▶ packs/ ──▶ net (allow-listed HTTP)       │
 │ commands/search ──▶ search (FTS5)                           │
-│ later: morphology, related, embed, llm, export, secrets     │
+│ commands/morphology ──▶ morphology (words, concordance)     │
+│ later: related, embed, llm, export, secrets                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -205,6 +206,6 @@ These hold in every change; a pull request that weakens one needs an ADR.
 | CI                                 | `.github/workflows/ci.yml`                                                                                                   |
 | the website                        | `website/src/content/docs/{en,tr}/`                                                                                          |
 
-Modules for later milestones (`morphology`, `related`, `embed`, `llm`, `export`,
+Modules for later milestones (`related`, `embed`, `llm`, `export`,
 `secrets`) already exist as documented, empty files; their `//!` comments say what they will
 hold and in which milestone.

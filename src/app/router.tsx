@@ -12,10 +12,18 @@ import { ReaderView } from "@/features/reader/ReaderView";
 import { SurahNotFound } from "@/features/reader/SurahNotFound";
 import { parseSearchParams } from "@/features/search/searchParams";
 import { SearchView } from "@/features/search/SearchView";
+import { ConcordanceView } from "@/features/word/ConcordanceView";
 import { useUiStore } from "@/stores/ui";
 
 import { AppShell } from "./layout/AppShell";
-import { formatRangeParam, parseAyahParam, parseRangeParam, parseSurahParam } from "./readParams";
+import {
+  formatRangeParam,
+  parseAyahParam,
+  parseConcordanceKind,
+  parseIdParam,
+  parseRangeParam,
+  parseSurahParam,
+} from "./readParams";
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -99,6 +107,26 @@ export const searchRoute = createRoute({
   },
 });
 
+/** `/concordance/:kind/:id`, e.g. `/concordance/root/12` (spec §13.3). */
+export const concordanceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/concordance/$kind/$id",
+  params: {
+    parse: ({ kind, id }) => {
+      const parsedKind = parseConcordanceKind(kind);
+      const parsedId = parseIdParam(id);
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router signals 404 by throwing
+      if (parsedKind === null || parsedId === null) throw notFound();
+      return { kind: parsedKind, id: parsedId };
+    },
+    stringify: ({ kind, id }) => ({ kind, id: String(id) }),
+  },
+  component: function ConcordanceRoute() {
+    const { kind, id } = concordanceRoute.useParams();
+    return <ConcordanceView target={{ kind, id }} />;
+  },
+});
+
 /**
  * Hash history: the app is served from local files inside the webview, where
  * there is no server to answer deep paths on reload.
@@ -110,6 +138,7 @@ export const router = createRouter({
     readVerseRoute,
     compareRoute,
     searchRoute,
+    concordanceRoute,
   ]),
   history: createHashHistory(),
   defaultNotFoundComponent: SurahNotFound,

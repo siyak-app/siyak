@@ -70,6 +70,7 @@ const verse = (ayah: number, text: string) => ({
   ayah,
   juz: 1,
   text_uthmani: `arabic ${String(ayah)}`,
+  words: [],
   translations: text ? [{ pack_id: "en.pickthall", lang: "en", text }] : [],
 });
 

@@ -22,6 +22,7 @@ const VERSE: VerseWithTranslations = {
   ayah: 1,
   juz: 1,
   text_uthmani: "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+  words: [],
   translations: [{ pack_id: "en.pickthall", lang: "en", text: "In the name of Allah" }],
 };
 const PACKS = { "en.pickthall": { dir: "ltr", title: "Pickthall" } } as const;

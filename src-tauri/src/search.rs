@@ -6,7 +6,9 @@
 //! `normalize_vectors.json`. User input never reaches FTS5 as query syntax:
 //! [`fts_query`] rebuilds it from quoted strings.
 //!
-//! TODO(M5): root and lemma search. TODO(M7): semantic search via [`crate::embed`].
+//! Roots and lemmas are found by [`crate::morphology::search_roots`].
+//!
+//! TODO(M7): semantic search via [`crate::embed`].
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -136,7 +138,7 @@ pub fn classify_query(conn: &Connection, query: &str) -> AppResult<QueryClass> {
     Ok(QueryClass::Text)
 }
 
-fn is_arabic(c: char) -> bool {
+pub(crate) fn is_arabic(c: char) -> bool {
     matches!(
         c,
         '\u{0600}'..='\u{06FF}'
@@ -147,13 +149,16 @@ fn is_arabic(c: char) -> bool {
     )
 }
 
-/// Three or four dash-separated groups of one or two letters: `s-b-r`.
-fn is_latin_root(text: &str) -> bool {
+/// Three or four dash-separated groups of one or two letters, or an apostrophe
+/// for a hamza or ayn: `s-b-r`, `s-'-l`.
+pub(crate) fn is_latin_root(text: &str) -> bool {
     let groups: Vec<&str> = text.split('-').collect();
     (3..=4).contains(&groups.len())
         && groups.iter().all(|group| {
             (1..=2).contains(&group.chars().count())
-                && group.chars().all(|c| c.is_alphabetic() && !is_arabic(c))
+                && group
+                    .chars()
+                    .all(|c| matches!(c, '\'' | '`') || (c.is_alphabetic() && !is_arabic(c)))
         })
 }
 
@@ -749,7 +754,7 @@ mod tests {
         for query in ["صبر", "الصَّبْرِ", "ص ب ر"] {
             assert_eq!(classify(query), QueryClass::Arabic, "{query}");
         }
-        for query in ["s-b-r", "S-B-R", "k-t-b", "z-l-z-l"] {
+        for query in ["s-b-r", "S-B-R", "k-t-b", "z-l-z-l", "s-'-l"] {
             assert_eq!(classify(query), QueryClass::LatinRoot, "{query}");
         }
         for query in [

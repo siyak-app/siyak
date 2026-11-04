@@ -68,9 +68,9 @@ export interface Settings {
   "compare.columns": string[] | null;
   /** Verse actions as icons on hover, or always visible with labels. */
   "reader.actions": "hover" | "labeled";
-  /** Word click: a small card, or the full analysis in the right panel (M5). */
+  /** Word click: a small card, or the full analysis in the right panel. */
   "word.click": "card" | "panel";
-  /** Underline of clickable words (M5). */
+  /** Underline of clickable words. */
   "word.underline": "none" | "dotted";
   /** Technical terms: in tooltips only, or inline in parentheses. */
   "ui.technical_terms": "tooltip" | "inline";

@@ -60,6 +60,7 @@ const versesOf = (number: number, count: number, ids: readonly string[]): VerseW
     ayah: i + 1,
     juz: 1,
     text_uthmani: `آية ${String(i + 1)}`,
+    words: [],
     translations: ids.map((id) => ({
       pack_id: id,
       lang: PACKS.find((p) => p.id === id)?.lang ?? null,
@@ -321,6 +322,24 @@ describe("ReaderView", () => {
       expect(state.preferences["layout.right_panel"]).toMatchObject({
         collapsed: false,
         tab: "tafsir",
+      });
+    });
+
+    it("opens the verse on the Word tab with w", () => {
+      useUiStore.getState().setPreference("layout.right_panel", {
+        ...DEFAULT_PREFERENCES["layout.right_panel"],
+        collapsed: true,
+        tab: "tafsir",
+      });
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:3" });
+      verse.focus();
+      fireEvent.keyDown(verse, { key: "w" });
+      const state = useUiStore.getState();
+      expect(state.selectedVerse).toEqual({ surah: 1, ayah: 3 });
+      expect(state.preferences["layout.right_panel"]).toMatchObject({
+        collapsed: false,
+        tab: "word",
       });
     });
 

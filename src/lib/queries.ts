@@ -16,9 +16,13 @@ import {
   type AppErrorCode,
   type Catalog,
   type Compare,
+  type Concordance,
+  type ConcordanceTarget,
   type CoreStatus,
+  type MorphologyPack,
   type NetworkLogEntry,
   type QueryClass,
+  type RootSearch,
   type SearchFilters,
   type SearchResults,
   type SearchScope,
@@ -28,6 +32,8 @@ import {
   type TranslationInfo,
   type VacuumSizes,
   type VerseWithTranslations,
+  type VerseWord,
+  type WordDetail,
 } from "./bindings";
 
 /** The result shape every generated command returns. */
@@ -89,6 +95,16 @@ export interface SearchTextVariables {
   limit: number;
 }
 
+/** Variables of {@link useConcordance}. */
+export interface ConcordanceVariables {
+  /** The root or lemma. */
+  target: ConcordanceTarget;
+  /** The translation to show with each verse. */
+  translationId: string | null;
+  /** Most verses to return. */
+  limit: number;
+}
+
 /** Query keys, exported so callers can invalidate or prefill caches. */
 export const queryKeys = {
   /** Key of {@link useSurahs}. */
@@ -116,6 +132,16 @@ export const queryKeys = {
   classify: (query: string) => ["classify", query] as const,
   /** Key of {@link useSearchText}. */
   search: (variables: SearchTextVariables) => ["search", variables] as const,
+  /** Key of {@link useMorphologyPack}. */
+  morphologyPack: ["morphology-pack"] as const,
+  /** Key of {@link useVerseWords}. */
+  verseWords: (verseId: number | null) => ["verse-words", verseId] as const,
+  /** Key of {@link useWord}. */
+  word: (wordId: number) => ["word", wordId] as const,
+  /** Key of {@link useConcordance}. */
+  concordance: (variables: ConcordanceVariables) => ["concordance", variables] as const,
+  /** Key of {@link useSearchRoots}. */
+  searchRoots: (query: string) => ["search-roots", query] as const,
   /** Key of {@link useCatalog}. */
   catalog: ["catalog"] as const,
   /** Key of {@link useNetworkLog}. */
@@ -324,6 +350,58 @@ export function useCatalog(enabled = true) {
   });
 }
 
+/** The installed morphology pack; `null` without one. */
+export function useMorphologyPack() {
+  return useQuery<MorphologyPack | null>({
+    queryKey: queryKeys.morphologyPack,
+    queryFn: () => unwrap(commands.getMorphologyPack()),
+    staleTime: Infinity,
+  });
+}
+
+/** The words of a verse; waits while `verseId` is `null`. */
+export function useVerseWords(verseId: number | null) {
+  return useQuery<VerseWord[]>({
+    queryKey: queryKeys.verseWords(verseId),
+    queryFn: () => unwrap(commands.getVerseWords(verseId ?? 0)),
+    staleTime: Infinity,
+    enabled: verseId !== null,
+  });
+}
+
+/** A word with its full analysis. */
+export function useWord(wordId: number) {
+  return useQuery<WordDetail>({
+    queryKey: queryKeys.word(wordId),
+    queryFn: () => unwrap(commands.getWord(wordId)),
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * Every occurrence of a root or lemma. The shown verses stay while more load;
+ * the screen is remounted for another root, so it never shows the previous one.
+ */
+export function useConcordance(variables: ConcordanceVariables) {
+  return useQuery<Concordance>({
+    queryKey: queryKeys.concordance(variables),
+    queryFn: () =>
+      unwrap(commands.concordance(variables.target, variables.translationId, variables.limit, 0)),
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** Roots and lemmas matching a query. */
+export function useSearchRoots(query: string, enabled = true) {
+  return useQuery<RootSearch>({
+    queryKey: queryKeys.searchRoots(query),
+    queryFn: () => unwrap(commands.searchRoots(query)),
+    staleTime: Infinity,
+    enabled,
+  });
+}
+
 /** Fetches the manifest again, ignoring the one-hour cache. */
 export function useRefreshCatalog() {
   const queryClient = useQueryClient();
@@ -429,6 +507,11 @@ export function invalidateContent(queryClient: ReturnType<typeof useQueryClient>
       ["tafsir-introduction"] as const,
       ["search"] as const,
       ["compare"] as const,
+      queryKeys.morphologyPack,
+      ["verse-words"] as const,
+      ["word"] as const,
+      ["concordance"] as const,
+      ["search-roots"] as const,
       queryKeys.networkLog,
     ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
   );

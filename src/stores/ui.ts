@@ -33,12 +33,15 @@ interface UiState {
   preferences: UiPreferences;
   /** The verse the context panel follows; not persisted. */
   selectedVerse: VersePosition | null;
+  /** Id of the word the Word tab analyzes, in the selected verse; not persisted. */
+  selectedWord: number | null;
   /** Whether the Packs dialog is open; other screens may open it. Not persisted. */
   packsDialogOpen: boolean;
   hydrate: (preferences: UiPreferences) => void;
   setPreference: <K extends PreferenceKey>(key: K, value: UiPreferences[K]) => void;
   setPreferences: (values: Partial<UiPreferences>) => void;
   selectVerse: (verse: VersePosition | null) => void;
+  selectWord: (verse: VersePosition, wordId: number) => void;
   setPacksDialogOpen: (open: boolean) => void;
 }
 
@@ -50,6 +53,7 @@ export const useUiStore = create<UiState>()((set) => ({
   hydrated: false,
   preferences: DEFAULT_PREFERENCES,
   selectedVerse: null,
+  selectedWord: null,
   packsDialogOpen: false,
   hydrate: (preferences) => {
     set({ hydrated: true, preferences });
@@ -61,7 +65,14 @@ export const useUiStore = create<UiState>()((set) => ({
     set((state) => ({ preferences: { ...state.preferences, ...values } }));
   },
   selectVerse: (verse) => {
-    set({ selectedVerse: verse });
+    set((state) => {
+      const same =
+        state.selectedVerse?.surah === verse?.surah && state.selectedVerse?.ayah === verse?.ayah;
+      return { selectedVerse: verse, selectedWord: same ? state.selectedWord : null };
+    });
+  },
+  selectWord: (verse, wordId) => {
+    set({ selectedVerse: verse, selectedWord: wordId });
   },
   setPacksDialogOpen: (open) => {
     set({ packsDialogOpen: open });

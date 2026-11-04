@@ -11,6 +11,7 @@ import { surahName } from "@/features/reader/surahName";
 import { translationTitle } from "@/features/reader/translationTitle";
 import { verseNumber, verseReference } from "@/features/reader/verseCopy";
 import { RadioField } from "@/features/settings/fields";
+import { RootGroup, RootResults } from "@/features/word/RootResults";
 import type {
   RevelationType,
   SearchFilters,
@@ -32,8 +33,10 @@ const NO_FILTERS: SearchFilters = { surah_from: null, surah_to: null, revelation
 
 /**
  * The search screen (spec §7.1, §7.2). All shows the first matches of the
- * group the query belongs to, Text the full list with filters. The Arabic text
- * is searched for Arabic queries, the translations for anything else.
+ * group the query belongs to, Text the full list with filters, Root the
+ * concordance (spec §7.3). The Arabic text is searched for Arabic queries, the
+ * translations for anything else; in All, an Arabic query or a Latin-script
+ * root also looks for a root or dictionary form.
  */
 export function SearchView({ q, mode }: SearchParams) {
   const { t } = useTranslation();
@@ -59,16 +62,24 @@ export function SearchView({ q, mode }: SearchParams) {
       );
     } else if (result.kind === "invalid_reference") {
       body = <Note>{t(`command_palette.errors.${result.reason}`)}</Note>;
-    } else if (result.kind === "latin_root") {
-      body = <Note>{t("search.root_later")}</Note>;
+    } else if (mode === "root") {
+      body = <RootResults q={q} />;
     } else {
       const scope: SearchScope = result.kind === "arabic" ? "arabic" : "translations";
-      body =
-        mode === "text" ? (
-          <TextResults key={`${q}-${scope}`} q={q} scope={scope} />
-        ) : (
-          <AllResults q={q} scope={scope} />
+      if (mode === "text") {
+        body = <TextResults key={`${q}-${scope}`} q={q} scope={scope} />;
+      } else if (result.kind === "latin_root") {
+        body = <RootGroup q={q} emptyNote />;
+      } else if (result.kind === "arabic") {
+        body = (
+          <>
+            <RootGroup q={q} />
+            <AllResults q={q} scope={scope} />
+          </>
         );
+      } else {
+        body = <AllResults q={q} scope={scope} />;
+      }
     }
   }
 

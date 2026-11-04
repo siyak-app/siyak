@@ -22,7 +22,7 @@ type VerseKey = (u16, u16);
 
 /// `content_meta.core_version` of the dev seed (spec §6.2). Raise it whenever
 /// the generated rows change, so existing dev `content.db` files are refreshed.
-const CORE_VERSION: u32 = 3;
+const CORE_VERSION: u32 = 4;
 
 /// Version of the Tanzil text in the fixtures, as in their copyright block.
 const TANZIL_VERSION: &str = "1.1";
@@ -94,6 +94,7 @@ pub fn build(root: &Path) -> Result<()> {
         insert_translation(&tx, pack, &texts, &verse_ids)?;
     }
     insert_notices(&tx, &uthmani, &clean)?;
+    let words = insert_morphology(&tx, &fixtures, &verse_ids)?;
     tx.execute(
         "INSERT INTO content_meta (key, value) VALUES ('core_version', ?1), ('tanzil_version', ?2)",
         params![CORE_VERSION.to_string(), TANZIL_VERSION],
@@ -116,11 +117,12 @@ pub fn build(root: &Path) -> Result<()> {
 
     fs::rename(&tmp, &out)?;
     println!(
-        "wrote {} ({} surahs, {} verses, {} translation pack(s), {} bytes)",
+        "wrote {} ({} surahs, {} verses, {} translation pack(s), {} words, {} bytes)",
         out.display(),
         surahs.len(),
         verse_ids.len(),
         packs.len(),
+        words,
         fs::metadata(&out)?.len()
     );
     Ok(())
@@ -353,4 +355,109 @@ fn insert_translation(
         fts.execute(params![text, pack.id, verse_id])?;
     }
     Ok(())
+}
+
+/// Fills the morphology tables and the pack's row from `morphology.tsv`, an
+/// excerpt of the `morphology.qac` tables for the surahs in the seed. Ids follow
+/// the first occurrence, as in the pack. Returns the number of words.
+fn insert_morphology(
+    tx: &Transaction,
+    fixtures: &Path,
+    verse_ids: &BTreeMap<VerseKey, u32>,
+) -> Result<u32> {
+    tx.execute(
+        "INSERT INTO packs (id, type, lang, title, author, version, license, attribution,
+                            citation_json, installed_at, bundled)
+         VALUES ('morphology.qac', 'morphology', 'ar', ?1, 'Kais Dukes', '1.0.0',
+                 'GNU General Public License (QAC terms of use)',
+                 'Source: Quranic Arabic Corpus (corpus.quran.com)',
+                 '{\"url\":\"https://corpus.quran.com\"}', '2026-10-21T00:00:00Z', 0)",
+        ["Quranic Arabic Corpus: word morphology"],
+    )?;
+    tx.execute(
+        "INSERT INTO notices (id, source, title, body, url)
+         VALUES ('morphology.qac', 'morphology.qac', 'Quranic Arabic Corpus', ?1,
+                 'https://corpus.quran.com')",
+        [fs::read_to_string(fixtures.join("qac-NOTICE.txt"))?],
+    )?;
+
+    let path = fixtures.join("morphology.tsv");
+    let mut roots: BTreeMap<String, u32> = BTreeMap::new();
+    let mut lemmas: BTreeMap<String, u32> = BTreeMap::new();
+    let mut word_id = 0;
+    let mut current: Option<(u32, u16)> = None;
+    for row in tsv_rows(&path)? {
+        let column = |idx| field(&row, idx, &path);
+        let key: VerseKey = (column(0)?.parse()?, column(1)?.parse()?);
+        let verse_id = *verse_ids
+            .get(&key)
+            .ok_or_else(|| format!("morphology.tsv: no verse {key:?}"))?;
+        let position: u16 = column(2)?.parse()?;
+        if current != Some((verse_id, position)) {
+            current = Some((verse_id, position));
+            word_id += 1;
+            tx.execute(
+                "INSERT INTO words (id, verse_id, position, text_ar) VALUES (?1, ?2, ?3, ?4)",
+                params![word_id, verse_id, position, column(3)?],
+            )?;
+        }
+        let root_id = match column(9)? {
+            "" => None,
+            root => Some(intern(
+                tx,
+                &mut roots,
+                root,
+                "INSERT INTO roots (id, root) VALUES (?1, ?2)",
+            )?),
+        };
+        let lemma_id = match column(8)? {
+            "" => None,
+            lemma => {
+                let id = intern(
+                    tx,
+                    &mut lemmas,
+                    lemma,
+                    "INSERT INTO lemmas (id, lemma) VALUES (?1, ?2)",
+                )?;
+                tx.execute(
+                    "UPDATE lemmas SET root_id = ?2 WHERE id = ?1",
+                    params![id, root_id],
+                )?;
+                Some(id)
+            }
+        };
+        let features = column(10)?;
+        tx.execute(
+            "INSERT INTO word_segments
+               (word_id, idx, kind, text_ar, pos, lemma_id, root_id, features)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                word_id,
+                column(4)?.parse::<u16>()?,
+                column(5)?,
+                column(6)?,
+                column(7)?,
+                lemma_id,
+                root_id,
+                (!features.is_empty()).then_some(features),
+            ],
+        )?;
+    }
+    Ok(word_id)
+}
+
+/// The id of `value`, inserting it with the next id on its first occurrence.
+fn intern(
+    tx: &Transaction,
+    known: &mut BTreeMap<String, u32>,
+    value: &str,
+    insert: &str,
+) -> Result<u32> {
+    if let Some(&id) = known.get(value) {
+        return Ok(id);
+    }
+    let id = u32::try_from(known.len())? + 1;
+    tx.execute(insert, params![id, value])?;
+    known.insert(value.to_owned(), id);
+    Ok(id)
 }

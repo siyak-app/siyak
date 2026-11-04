@@ -10,6 +10,7 @@ const verse = (translations: VerseWithTranslations["translations"]): VerseWithTr
   ayah: 153,
   juz: 2,
   text_uthmani: "يَـٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟",
+  words: [],
   translations,
 });
 

@@ -24,6 +24,7 @@ import { recallTopAyah, rememberTopAyah } from "./scrollMemory";
 import { SurahHeader } from "./SurahHeader";
 import { surahName } from "./surahName";
 import { translationTitle } from "./translationTitle";
+import { hasTextSelection, openContextPanel } from "./verseSelection";
 import { type ShownPack, VerseItem } from "./VerseItem";
 import { estimateVerseHeight } from "./verseLayout";
 
@@ -84,20 +85,10 @@ function topVerse(
   return index === undefined ? undefined : items[index];
 }
 
-/** Whether the user has selected some text (a click then only ends the selection). */
-function hasTextSelection(): boolean {
-  return (window.getSelection()?.toString() ?? "") !== "";
-}
-
 /** Shows `verse` in the context panel, opening the panel (and `tab`) if needed. */
 function openInPanel(verse: VerseWithTranslations, tab?: ContextTab) {
-  const { preferences, setPreference, selectVerse } = useUiStore.getState();
-  selectVerse({ surah: verse.surah, ayah: verse.ayah });
-  const panel = preferences["layout.right_panel"];
-  const nextTab = tab ?? panel.tab;
-  if (panel.collapsed || nextTab !== panel.tab) {
-    setPreference("layout.right_panel", { ...panel, collapsed: false, tab: nextTab });
-  }
+  useUiStore.getState().selectVerse({ surah: verse.surah, ayah: verse.ayah });
+  openContextPanel(tab);
 }
 
 /** Opens a verse on the compare screen. Stable, as verses are memoized. */
@@ -118,8 +109,9 @@ function useCompareVerse() {
  * Keyboard navigation of the verse list (one tab stop, roving focus):
  * ↑/↓ move between verses, Home/End jump to the first or last, scrolling
  * the virtualized list as needed; Enter or a click opens the verse in the
- * context panel, `t` opens it on the Tafsir tab and `c` on the compare screen. Keys and clicks on a verse's buttons keep their usual
- * meaning, and a click that ends a text selection selects nothing, so text
+ * context panel, `t` opens it on the Tafsir tab, `w` on the Word tab and `c`
+ * on the compare screen. Keys and clicks on a verse's buttons and words keep
+ * their usual meaning, and a click that ends a text selection selects nothing, so text
  * can still be selected and copied.
  */
 function useVerseFocus(
@@ -162,6 +154,7 @@ function useVerseFocus(
     else if (event.key === "End") moveTo(items.length - 1);
     else if (event.key === "Enter") openInPanel(verse);
     else if (event.key === "t") openInPanel(verse, "tafsir");
+    else if (event.key === "w") openInPanel(verse, "word");
     else if (event.key === "c") compareVerse(verse);
     else return;
     event.preventDefault();
@@ -169,7 +162,7 @@ function useVerseFocus(
 
   const onClick = (event: MouseEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest("button, a, input") || hasTextSelection()) return;
+    if (target.closest("button, a, input, [data-word]") || hasTextSelection()) return;
     const index = Number(target.closest<HTMLElement>("[data-index]")?.dataset.index);
     const verse = items[index];
     if (verse) openInPanel(verse);

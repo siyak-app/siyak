@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { VerseArabic } from "@/features/word/VerseArabic";
 import type { TextDirection, VerseWithTranslations } from "@/lib/bindings";
 import { useUiStore } from "@/stores/ui";
 
@@ -69,9 +70,7 @@ export const VerseItem = memo(function VerseItem({
         {verse.ayah}
       </span>
       <div className="min-w-0 flex-1 space-y-3">
-        <p dir="rtl" lang="ar" className="arabic-text">
-          {verse.text_uthmani}
-        </p>
+        <VerseArabic verse={verse} />
         {verse.translations.map((translation) => (
           <p
             key={translation.pack_id}

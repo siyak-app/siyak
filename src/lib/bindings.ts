@@ -50,6 +50,24 @@ export const commands = {
 	 *  commentary of the given tafsirs, for the compare screen.
 	 */
 	getCompare: (from: number, to: number, translationIds: string[], tafsirIds: string[]) => typedError<Compare, AppError>(__TAURI_INVOKE("get_compare", { from, to, translationIds, tafsirIds })),
+	/**  The installed morphology pack, if any. */
+	getMorphologyPack: () => typedError<{
+	/**  Pack id, e.g. `morphology.qac`. */
+	id: string,
+	/**  Who to credit, e.g. `Quranic Arabic Corpus (corpus.quran.com)`. */
+	source: string,
+} | null, AppError>(__TAURI_INVOKE("get_morphology_pack")),
+	/**  The words of a verse, in order; empty without a morphology pack. */
+	getVerseWords: (verseId: number) => typedError<VerseWord[], AppError>(__TAURI_INVOKE("get_verse_words", { verseId })),
+	/**  A word with its full analysis. */
+	getWord: (wordId: number) => typedError<WordDetail, AppError>(__TAURI_INVOKE("get_word", { wordId })),
+	/**
+	 *  Every occurrence of a root or lemma: the summary and one page of verses,
+	 *  each with the given translation if it has one.
+	 */
+	concordance: (target: ConcordanceTarget, translationId: string | null, limit: number, offset: number) => typedError<Concordance, AppError>(__TAURI_INVOKE("concordance", { target, translationId, limit, offset })),
+	/**  Finds roots and lemmas by an Arabic query or a Latin-script root. */
+	searchRoots: (query: string) => typedError<RootSearch, AppError>(__TAURI_INVOKE("search_roots", { query })),
 	/**
 	 *  Classifies a query: a verse to jump to, Arabic letters, a Latin-script root
 	 *  or other text.
@@ -237,6 +255,58 @@ export type CompareTafsir = {
 	passages: TafsirPassage[],
 };
 
+/**  Every occurrence of a root or lemma (spec §7.3, §13.3). */
+export type Concordance = {
+	/**  The root, or the lemma's root. */
+	root: RootInfo | null,
+	/**  The lemma, when the concordance is narrowed to one. */
+	lemma: LemmaInfo | null,
+	/**
+	 *  The lemmas of the root, most frequent first; for a lemma without a
+	 *  root, the lemma alone.
+	 */
+	lemmas: LemmaInfo[],
+	/**  Words listed. */
+	occurrences: number,
+	/**  Verses containing them. */
+	verse_count: number,
+	/**  Occurrences per surah, in Mushaf order. */
+	by_surah: SurahCount[],
+	/**  The requested page of verses, in Mushaf order. */
+	verses: ConcordanceVerse[],
+};
+
+/**  What a concordance lists. */
+export type ConcordanceTarget = 
+/**  Every word with this root. */
+{ kind: "root"; 
+/**  Root id. */
+id: number } | 
+/**  Every word with this lemma. */
+{ kind: "lemma"; 
+/**  Lemma id. */
+id: number };
+
+/**  A verse of a concordance. */
+export type ConcordanceVerse = {
+	/**  Surah number. */
+	surah: number,
+	/**  Verse number within the surah. */
+	ayah: number,
+	/**  The words of the verse, in order. */
+	words: ConcordanceWord[],
+	/**  The requested translation, if the verse has one. */
+	translation: VerseTranslation | null,
+};
+
+/**  A word of a concordance verse. */
+export type ConcordanceWord = {
+	/**  Uthmani script. */
+	text_ar: string,
+	/**  Whether this word is what the concordance lists. */
+	matched: boolean,
+};
+
 /**  The core data in use and whether refreshing it failed at startup (spec §6.2). */
 export type CoreStatus = {
 	/**  `content_meta.core_version` of the content database. */
@@ -270,6 +340,16 @@ done: number | null;
 /**  Bytes in this phase. */
 total: number | null };
 
+/**  A lemma and how many words have it. */
+export type LemmaInfo = {
+	/**  Lemma id. */
+	id: number,
+	/**  As in the source, including a trailing homograph digit (`عَاد2`). */
+	lemma: string,
+	/**  Words with this lemma. */
+	occurrences: number,
+};
+
 /**  A `{ "tr": [...], "en": [...] }` list, e.g. `license_terms`. */
 export type LocalizedList = {
 	/**  Turkish items. */
@@ -292,6 +372,14 @@ export type LocalizedTitle = {
 	tr: string | null,
 	/**  English title. */
 	en: string | null,
+};
+
+/**  The installed morphology pack (spec §5.3.1: its source is shown with the data). */
+export type MorphologyPack = {
+	/**  Pack id, e.g. `morphology.qac`. */
+	id: string,
+	/**  Who to credit, e.g. `Quranic Arabic Corpus (corpus.quran.com)`. */
+	source: string,
 };
 
 /**  One connection log entry (spec §14.1): no URL path, query or content. */
@@ -429,6 +517,24 @@ export type RevelationType =
 /**  Revealed in Medina. */
 "medinan";
 
+/**  A root and how many words have it. */
+export type RootInfo = {
+	/**  Root id. */
+	id: number,
+	/**  Spaced Arabic letters, e.g. `ر ح م`. */
+	root: string,
+	/**  Words with this root. */
+	occurrences: number,
+};
+
+/**  Roots and lemmas matching a query. */
+export type RootSearch = {
+	/**  Matching roots, most frequent first. */
+	roots: RootInfo[],
+	/**  Matching lemmas, most frequent first. */
+	lemmas: LemmaInfo[],
+};
+
 /**  Limits on the verses searched (spec §7.2). */
 export type SearchFilters = {
 	/**  First surah. */
@@ -466,6 +572,15 @@ export type SearchScope =
 /**  The translations (`translations_fts`). */
 "translations";
 
+/**  Which part of its word a segment is. */
+export type SegmentKind = 
+/**  Before the stem. */
+"prefix" | 
+/**  The stem. */
+"stem" | 
+/**  After the stem. */
+"suffix";
+
 /**  A row of the `surahs` table. */
 export type Surah = {
 	/**  Surah number, 1..=114. */
@@ -485,6 +600,14 @@ export type Surah = {
 	 *  it is verse 1) and surah 9 (spec §5.1).
 	 */
 	bismillah: string | null,
+};
+
+/**  Occurrences within one surah. */
+export type SurahCount = {
+	/**  Surah number. */
+	surah: number,
+	/**  Words in this surah. */
+	occurrences: number,
 };
 
 /**  An installed tafsir pack. */
@@ -608,6 +731,71 @@ export type VerseWithTranslations = {
 	 *  for this verse are omitted.
 	 */
 	translations: VerseTranslation[],
+	/**
+	 *  The words of the verse, in order: filled by [`get_verses`] when a
+	 *  morphology pack is installed, so the reader renders them all at once.
+	 */
+	words: VerseWord[],
+};
+
+/**
+ *  One word of a verse. The words of a verse, joined by spaces, are its
+ *  `text_uthmani` (the pack's alignment gate checks this).
+ */
+export type VerseWord = {
+	/**  Global word id. */
+	id: number,
+	/**  Position in the verse, from 1. */
+	position: number,
+	/**  Uthmani script; two tokens for the four words merged by the alignment. */
+	text_ar: string,
+};
+
+/**  A word with its full analysis (spec §7.5). */
+export type WordDetail = {
+	/**  Global word id. */
+	id: number,
+	/**  Surah number. */
+	surah: number,
+	/**  Verse number within the surah. */
+	ayah: number,
+	/**  Position in the verse, from 1. */
+	position: number,
+	/**  Uthmani script. */
+	text_ar: string,
+	/**  Transliteration, if the pack has one. */
+	translit: string | null,
+	/**  English meaning, if the pack has one. */
+	gloss_en: string | null,
+	/**  Its segments, in order. */
+	segments: WordSegment[],
+};
+
+/**
+ *  One grammatical feature of a segment; both are the pack's stable codes
+ *  (`siyak-data/docs/pack-format.md` §7).
+ */
+export type WordFeature = {
+	/**  Feature key, e.g. `case`. */
+	key: string,
+	/**  Feature value, e.g. `GEN`. */
+	value: string,
+};
+
+/**  A prefix, stem or suffix of a word. */
+export type WordSegment = {
+	/**  Prefix, stem or suffix. */
+	kind: SegmentKind,
+	/**  The segment in Arabic. */
+	text_ar: string,
+	/**  Part-of-speech tag, e.g. `N`. */
+	pos: string,
+	/**  Its root, if it has one. */
+	root: RootInfo | null,
+	/**  Its lemma, if it has one. */
+	lemma: LemmaInfo | null,
+	/**  Its features, sorted by key. */
+	features: WordFeature[],
 };
 
 /* Tauri Specta runtime */

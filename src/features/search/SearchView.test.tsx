@@ -2,8 +2,15 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import i18n from "@/i18n";
-import type { QueryClass, SearchHit, SearchResults } from "@/lib/bindings";
+import type {
+  MorphologyPack,
+  QueryClass,
+  RootSearch,
+  SearchHit,
+  SearchResults,
+} from "@/lib/bindings";
 import type { SearchTextVariables } from "@/lib/queries";
 import { DEFAULT_PREFERENCES, useUiStore } from "@/stores/ui";
 
@@ -13,6 +20,10 @@ const navigate = vi.fn();
 let classified: QueryClass;
 let results: SearchResults;
 const searches: SearchTextVariables[] = [];
+let morphologyPack: MorphologyPack | null;
+let rootSearch: RootSearch;
+const ROOT = { id: 7, root: "ص ب ر", occurrences: 103 };
+const LEMMA = { id: 9, lemma: "صَبْر", occurrences: 20 };
 
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
@@ -42,6 +53,22 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("@/lib/queries", () => ({
+  useMorphologyPack: () => ({ data: morphologyPack }),
+  useSearchRoots: () => ({ data: rootSearch, isError: false }),
+  useOpenPackSource: () => ({ mutate: vi.fn() }),
+  useCatalog: () => ({ data: undefined }),
+  useConcordance: () => ({
+    data: {
+      root: rootSearch.roots[0] ?? null,
+      lemma: null,
+      lemmas: rootSearch.lemmas,
+      occurrences: 103,
+      verse_count: 90,
+      by_surah: [],
+      verses: [],
+    },
+    isError: false,
+  }),
   useClassifyQuery: () => ({ data: classified, isError: false }),
   useSearchText: (variables: SearchTextVariables) => {
     searches.push(variables);
@@ -99,6 +126,8 @@ describe("SearchView", () => {
     searches.length = 0;
     classified = { kind: "text" };
     results = { total: 1, hits: [TRANSLATION] };
+    morphologyPack = { id: "morphology.qac", source: "Quranic Arabic Corpus" };
+    rootSearch = { roots: [], lemmas: [] };
     await i18n.changeLanguage("en");
     useUiStore.getState().hydrate(DEFAULT_PREFERENCES);
   });
@@ -185,8 +214,8 @@ describe("SearchView", () => {
     second.unmount();
 
     classified = { kind: "latin_root" };
-    const third = render(<SearchView q="s-b-r" mode="all" />);
-    expect(screen.getByText("Root search arrives in a later version.")).toBeInTheDocument();
+    const third = render(<SearchView q="x-y-z" mode="all" />);
+    expect(screen.getByText(/No root or dictionary form matches/)).toBeInTheDocument();
     third.unmount();
 
     classified = { kind: "empty" };
@@ -207,5 +236,50 @@ describe("SearchView", () => {
       to: "/search",
       search: { q: "patience", mode: "text" },
     });
+  });
+
+  it("puts the root and dictionary form above the Arabic matches", () => {
+    classified = { kind: "arabic" };
+    rootSearch = { roots: [ROOT], lemmas: [LEMMA] };
+    render(<SearchView q="صبر" mode="all" />, { wrapper: TooltipProvider });
+    expect(screen.getByRole("link", { name: /ص ب ر/ })).toHaveAttribute(
+      "href",
+      "/concordance/root/7",
+    );
+    expect(screen.getByRole("link", { name: /صَبْر/ })).toHaveAttribute(
+      "href",
+      "/concordance/lemma/9",
+    );
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Roots and dictionary forms", "In the Arabic text"]);
+  });
+
+  it("shows the pack card instead of the root group without the pack", () => {
+    classified = { kind: "arabic" };
+    morphologyPack = null;
+    render(<SearchView q="صبر" mode="all" />, { wrapper: TooltipProvider });
+    expect(screen.getByRole("button", { name: "Open Packs" })).toBeInTheDocument();
+    expect(screen.getByText("In the Arabic text")).toBeInTheDocument();
+  });
+
+  it("opens the concordance in root mode when the query means one root", () => {
+    classified = { kind: "latin_root" };
+    rootSearch = { roots: [ROOT], lemmas: [] };
+    render(<SearchView q="s-b-r" mode="root" />, { wrapper: TooltipProvider });
+    expect(screen.getByRole("heading", { level: 2, name: "ص ب ر" })).toBeInTheDocument();
+    expect(screen.getByText("Occurrences: 103 · Verses: 90")).toBeInTheDocument();
+  });
+
+  it("offers a choice in root mode when the query means several", () => {
+    classified = { kind: "latin_root" };
+    rootSearch = { roots: [ROOT, { id: 8, root: "س ب ر", occurrences: 1 }], lemmas: [] };
+    render(<SearchView q="s-b-r" mode="root" />, { wrapper: TooltipProvider });
+    expect(screen.getAllByRole("link", { name: /ب ر/ })).toHaveLength(2);
+  });
+
+  it("searches the translations for a Latin root in Text mode", () => {
+    classified = { kind: "latin_root" };
+    render(<SearchView q="s-b-r" mode="text" />, { wrapper: TooltipProvider });
+    expect(searches[0]?.scope).toBe("translations");
   });
 });

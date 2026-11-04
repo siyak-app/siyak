@@ -15,6 +15,7 @@ use specta::Type;
 
 use super::{Migration, backup, connect, migrate, schema_version};
 use crate::error::{AppError, AppErrorCode, AppResult};
+use crate::morphology::VerseWord;
 
 /// File name of the content database inside the app data directory.
 pub const FILE_NAME: &str = "content.db";
@@ -188,6 +189,13 @@ fn replace_core_tables(conn: &mut Connection) -> AppResult<()> {
          DELETE FROM main.surahs;
          DELETE FROM main.notices;
 
+         -- Only the development seed carries morphology rows; a core.db has none,
+         -- and an installed pack keeps its rows.
+         DELETE FROM main.word_segments WHERE EXISTS (SELECT 1 FROM core.words);
+         DELETE FROM main.words WHERE EXISTS (SELECT 1 FROM core.words);
+         DELETE FROM main.lemmas WHERE EXISTS (SELECT 1 FROM core.words);
+         DELETE FROM main.roots WHERE EXISTS (SELECT 1 FROM core.words);
+
          INSERT INTO main.surahs
            (number, name_ar, name_tr, name_en, revelation_type, ayah_count, bismillah)
            SELECT number, name_ar, name_tr, name_en, revelation_type, ayah_count, bismillah
@@ -208,6 +216,10 @@ fn replace_core_tables(conn: &mut Connection) -> AppResult<()> {
            SELECT pack_id, verse_id, text FROM core.translations;
          INSERT INTO main.translations_fts (text, pack_id, verse_id)
            SELECT text, pack_id, verse_id FROM core.translations_fts;
+         INSERT INTO main.roots SELECT * FROM core.roots;
+         INSERT INTO main.lemmas SELECT * FROM core.lemmas;
+         INSERT INTO main.words SELECT * FROM core.words;
+         INSERT INTO main.word_segments SELECT * FROM core.word_segments;
          -- Keys only this database has (the debug `seed` marker) are kept.
          INSERT INTO main.content_meta (key, value)
            SELECT key, value FROM core.content_meta WHERE true
@@ -310,6 +322,9 @@ pub struct VerseWithTranslations {
     /// Translations in the order they were requested; packs without a row
     /// for this verse are omitted.
     pub translations: Vec<VerseTranslation>,
+    /// The words of the verse, in order: filled by [`get_verses`] when a
+    /// morphology pack is installed, so the reader renders them all at once.
+    pub words: Vec<VerseWord>,
 }
 
 /// An installed tafsir pack.
@@ -529,6 +544,7 @@ pub fn get_verses(
                 juz: row.get(3)?,
                 text_uthmani: row.get(4)?,
                 translations: Vec::new(),
+                words: Vec::new(),
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -559,6 +575,28 @@ pub fn get_verses(
                     text,
                 });
             }
+        }
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT w.verse_id, w.id, w.position, w.text_ar
+         FROM words w JOIN verses v ON v.id = w.verse_id
+         WHERE v.surah = ?1 ORDER BY w.verse_id, w.position",
+    )?;
+    let rows = stmt.query_map([surah], |row| {
+        Ok((
+            row.get::<_, u32>(0)?,
+            VerseWord {
+                id: row.get(1)?,
+                position: row.get(2)?,
+                text_ar: row.get(3)?,
+            },
+        ))
+    })?;
+    for row in rows {
+        let (verse_id, word) = row?;
+        if let Some(verse) = index.get(&verse_id).and_then(|&i| verses.get_mut(i)) {
+            verse.words.push(word);
         }
     }
     Ok(verses)
@@ -651,6 +689,7 @@ pub fn get_compare(
                 juz: row.get(3)?,
                 text_uthmani: row.get(4)?,
                 translations: Vec::new(),
+                words: Vec::new(),
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -916,6 +955,45 @@ mod tests {
             .unwrap();
         assert_eq!(count, 1);
         assert!(!path.with_extension("db.tmp").exists());
+    }
+
+    /// Installed morphology rows survive a refresh by a `core.db`, which has none;
+    /// the development seed brings its own.
+    #[test]
+    fn refresh_replaces_morphology_only_when_the_new_core_has_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let (old, new, bak) = (
+            dir.path().join("old.db"),
+            dir.path().join("new.db"),
+            dir.path().join("content.bak"),
+        );
+        write_core(&old, 1, "old");
+        let mut conn = Connection::open(&old).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        conn.execute_batch(
+            "INSERT INTO roots (id, root) VALUES (1, 'ق و ل');
+             INSERT INTO words (id, verse_id, position, text_ar) VALUES (1, 1, 1, 'pack');",
+        )
+        .unwrap();
+        write_core(&new, 2, "new");
+        assert!(refresh_core(&mut conn, &new, &bak).unwrap());
+        let words: Vec<String> = query(&conn, "SELECT text_ar FROM words");
+        assert_eq!(words, ["pack"]);
+
+        let newer = dir.path().join("newer.db");
+        write_core(&newer, 3, "newer");
+        let seed = Connection::open(&newer).unwrap();
+        seed.execute(
+            "INSERT INTO words (id, verse_id, position, text_ar) VALUES (5, 8, 1, 'seed')",
+            [],
+        )
+        .unwrap();
+        drop(seed);
+        assert!(refresh_core(&mut conn, &newer, &bak).unwrap());
+        let words: Vec<String> = query(&conn, "SELECT text_ar FROM words");
+        assert_eq!(words, ["seed"]);
+        let roots: Vec<String> = query(&conn, "SELECT root FROM roots");
+        assert!(roots.is_empty());
     }
 
     fn dev_db() -> Connection {

@@ -7,6 +7,7 @@
 //! Commands are `async` so Tauri runs them off the main (UI) thread.
 
 pub mod content;
+pub mod morphology;
 pub mod packs;
 pub mod search;
 pub mod settings;
@@ -32,6 +33,11 @@ pub fn builder() -> Builder<tauri::Wry> {
             content::get_tafsir,
             content::get_tafsir_introduction,
             content::get_compare,
+            morphology::get_morphology_pack,
+            morphology::get_verse_words,
+            morphology::get_word,
+            morphology::concordance,
+            morphology::search_roots,
             search::classify_query,
             search::search_text,
             settings::get_settings,

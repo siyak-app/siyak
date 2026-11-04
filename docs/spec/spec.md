@@ -859,9 +859,9 @@ All commands return `Result<T, AppError>` (`{ code, message }`). Types are expor
 
 | Area | Commands |
 |---|---|
-| Content | `list_surahs`, `get_verses(surah, translation_ids[])`, `get_verse_words(verse_id)`, `get_compare(from, to, translation_ids[], tafsir_ids[])` |
+| Content | `list_surahs`, `get_verses(surah, translation_ids[])` (with the words of each verse when a morphology pack is installed), `get_verse_words(verse_id)`, `get_compare(from, to, translation_ids[], tafsir_ids[])` |
 | Tafsir | `list_tafsirs`, `get_tafsir(verse_id, pack_id)`, `get_tafsir_introduction(pack_id)`, `estimate_tafsir_translation(tafsir_id, paragraph_idx?, mode)`, `translate_tafsir(…, channel)` |
-| Morphology | `get_word(word_id)`, `concordance(root_id \| lemma_id, limit, offset)`, `search_roots(query)` |
+| Morphology | `get_morphology_pack`, `get_word(word_id)`, `concordance(root_id \| lemma_id, translation_id?, limit, offset)`, `search_roots(query)` |
 | Search | `classify_query(query)`, `search_text(query, scope, pack_ids[], filters, limit)`, `search_semantic(query, limit)`, `semantic_status()` |
 | Cross-refs | `related_verses(verse_id)` → `{ semantic[], shared_roots[] }` |
 | Packs | `fetch_manifest(force?)`, `install_pack(id)`, `install_bundle(id)`, `cancel_install(id)`, `uninstall_pack(id)` |
