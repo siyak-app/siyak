@@ -20,6 +20,7 @@ pub const COMMAND_NAMES: &[&str] = &[
     "search_roots",
     "classify_query",
     "search_text",
+    "get_semantic_status",
     "get_settings",
     "set_setting",
     "set_settings",

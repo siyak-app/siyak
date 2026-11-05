@@ -78,6 +78,11 @@ export const commands = {
 	 *  `pack_ids` searches every installed translation.
 	 */
 	searchText: (query: string, scope: SearchScope, packIds: string[], filters: SearchFilters, limit: number) => typedError<SearchResults, AppError>(__TAURI_INVOKE("search_text", { query, scope, packIds, filters, limit })),
+	/**
+	 *  Whether semantic search and cross-references are available, and if not,
+	 *  what the user can do about it (install a pack, store a key).
+	 */
+	getSemanticStatus: () => typedError<SemanticStatus, AppError>(__TAURI_INVOKE("get_semantic_status")),
 	/**  Returns all stored settings as `key → JSON text`. */
 	getSettings: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("get_settings")),
 	/**  Stores a setting. `value` must be JSON text, e.g. `"\"tr\""` or `"{\"size\":20}"`. */
@@ -189,6 +194,20 @@ export const PACK_ERROR_EVENT = "pack://error" as const;
 export const PACK_PROGRESS_EVENT = "pack://progress" as const;
 
 /* Types */
+/**  Embedding APIs a vector pack can name. */
+export type ApiProvider = 
+/**  OpenAI embeddings. */
+"openai" | 
+/**  Voyage AI embeddings, the provider Anthropic recommends. */
+"voyage" | 
+/**  Google Gemini embeddings. */
+"gemini" | 
+/**
+ *  An OpenAI-compatible server at a user-entered address (Ollama, LM
+ *  Studio); may run on this computer.
+ */
+"openai_compatible";
+
 /**  Error returned by every command: `{ code, message }` on the frontend. */
 export type AppError = {
 	/**  Stable code the frontend maps to a translated message. */
@@ -271,7 +290,12 @@ export type AppErrorCode =
 /**  The chosen file is not a Siyak backup. */
 "backup_invalid" | 
 /**  The backup was written by a newer app version than this one. */
-"backup_unsupported";
+"backup_unsupported" | 
+/**
+ *  Semantic search needs a vector pack with a working embedder (spec §7.4);
+ *  `get_semantic_status` says what is missing.
+ */
+"semantic_unavailable";
 
 /**  A bookmark with its verse. */
 export type BookmarkedVerse = {
@@ -867,6 +891,49 @@ export type SegmentKind =
 "stem" | 
 /**  After the stem. */
 "suffix";
+
+/**  Why semantic features are, or are not, available. */
+export type SemanticStatus = 
+/**  No vector pack is installed. */
+{ state: "no_vector_pack" } | 
+/**  The metadata of `pack` is not valid. */
+{ state: "invalid"; 
+/**  The vector or model pack with the bad metadata. */
+pack: string } | 
+/**  The model pack the local vector pack needs is not installed. */
+{ state: "model_pack_missing"; 
+/**  The vector pack. */
+pack: string; 
+/**  The model pack to install. */
+model_pack: string } | 
+/**  The model pack embeds into a different space than the vectors. */
+{ state: "mismatch"; 
+/**  The vector pack. */
+pack: string; 
+/**  The installed model pack. */
+model_pack: string } | 
+/**  The provider's API key is not stored. */
+{ state: "key_missing"; 
+/**  The vector pack. */
+pack: string; 
+/**  The provider whose key is needed. */
+provider: ApiProvider } | 
+/**  The address of the OpenAI-compatible server is not entered. */
+{ state: "base_url_missing"; 
+/**  The vector pack. */
+pack: string } | 
+/**  This app version cannot run the pack's backend yet. */
+{ state: "not_built"; 
+/**  The vector pack. */
+pack: string; 
+/**  `local` or `api`. */
+backend: string } | 
+/**  Semantic features work. */
+{ state: "ready"; 
+/**  The vector pack. */
+pack: string; 
+/**  The provider queries are sent to; `None` if they stay on this computer. */
+provider: ApiProvider | null };
 
 /**  A row of the `surahs` table. */
 export type Surah = {

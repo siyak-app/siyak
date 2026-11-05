@@ -419,7 +419,8 @@
     "morphology_replace_required": "Bu morfoloji paketini kurmak, kurulu olanın yerini alır. Lütfen onaylayın.",
     "invalid_input": "Bu giriş geçerli değil.",
     "backup_invalid": "Bu dosya bir Siyak yedeği değil.",
-    "backup_unsupported": "Bu yedek uygulamanın daha yeni bir sürümüyle alınmış. Uygulamayı güncelleyip yeniden deneyin."
+    "backup_unsupported": "Bu yedek uygulamanın daha yeni bir sürümüyle alınmış. Uygulamayı güncelleyip yeniden deneyin.",
+    "semantic_unavailable": "Anlamına göre arama için bir anlamsal arama paketi gerekli. Paketler'den kurabilirsiniz."
   },
   "term": {
     "lemma": {

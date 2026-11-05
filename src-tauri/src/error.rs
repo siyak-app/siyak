@@ -79,6 +79,9 @@ pub enum AppErrorCode {
     BackupInvalid,
     /// The backup was written by a newer app version than this one.
     BackupUnsupported,
+    /// Semantic search needs a vector pack with a working embedder (spec §7.4);
+    /// `get_semantic_status` says what is missing.
+    SemanticUnavailable,
 }
 
 /// Error returned by every command: `{ code, message }` on the frontend.

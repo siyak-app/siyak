@@ -419,7 +419,8 @@
     "morphology_replace_required": "Installing this morphology pack replaces the one already installed. Please confirm.",
     "invalid_input": "That entry is not valid.",
     "backup_invalid": "This file is not a Siyak backup.",
-    "backup_unsupported": "This backup was made by a newer version of the app. Update the app and try again."
+    "backup_unsupported": "This backup was made by a newer version of the app. Update the app and try again.",
+    "semantic_unavailable": "Semantic search needs a semantic search pack. Install one from Packs."
   },
   "term": {
     "lemma": {

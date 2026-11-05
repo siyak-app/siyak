@@ -93,7 +93,7 @@ Windows, macOS, Linux.
 │  db        content.db (içerik) + user.db (kullanıcı)            │
 │  search    FTS5 · kök/lemma · sqlite-vec                         │
 │  related   çapraz referans (vektör + ortak kök)                  │
-│  embed     Embedder trait → ONNX (lazy-load)                     │
+│  embed     Embedder trait → lokal ONNX ya da embedding API'si    │
 │  packs     manifest · indirme · sha256 · kurulum                 │
 │  llm       Provider trait → Anthropic/OpenAI/Gemini/OAI-compat  │
 │            ├─ chat (RAG)                                         │
@@ -151,7 +151,7 @@ Tüm repo'lar ayrı bir GitHub organizasyonu altında durur: `github.com/siyak-a
 │  │  ├─ search.rs
 │  │  ├─ morphology.rs
 │  │  ├─ related.rs
-│  │  ├─ embed/{mod,onnx}.rs
+│  │  ├─ embed/{mod,space,service,onnx,api}.rs
 │  │  ├─ packs/{manifest,download,install}.rs
 │  │  ├─ llm/
 │  │  │  ├─ mod.rs               # Provider trait, ortak tipler
@@ -428,7 +428,7 @@ CREATE VIRTUAL TABLE vec_{pack_id} USING vec0(
 );
 ```
 
-Aynı anda en fazla bir vektör paketi aktiftir (`settings.active_vector_pack`).
+Aynı anda en fazla bir vektör paketi aktiftir (`semantic.vector_pack` ayarı, §7.4).
 
 ### 5.5 `user.db`
 
@@ -536,10 +536,16 @@ Her iki DB için `PRAGMA user_version` tabanlı, sıralı SQL migration'lar. `us
 | `translation` | `.sqlite.zst` | `translations` şemasına uygun tablo |
 | `tafsir` | `.sqlite.zst` | `tafsir` + `tafsir_paragraphs` |
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; QAC için ayrıca orijinal dosya ve `NOTICE` (§5.3.1) |
-| `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32 |
+| `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` vektör uzayını ve backend'i belirtir (aşağıda) |
+| `model` | `.tar.zst` | `model.onnx`, `tokenizer.json`, `config.json`; yalnızca `local` backend'li vektör paketleri için |
+
+**Vektör paketi meta verisi** (ADR 0012). Vektör paketi kendi vektör uzayını tanımlar: backend önekiyle kanonik `embedding_model` (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` ve `normalized`. `backend` sorguların nerede embed edileceğini söyler:
+- `local`: `model_pack` model paketini belirtir; bu paket `requires` içinde de yer alır. `embedding_model` ve `dim` değerleri eşleşmelidir.
+- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (sağlayıcının model kimliği) ve isteğe bağlı `api_dimensions` (vektörlerini kısaltabilen modeller için, `dim`'e eşit). Model paketi yoktur. Vektörler pipeline'da bir kez, bakımcıların anahtarıyla üretilir.
+
+Meta verisi geçersiz bir vektör paketi "desteklenmiyor" olarak listelenir; manifestin geri kalanı kullanılmaya devam eder.
 
 Tüm SQLite paketleri zstd ile sıkıştırılmış dağıtılır ve bir `pack_info` tablosu taşır; ayrıntılı format `siyak-data/docs/pack-format.md`'dedir. Arşiv paketleri ek dosyalarını `<app_data>/packs/<pack-id>/` altında tutar (örn. QAC'ın `NOTICE`'u, Hakkında → Kaynaklar'da tam gösterilir). v1'de aynı anda en fazla bir morfoloji paketi kurulu olabilir.
-| `model` | `.tar.zst` | `model.onnx`, `tokenizer.json`, `config.json` |
 
 ### 6.2 Gömülü içerik
 `core.db` installer'a gömülür ve şunları içerir: Tanzil Arapça metin (Uthmani + Simple Clean) ve metadata, bir Türkçe meal ve Pickthall (EN). Böylece uygulama ilk açılışta, internet olmadan kullanılabilir. Türkçe mealin Elmalılı Hamdi Yazır meali olması planlanıyor; orijinal metnin temiz ve lisansı net bir kaynağının doğrulanmasına bağlı (§18).
@@ -584,12 +590,21 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
       "id": "vectors.<model>",
       "type": "vectors",
       "requires": ["model.<model>"],
-      "meta": { "embedding_model": "<model>", "dim": 384, "source_text": "<bkz. §18>", "normalized": true }
+      "meta": { "embedding_model": "local/<model>", "dim": 384, "source_text": "<bkz. §18>", "normalized": true,
+                "backend": "local", "model_pack": "model.<model>" }
     },
     {
       "id": "model.<model>",
       "type": "model",
-      "meta": { "embedding_model": "<model>", "dim": 384, "query_prefix": "query: ", "max_tokens": 512, "pooling": "mean" }
+      "meta": { "embedding_model": "local/<model>", "dim": 384, "query_prefix": "query: ", "passage_prefix": "passage: ",
+                "max_tokens": 512, "pooling": "mean" }
+    },
+    {
+      "id": "vectors.openai-3-small",
+      "type": "vectors",
+      "terms_ack": true,
+      "meta": { "embedding_model": "openai/text-embedding-3-small", "dim": 512, "source_text": "<bkz. §18>", "normalized": true,
+                "backend": "api", "provider": "openai", "api_model": "text-embedding-3-small", "api_dimensions": 512 }
     }
   ],
   "bundles": [
@@ -712,16 +727,25 @@ Her grup ilk 3–5 sonucu gösterir; "tümünü gör" ilgili modun tam sonuç sa
 ### 7.4 Anlamsal arama
 
 ```rust
+pub enum TextKind { Query, Passage }
+pub enum Locality { Local, Remote(ApiProvider) }
+
 pub trait Embedder: Send + Sync {
-    fn model_id(&self) -> &str;
-    fn dim(&self) -> usize;
-    fn embed_query(&self, text: &str) -> Result<Vec<f32>>;
+    fn space(&self) -> &EmbeddingSpace;   // embedding_model, dim, normalized
+    fn locality(&self) -> Locality;
+    fn embed(&self, texts: Vec<String>, kind: TextKind) -> EmbedFuture<'_>;  // kutulu future
 }
 ```
 
-- `OnnxEmbedder`, model paketindeki `config.json` ve manifest `meta`'sına göre yapılandırılır.
-- **Lazy-load:** Model ilk kullanımda yüklenir ve `OnceCell` içinde tutulur.
-- **Uyumluluk:** Aktif vektör paketi ile yüklü modelin `embedding_model` ve `dim` değerleri eşleşmezse anlamsal özellikler devre dışı kalır ve arayüz nedenini gösterir.
+- **İki backend** (ADR 0012); hangisinin kullanılacağını aktif vektör paketinin meta verisi belirler (§6.1):
+  - **Lokal (varsayılan):** `OnnxEmbedder`, model paketinin meta verisine göre yapılandırılır (önekler, pooling, token sınırı). İnternetsiz ve anahtarsız çalışır; çıkarım ayrı bir thread'de yapılır.
+  - **API:** OpenAI, Voyage, Gemini ya da OpenAI-uyumlu bir sunucu (Ollama, LM Studio). Sağlayıcının keychain'deki anahtarını kullanır (§14.2); bu anahtar AI katmanıyla ortaktır (§8). OpenAI-uyumlu sunucu için kullanıcının girdiği adres gerekir (`semantic.base_url`). Anthropic'in embedding modeli olmadığı için Claude listede yoktur.
+- **Sorgu ve pasaj** farklı embed edilir (e5 `query: `/`passage: ` önekleri, Voyage `input_type`, Gemini görev türleri); her backend `TextKind`'ı kendisi eşler.
+- **Aktif paket:** Aynı anda en fazla bir vektör paketi aktiftir: `semantic.vector_pack` ayarında adı geçen, yoksa ilk kurulu paket.
+- **Durum:** `get_semantic_status`, anlamsal özelliklerin neden kullanılabildiğini ya da kullanılamadığını döner: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `not_built` veya `ready` (sorgular bilgisayardan çıkıyorsa sağlayıcıyla birlikte). Arayüz her birini bir eyleme çevirir (kur, anahtar ekle, adres gir).
+- **Lazy-load:** Embedder ilk kullanımda oluşturulur; paketlerden birinin sürümü ya da adres değişene kadar tutulur.
+- **Uyumluluk:** Embedder'ın `embedding_model` ve `dim` değerleri aktif vektör paketininkilerle eşleşmezse anlamsal özellikler devre dışı kalır ve arayüz nedenini gösterir.
+- **Gizlilik:** API paketiyle sorgular (sohbette ayrıca sıralanan tefsir paragrafları, §10) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler "Gelişmiş" altındadır ve indirmeden önce bunu söyler (`terms_ack`).
 - **Sorgu:** `SELECT verse_id, distance FROM vec_<pack> WHERE embedding MATCH ? AND k = ?`
 - Embedding'ler **ayet bazında** hesaplanır. Tefsir hiçbir zaman embed edilmez; sohbete ait olduğu ayetler üzerinden gider (§10).
 
@@ -811,7 +835,7 @@ Kullanıcının bir çeviriyi `siyak-data`'ya katkı olarak göndermesi ve incel
 3. Bulunan ayetlerin tefsirlerini **otomatik olarak** ekle, bağlam bütçesiyle sınırlı:
    - **Sohbet tefsirleri** ayrı seçilir (`settings.chat.tafsirs`, en fazla 3). Okuma ekranında kurulu tüm tefsirler kullanılabilir; sohbete yalnızca bu seçim gider. Varsayılan: Celâleyn (kısa) + İbn Kesîr (orta hacimli). Seçili tefsirin paketi kurulu değilse atlanır ve arayüz bunu belirtir.
    - **Ayet sırasına göre bütçe:** Toplam tefsir bütçesi (varsayılan ~6.000 token, modelin bağlam penceresine göre ayarlanır) en alakalı ilk 3 ayete dağıtılır; kalan ayetlere yalnızca Arapça metin ve meal gider.
-   - **Uzun pasajlarda paragraf seçimi:** Bir pasaj ayet başına bütçeyi aşarsa, `tafsir_paragraphs` o anda lokal embedding modeliyle soruya göre sıralanır ve en alakalı paragraflar, orijinal sıralarıyla, bütçe dolana kadar eklenir. Tefsir için kalıcı vektör saklanmaz; yalnızca o pasajın birkaç düzine paragrafı anlık embed edilir. Atlanan paragraflar bağlamda "[…]" ile işaretlenir.
+   - **Uzun pasajlarda paragraf seçimi:** Bir pasaj ayet başına bütçeyi aşarsa, `tafsir_paragraphs` o anda aktif embedder'la soruya göre sıralanır (§7.4; API paketinde paragraflar sağlayıcıya gönderilir) ve en alakalı paragraflar, orijinal sıralarıyla, bütçe dolana kadar eklenir. Tefsir için kalıcı vektör saklanmaz; yalnızca o pasajın birkaç düzine paragrafı anlık embed edilir. Atlanan paragraflar bağlamda "[…]" ile işaretlenir.
    - **Dil:** Arayüz dilindeki tefsirler her zaman eklenebilir. Arapça tefsirler yalnızca `chat_model.arabic_sources = true` ise eklenir; model aktarım yaparken orijinal ifadeyi de verir. Bayrak kapalıysa arayüz "Seçili model Arapça tefsirleri okuyamıyor; yalnızca meal kullanıldı" uyarısı gösterir.
    - **Maliyet:** Bağlam, kullanıcının belirlediği eşiği aşarsa gönder butonunun yanında tahmini maliyet gösterilir (§9.4).
 4. Sistem promptu:
@@ -936,9 +960,9 @@ Referans mockup: "Okuma Ekranı Mockup" canvas'ı (sade ve araştırma varsayıl
 - Tüm HTTP istekleri `net.rs` içindeki tek bir client'tan geçer. Bu client'ın sabit bir host izin listesi vardır:
   - `quran.kemalozyon.com` (manifest, fiyatlar, güncelleme meta verisi)
   - `github.com`, `objects.githubusercontent.com` (paketler, güncellemeler)
-  - Sağlayıcı API host'ları (Anthropic, OpenAI, Gemini)
+  - Sağlayıcı API host'ları (Anthropic, OpenAI, Gemini; embedding için Voyage)
   - Kullanıcının OpenAI-uyumlu sağlayıcı için açıkça girdiği `base_url`
-- **Bağlantı günlüğü:** Her istek için host, zaman, amaç (`pack`, `update`, `chat`, `translate`) ve durum kaydı tutulur; içerik kaydedilmez. Son 500 kayıt bellekte ve `user.db`'de tutulur. Ayarlar → Gizlilik'ten görüntülenir.
+- **Bağlantı günlüğü:** Her istek için host, zaman, amaç (`pack`, `update`, `chat`, `translate`, `embed`) ve durum kaydı tutulur; içerik kaydedilmez. Son 500 kayıt bellekte ve `user.db`'de tutulur. Ayarlar → Gizlilik'ten görüntülenir.
 
 ### 14.2 API anahtarları
 - OS keychain'de saklanır (servis: `com.kemalozyon.siyak`, hesap: `<provider>`). Webview'e asla dönmez; arayüz yalnızca "kayıtlı / kayıtlı değil" bilgisini görür.
@@ -1108,7 +1132,7 @@ Kurallar dokümanda değil, CI'da zorunlu tutulur. Her PR'da çalışan `ci.yml`
 | M4 | Tefsir + karşılaştırma + arama | Tefsir paneli (paragraflı), karşılaştırma ekranı, tek arama kutusu (Tümü + Kelime), FTS5 |
 | M5 | Morfoloji | Morfoloji paketi, tıklanabilir kelimeler, kelime kartı ve paneli, Kök modu, konkordans |
 | M6 | Koleksiyonlar | Yer imi, notlar, koleksiyonlar, Markdown/atıf/JSON dışa aktarma |
-| M7 | Anlamsal katman | Model seçimi, ONNX embedder, vektör paketi, Anlam modu, çapraz referans |
+| M7 | Anlamsal katman | Model seçimi, lokal (ONNX) ve API embedder'lar, vektör paketi, Anlam modu, çapraz referans |
 | M8 | AI | Sağlayıcı katmanı, keychain, ağ izin listesi + günlük, tefsir özet/çeviri + maliyet, RAG sohbet |
 | M9 | Release + web sitesi | Updater, provenance, landing page, kullanıcı rehberi (iki dil), v0.1.0 |
 
@@ -1120,7 +1144,7 @@ Sıralama mantığı: Açık kaynak altyapısı en başta kurulur (M0), çünkü
 
 | # | Soru | Etkisi |
 |---|---|---|
-| 1 | Embedding modeli | Paket boyutu, arama ve çapraz referans kalitesi |
+| 1 | Embedding modeli: varsayılan lokal model ve hangi API modellerine paket çıkarılacağı (ADR 0012) | Paket boyutu, arama ve çapraz referans kalitesi |
 | 2 | Embed edilecek metin: harekesiz Arapça, meal ya da ikisinin birleşimi. Türkçe sorgular için Arapça-yalnız embedding zayıf kalabilir; değerlendirme setiyle denenmeli | Vektör paketi tasarımı |
 | 3 | Anlamsal arama ve çapraz referans için değerlendirme seti (sorgu/ayet → beklenen ayetler): kim hazırlayacak, kaç örnek? | M7 kabul kriteri |
 | 4 | **MASAQ değerlendirmesi** (§5.3.1): lemma bilgisi var mı, Tanzil ile hizalama, QAC ile örneklem karşılaştırması; son sürümün lisans ifadesinin netleştirilmesi | İkinci morfoloji paketi, i'rab katmanı |

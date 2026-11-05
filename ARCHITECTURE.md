@@ -19,7 +19,8 @@ rules must not be broken. The full design, including features that are not built
 │ commands/morphology ──▶ morphology (words, concordance)     │
 │ commands/{notes,collections,export} ──▶ notes, collections, │
 │                                         export              │
-│ later: related, embed, llm, secrets                         │
+│ commands/semantic ──▶ embed (vector space, local/API)       │
+│ later: related, llm, secrets                                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -208,6 +209,19 @@ These hold in every change; a pull request that weakens one needs an ADR.
 | CI                                 | `.github/workflows/ci.yml`                                                                                                   |
 | the website                        | `website/src/content/docs/{en,tr}/`                                                                                          |
 
-Modules for later milestones (`related`, `embed`, `llm`,
-`secrets`) already exist as documented, empty files; their `//!` comments say what they will
-hold and in which milestone.
+## Semantic layer (M7, in progress)
+
+Semantic search, cross-references and chat retrieval share one embedder (spec §7.4, ADR 0012).
+A vector pack defines the embedding space (`embedding_model`, `dim`) and the backend that embeds
+queries in it: `local` (an ONNX model from a model pack) or `api` (OpenAI, Voyage, Gemini or an
+OpenAI-compatible server, with the user's key).
+
+- `embed/space.rs` reads and checks vector and model pack metadata.
+- `embed/mod.rs` defines the `Embedder` trait (batches, query or passage, local or remote).
+- `embed/service.rs` picks the active vector pack (`semantic.vector_pack`), reports a
+  `SemanticStatus` (`get_semantic_status`) and builds the embedder lazily, once per pack version.
+- `embed/onnx.rs` and `embed/api.rs` will hold the two backends; until then the status is
+  `not_built`. Vector and model packs are not installable yet.
+
+Modules for later milestones (`related`, `llm`, `secrets`) already exist as documented, empty
+files; their `//!` comments say what they will hold and in which milestone.

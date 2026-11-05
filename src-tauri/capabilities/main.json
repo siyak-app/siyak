@@ -20,6 +20,7 @@
     "allow-search-roots",
     "allow-classify-query",
     "allow-search-text",
+    "allow-get-semantic-status",
     "allow-get-settings",
     "allow-set-setting",
     "allow-set-settings",

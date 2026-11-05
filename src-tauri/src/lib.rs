@@ -31,6 +31,7 @@ use tauri::path::BaseDirectory;
 use crate::commands::packs::TauriEvents;
 use crate::db::Databases;
 use crate::db::content::Seed;
+use crate::embed::service::Semantic;
 use crate::error::{AppError, AppErrorCode, AppResult};
 use crate::net::{Net, UserDbLog};
 use crate::packs::manifest::{ManifestStore, PackSource};
@@ -48,6 +49,7 @@ const BINDINGS_HEADER: &str =
 pub struct AppState {
     databases: AppResult<Databases>,
     packs: AppResult<Packs>,
+    semantic: Semantic,
 }
 
 impl AppState {
@@ -59,6 +61,11 @@ impl AppState {
     /// Returns the pack service, or the error that prevented setting it up.
     pub fn packs(&self) -> AppResult<&Packs> {
         self.packs.as_ref().map_err(Clone::clone)
+    }
+
+    /// Returns the semantic service (spec §7.4).
+    pub fn semantic(&self) -> &Semantic {
+        &self.semantic
     }
 
     /// Locks the `content.db` connection.
@@ -134,6 +141,7 @@ fn open_state(app: &tauri::App) -> AppState {
             return AppState {
                 databases: Err(err.clone()),
                 packs: Err(err),
+                semantic: Semantic::unbuilt(),
             };
         }
     };
@@ -146,6 +154,7 @@ fn open_state(app: &tauri::App) -> AppState {
     AppState {
         databases: Ok(databases),
         packs,
+        semantic: Semantic::unbuilt(),
     }
 }
 

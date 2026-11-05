@@ -92,7 +92,7 @@ Windows, macOS, Linux.
 │  db        content.db (content) + user.db (user data)           │
 │  search    FTS5 · root/lemma · sqlite-vec                        │
 │  related   cross-references (vectors + shared roots)            │
-│  embed     Embedder trait → ONNX (lazy-loaded)                   │
+│  embed     Embedder trait → local ONNX or embedding API (lazy)   │
 │  packs     manifest · download · sha256 · install                │
 │  llm       Provider trait → Anthropic/OpenAI/Gemini/OAI-compat  │
 │            ├─ chat (RAG)                                         │
@@ -150,7 +150,7 @@ All repositories live under a dedicated GitHub organization: `github.com/siyak-a
 │  │  ├─ search.rs
 │  │  ├─ morphology.rs
 │  │  ├─ related.rs
-│  │  ├─ embed/{mod,onnx}.rs
+│  │  ├─ embed/{mod,space,service,onnx,api}.rs
 │  │  ├─ packs/{manifest,download,install}.rs
 │  │  ├─ llm/
 │  │  │  ├─ mod.rs               # Provider trait, shared types
@@ -427,7 +427,7 @@ CREATE VIRTUAL TABLE vec_{pack_id} USING vec0(
 );
 ```
 
-At most one vector pack is active at a time (`settings.active_vector_pack`).
+At most one vector pack is active at a time (`semantic.vector_pack` setting, §7.4).
 
 ### 5.5 `user.db`
 
@@ -535,10 +535,16 @@ Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.
 | `translation` | `.sqlite.zst` | A table matching the `translations` schema |
 | `tafsir` | `.sqlite.zst` | `tafsir` + `tafsir_paragraphs` |
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; for QAC also the original file and `NOTICE` (§5.3.1) |
-| `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32 |
+| `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` names the embedding space and backend (below) |
+| `model` | `.tar.zst` | `model.onnx`, `tokenizer.json`, `config.json`; only for vector packs with the `local` backend |
+
+**Vector pack metadata** (ADR 0012). A vector pack defines its embedding space: `embedding_model`, canonical with a backend prefix (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` and `normalized`. `backend` says where queries are embedded:
+- `local`: `model_pack` names the model pack, which is also in `requires`. Its `embedding_model` and `dim` must match.
+- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (the provider's model id) and optionally `api_dimensions` (equal to `dim`, for models that shorten their vectors). No model pack. The vectors are built once in the pipeline with the maintainers' key.
+
+A vector pack with invalid metadata is listed as unsupported; the rest of the manifest stays usable.
 
 All SQLite packs are distributed zstd-compressed and carry a `pack_info` table; the detailed format is `siyak-data/docs/pack-format.md`. Archive packs keep their extra files under `<app_data>/packs/<pack-id>/` (e.g. QAC's `NOTICE`, shown in full on About → Sources). At most one morphology pack is installed at a time in v1.
-| `model` | `.tar.zst` | `model.onnx`, `tokenizer.json`, `config.json` |
 
 ### 6.2 Bundled content
 `core.db` is bundled with the installer and contains: the Tanzil Arabic text (Uthmani + Simple Clean) and metadata, a Turkish translation, and Pickthall (English). The app is therefore usable on first launch without internet access. The Turkish translation is planned to be Elmalılı Hamdi Yazır's, pending verification of a clean, properly licensed source of the original text (§18).
@@ -583,12 +589,21 @@ The primary address is independent of the GitHub organization and repository nam
       "id": "vectors.<model>",
       "type": "vectors",
       "requires": ["model.<model>"],
-      "meta": { "embedding_model": "<model>", "dim": 384, "source_text": "<see §18>", "normalized": true }
+      "meta": { "embedding_model": "local/<model>", "dim": 384, "source_text": "<see §18>", "normalized": true,
+                "backend": "local", "model_pack": "model.<model>" }
     },
     {
       "id": "model.<model>",
       "type": "model",
-      "meta": { "embedding_model": "<model>", "dim": 384, "query_prefix": "query: ", "max_tokens": 512, "pooling": "mean" }
+      "meta": { "embedding_model": "local/<model>", "dim": 384, "query_prefix": "query: ", "passage_prefix": "passage: ",
+                "max_tokens": 512, "pooling": "mean" }
+    },
+    {
+      "id": "vectors.openai-3-small",
+      "type": "vectors",
+      "terms_ack": true,
+      "meta": { "embedding_model": "openai/text-embedding-3-small", "dim": 512, "source_text": "<see §18>", "normalized": true,
+                "backend": "api", "provider": "openai", "api_model": "text-embedding-3-small", "api_dimensions": 512 }
     }
   ],
   "bundles": [
@@ -711,16 +726,25 @@ Each group shows its first 3–5 results; "see all" opens the full results page 
 ### 7.4 Semantic search
 
 ```rust
+pub enum TextKind { Query, Passage }
+pub enum Locality { Local, Remote(ApiProvider) }
+
 pub trait Embedder: Send + Sync {
-    fn model_id(&self) -> &str;
-    fn dim(&self) -> usize;
-    fn embed_query(&self, text: &str) -> Result<Vec<f32>>;
+    fn space(&self) -> &EmbeddingSpace;   // embedding_model, dim, normalized
+    fn locality(&self) -> Locality;
+    fn embed(&self, texts: Vec<String>, kind: TextKind) -> EmbedFuture<'_>;  // boxed future
 }
 ```
 
-- `OnnxEmbedder` is configured from the model pack's `config.json` and the manifest `meta`.
-- **Lazy loading:** the model is loaded on first use and kept in a `OnceCell`.
-- **Compatibility:** if `embedding_model` and `dim` of the active vector pack and the loaded model do not match, semantic features are disabled and the interface explains why.
+- **Two backends** (ADR 0012), chosen by the active vector pack's metadata (§6.1):
+  - **Local (default):** `OnnxEmbedder`, configured from the model pack's metadata (prefixes, pooling, token limit). Works offline and without a key; inference runs on a blocking thread.
+  - **API:** OpenAI, Voyage, Gemini or an OpenAI-compatible server (Ollama, LM Studio). Uses the provider's key from the keychain (§14.2), shared with the AI layer (§8); an OpenAI-compatible server needs the address the user entered (`semantic.base_url`). Claude is not listed because Anthropic offers no embedding model.
+- **Queries and passages** are embedded differently where the model expects it (e5 `query: `/`passage: ` prefixes, Voyage `input_type`, Gemini task types); each backend maps `TextKind` itself.
+- **Active pack:** at most one vector pack is active: the one named by `semantic.vector_pack`, else the first installed one.
+- **Status:** `get_semantic_status` returns why semantic features are or are not available: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `not_built` or `ready` (with the provider if queries leave the computer). The interface turns each into an action (install, add key, enter address).
+- **Lazy loading:** the embedder is built on first use and kept until either pack's version or the address changes.
+- **Compatibility:** if the embedder's `embedding_model` and `dim` differ from the active vector pack's, semantic features are disabled and the interface explains why.
+- **Privacy:** with an API pack, queries (and in chat the ranked tafsir paragraphs, §10) are sent to the provider through `net.rs` (§14.1). The pack is under "Advanced" and says so before download (`terms_ack`).
 - **Query:** `SELECT verse_id, distance FROM vec_<pack> WHERE embedding MATCH ? AND k = ?`
 - Embeddings are computed **per verse**. Tafsir is never embedded; it reaches the chat through the verses it belongs to (§10).
 
@@ -810,7 +834,7 @@ Users submitting a translation as a contribution to `siyak-data`, and reviewed t
 3. **Automatically** add the tafsirs of the retrieved verses, within a context budget:
    - **Chat tafsirs** are selected separately (`settings.chat.tafsirs`, at most 3). All installed tafsirs are available in the reader; only this selection goes to the chat. Default: al-Jalalayn (concise) + Ibn Kathir (mid-sized). If a selected tafsir's pack is not installed, it is skipped and the interface says so.
    - **Budget by verse rank:** the total tafsir budget (default ~6,000 tokens, adjusted to the model's context window) is spread over the 3 most relevant verses; the remaining verses get only the Arabic text and translation.
-   - **Paragraph selection for long passages:** if a passage exceeds the per-verse budget, its `tafsir_paragraphs` are ranked against the question on the fly with the local embedding model, and the most relevant paragraphs are added, in their original order, until the budget is full. No persistent tafsir vectors are stored; only the few dozen paragraphs of that passage are embedded at query time. Skipped paragraphs are marked "[…]" in the context.
+   - **Paragraph selection for long passages:** if a passage exceeds the per-verse budget, its `tafsir_paragraphs` are ranked against the question on the fly with the active embedder (§7.4; with an API pack the paragraphs are sent to its provider), and the most relevant paragraphs are added, in their original order, until the budget is full. No persistent tafsir vectors are stored; only the few dozen paragraphs of that passage are embedded at query time. Skipped paragraphs are marked "[…]" in the context.
    - **Language:** tafsirs in the UI language can always be added. Arabic tafsirs are added only if `chat_model.arabic_sources = true`; the model then quotes the original wording when it cites them. If the flag is off, the interface warns: "The selected model cannot read Arabic tafsirs; only translations were used."
    - **Cost:** if the context exceeds a user-defined threshold, the estimated cost is shown next to the send button (§9.4).
 4. System prompt:
@@ -935,9 +959,9 @@ Reference mockup: the "Okuma Ekranı Mockup" canvas (reader and researcher defau
 - All HTTP requests go through a single client in `net.rs`, which has a fixed host allow-list:
   - `quran.kemalozyon.com` (manifest, pricing, update metadata)
   - `github.com`, `objects.githubusercontent.com` (packs, updates)
-  - Provider API hosts (Anthropic, OpenAI, Gemini)
+  - Provider API hosts (Anthropic, OpenAI, Gemini; Voyage for embeddings)
   - The `base_url` the user explicitly entered for an OpenAI-compatible provider
-- **Connection log:** for each request the host, time, purpose (`pack`, `update`, `chat`, `translate`) and status are recorded; no content is logged. The last 500 entries are kept in memory and in `user.db`, viewable under Settings → Privacy.
+- **Connection log:** for each request the host, time, purpose (`pack`, `update`, `chat`, `translate`, `embed`) and status are recorded; no content is logged. The last 500 entries are kept in memory and in `user.db`, viewable under Settings → Privacy.
 
 ### 14.2 API keys
 - Stored in the OS keychain (service: `com.kemalozyon.siyak`, account: `<provider>`). Never returned to the webview; the interface only learns "saved / not saved".
@@ -1107,7 +1131,7 @@ Rules are enforced by CI, not just written down. `ci.yml` runs on every PR:
 | M4 | Tafsir + compare + search | Tafsir panel (with paragraphs), compare screen, single search box (All + Text), FTS5 |
 | M5 | Morphology | Morphology pack, clickable words, word card and panel, Root mode, concordance |
 | M6 | Collections | Bookmarks, notes, collections, Markdown/citation/JSON export |
-| M7 | Semantic layer | Model choice, ONNX embedder, vector pack, Meaning mode, cross-references |
+| M7 | Semantic layer | Model choice, local (ONNX) and API embedders, vector pack, Meaning mode, cross-references |
 | M8 | AI | Provider layer, keychain, network allow-list + log, tafsir summary/translation + cost, RAG chat |
 | M9 | Release + website | Updater, provenance, landing page, user guide (both languages), v0.1.0 |
 
@@ -1119,7 +1143,7 @@ Ordering rationale: the open-source foundation comes first (M0), because adding 
 
 | # | Question | Impact |
 |---|---|---|
-| 1 | Embedding model | Pack size, search and cross-reference quality |
+| 1 | Embedding model: the default local model, and which API models get a pack (ADR 0012) | Pack size, search and cross-reference quality |
 | 2 | Text to embed: Arabic without diacritics, a translation, or both combined. Arabic-only embeddings may be weak for Turkish queries; to be tested against an evaluation set | Vector pack design |
 | 3 | Evaluation set for semantic search and cross-references (query/verse → expected verses): who prepares it, how many examples? | M7 acceptance criteria |
 | 4 | **MASAQ evaluation** (§5.3.1): does it have lemmas, Tanzil alignment, sample comparison with QAC; clarify the license wording of the latest version | Second morphology pack, *i'rab* layer |

@@ -13,6 +13,7 @@ pub mod morphology;
 pub mod notes;
 pub mod packs;
 pub mod search;
+pub mod semantic;
 pub mod settings;
 
 include!("names.rs");
@@ -43,6 +44,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             morphology::search_roots,
             search::classify_query,
             search::search_text,
+            semantic::get_semantic_status,
             settings::get_settings,
             settings::set_setting,
             settings::set_settings,
