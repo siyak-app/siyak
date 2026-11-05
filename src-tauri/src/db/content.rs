@@ -122,6 +122,41 @@ pub fn seed_marker(conn: &Connection) -> AppResult<Option<String>> {
         .optional()?)
 }
 
+/// Creates `verse_vectors`, the verse embeddings of installed vector packs
+/// (spec §5.4), if it does not exist yet. Created by the first vector pack
+/// install rather than by a migration: every pack is checked against the
+/// schema version, which a migration would raise for all published packs.
+pub fn ensure_vector_table(conn: &Connection) -> AppResult<()> {
+    // A rowid table: WITHOUT ROWID roughly doubles disk use for long rows.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS main.verse_vectors (
+           pack_id    TEXT NOT NULL REFERENCES packs(id) ON DELETE CASCADE,
+           verse_id   INTEGER NOT NULL REFERENCES verses(id),
+           embedding  BLOB NOT NULL,             -- dim little-endian float32
+           UNIQUE (pack_id, verse_id)
+         );",
+    )?;
+    Ok(())
+}
+
+/// Reads the vectors of `pack_id` in verse order, as raw little-endian bytes.
+/// Empty if no vector pack was ever installed.
+pub fn vector_rows(conn: &Connection, pack_id: &str) -> AppResult<Vec<(u32, Vec<u8>)>> {
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'verse_vectors')",
+        [],
+        |r| r.get(0),
+    )?;
+    if !exists {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn.prepare(
+        "SELECT verse_id, embedding FROM verse_vectors WHERE pack_id = ?1 ORDER BY verse_id",
+    )?;
+    let rows = stmt.query_map([pack_id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
 /// Replaces the core data of `conn` with that of the bundled `core` database
 /// if the bundled `core_version` is higher (spec §6.2, ADR 0011). Returns
 /// whether a refresh happened.

@@ -57,7 +57,7 @@ Windows, macOS, Linux.
 | Frontend | React + TypeScript + Vite |
 | UI kit | Tailwind CSS + shadcn/ui |
 | Veritabanı | SQLite (`rusqlite`, bundled) |
-| Vektör arama | `sqlite-vec` (statik gömülü), brute-force KNN |
+| Vektör arama | Bellekte tutulan vektörler üzerinde Rust'ta brute-force KNN (ADR 0012) |
 | Embedding çalıştırma | Rust tarafında ONNX Runtime (`ort`) + `tokenizers` |
 | Embedding modeli | **Açık soru.** Sistem modelden bağımsız tasarlanır (§7.4) |
 | Tefsir erişimi | Ayet referansıyla anahtarlı lookup; tefsir embed edilmez |
@@ -91,7 +91,7 @@ Windows, macOS, Linux.
                                 │ Tauri IPC
 ┌───────────────────────────────┴──────── Rust çekirdek ──────────┐
 │  db        content.db (içerik) + user.db (kullanıcı)            │
-│  search    FTS5 · kök/lemma · sqlite-vec                         │
+│  search    FTS5 · kök/lemma · bellekte KNN                       │
 │  related   çapraz referans (vektör + ortak kök)                  │
 │  embed     Embedder trait → lokal ONNX ya da embedding API'si    │
 │  packs     manifest · indirme · sha256 · kurulum                 │
@@ -419,14 +419,18 @@ CREATE VIRTUAL TABLE translations_fts USING fts5(
 );
 ```
 
-Vektör tablosu, vektör paketi kurulurken boyutuna göre dinamik oluşturulur:
+Vektör tablosu bir migration'la değil, ilk vektör paketi kurulurken oluşturulur (paketler şema sürümüne göre denetlenir; bir migration yayımlanmış tüm paketlerin şema sürümünü geçersiz kılardı):
 
 ```sql
-CREATE VIRTUAL TABLE vec_{pack_id} USING vec0(
-  verse_id  INTEGER PRIMARY KEY,
-  embedding FLOAT[{dim}]
+CREATE TABLE verse_vectors (
+  pack_id    TEXT NOT NULL REFERENCES packs(id) ON DELETE CASCADE,
+  verse_id   INTEGER NOT NULL REFERENCES verses(id),
+  embedding  BLOB NOT NULL,             -- dim adet little-endian float32
+  UNIQUE (pack_id, verse_id)
 );
 ```
+
+Aktif paketin vektörleri bir kez belleğe yüklenir ve her sorguda taranır (6.236 iç çarpım milisaniyeler sürer). Düz bir tablo SQLite eklentisi gerektirmez; böylece `content.db` her araçla okunabilir kalır ve eklenti yüklemek için `unsafe` kod gerekmez (ADR 0012).
 
 Aynı anda en fazla bir vektör paketi aktiftir (`semantic.vector_pack` ayarı, §7.4).
 
@@ -537,7 +541,7 @@ Her iki DB için `PRAGMA user_version` tabanlı, sıralı SQL migration'lar. `us
 | `tafsir` | `.sqlite.zst` | `tafsir` + `tafsir_paragraphs` |
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; QAC için ayrıca orijinal dosya ve `NOTICE` (§5.3.1) |
 | `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` vektör uzayını ve backend'i belirtir (aşağıda) |
-| `model` | `.tar.zst` | `model.onnx`, `tokenizer.json`, `config.json`; yalnızca `local` backend'li vektör paketleri için |
+| `model` | `.tar.zst` | `model.sqlite` (yalnızca `pack_info`), `model/model.onnx`, `model/tokenizer.json`; modelin ayarları `meta`'dadır. Yalnızca `local` backend'li vektör paketleri için |
 
 **Vektör paketi meta verisi** (ADR 0012). Vektör paketi kendi vektör uzayını tanımlar: backend önekiyle kanonik `embedding_model` (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` ve `normalized`. `backend` sorguların nerede embed edileceğini söyler:
 - `local`: `model_pack` model paketini belirtir; bu paket `requires` içinde de yer alır. `embedding_model` ve `dim` değerleri eşleşmelidir.
@@ -627,8 +631,8 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
 4. `<app_data>/downloads/<id>.part` dosyasına stream ederek indir. İlerleme `pack://progress` event'iyle bildirilir. İndirme iptal edilebilir; HTTP Range ile kaldığı yerden devam eder.
 5. **sha256 doğrula.** Uyuşmazsa dosyayı sil ve hata ver.
 6. Kur:
-   - SQLite paketleri: tek transaction içinde `ATTACH` → mevcut `pack_id` satırlarını sil → yalnızca beklenen tablo/kolonlardan `INSERT … SELECT` → FTS/vec güncelle → `packs` upsert → `DETACH`.
-   - `model`: geçici klasöre aç, sonra atomik rename ile `<app_data>/models/<id>/` altına taşı.
+   - SQLite paketleri: tek transaction içinde `ATTACH` → mevcut `pack_id` satırlarını sil → yalnızca beklenen tablo/kolonlardan `INSERT … SELECT` → FTS güncelle → `packs` upsert → `DETACH`. Vektör paketi önce denetlenir: `content.db`'deki her ayet için bir vektör, her biri `dim` adet sonlu değer, `normalized` ise birim uzunlukta.
+   - `model` (ve diğer arşiv paketleri): geçici klasöre aç, sonra atomik rename ile `<app_data>/packs/<id>/` altına taşı.
 7. İndirilen dosyayı sil.
 
 **Güncelleme:** Aynı akışla yeniden kurulum. Tefsir güncellenirse `tafsir_translations` içindeki eski `pack_version` kayıtları "kaynak güncellendi" etiketiyle gösterilir; kullanıcı yeniden çevirebilir.
@@ -746,7 +750,7 @@ pub trait Embedder: Send + Sync {
 - **Lazy-load:** Embedder ilk kullanımda oluşturulur; paketlerden birinin sürümü ya da adres değişene kadar tutulur.
 - **Uyumluluk:** Embedder'ın `embedding_model` ve `dim` değerleri aktif vektör paketininkilerle eşleşmezse anlamsal özellikler devre dışı kalır ve arayüz nedenini gösterir.
 - **Gizlilik:** API paketiyle sorgular (sohbette ayrıca sıralanan tefsir paragrafları, §10) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler "Gelişmiş" altındadır ve indirmeden önce bunu söyler (`terms_ack`).
-- **Sorgu:** `SELECT verse_id, distance FROM vec_<pack> WHERE embedding MATCH ? AND k = ?`
+- **Sorgu:** Sorgu vektörünün aktif paketin her ayet vektörüyle kosinüs benzerliği, bellekte (§5.4); en iyi `k` sonuç, istenirse bazı ayetler hariç (çapraz referansın başladığı ayet gibi).
 - Embedding'ler **ayet bazında** hesaplanır. Tefsir hiçbir zaman embed edilmez; sohbete ait olduğu ayetler üzerinden gider (§10).
 
 ### 7.5 Kelime paneli

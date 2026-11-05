@@ -56,7 +56,7 @@ Windows, macOS, Linux.
 | Frontend | React + TypeScript + Vite |
 | UI kit | Tailwind CSS + shadcn/ui |
 | Database | SQLite (`rusqlite`, bundled) |
-| Vector search | `sqlite-vec` (statically embedded), brute-force KNN |
+| Vector search | Brute-force KNN in Rust over vectors kept in memory (ADR 0012) |
 | Embedding runtime | ONNX Runtime (`ort`) + `tokenizers` on the Rust side |
 | Embedding model | **Open question.** The system is designed to be model-agnostic (§7.4) |
 | Tafsir access | Keyed lookup by verse reference; tafsir is never embedded |
@@ -90,7 +90,7 @@ Windows, macOS, Linux.
                                 │ Tauri IPC
 ┌───────────────────────────────┴────────── Rust core ────────────┐
 │  db        content.db (content) + user.db (user data)           │
-│  search    FTS5 · root/lemma · sqlite-vec                        │
+│  search    FTS5 · root/lemma · in-memory KNN                     │
 │  related   cross-references (vectors + shared roots)            │
 │  embed     Embedder trait → local ONNX or embedding API (lazy)   │
 │  packs     manifest · download · sha256 · install                │
@@ -418,14 +418,18 @@ CREATE VIRTUAL TABLE translations_fts USING fts5(
 );
 ```
 
-The vector table is created dynamically, sized to its dimension, when a vector pack is installed:
+The vector table is created when the first vector pack is installed, not by a migration (packs are checked against the schema version, which a migration would raise for every published pack):
 
 ```sql
-CREATE VIRTUAL TABLE vec_{pack_id} USING vec0(
-  verse_id  INTEGER PRIMARY KEY,
-  embedding FLOAT[{dim}]
+CREATE TABLE verse_vectors (
+  pack_id    TEXT NOT NULL REFERENCES packs(id) ON DELETE CASCADE,
+  verse_id   INTEGER NOT NULL REFERENCES verses(id),
+  embedding  BLOB NOT NULL,             -- dim little-endian float32
+  UNIQUE (pack_id, verse_id)
 );
 ```
+
+The active pack's vectors are loaded into memory once and scanned per query (6,236 dot products take milliseconds). A plain table needs no SQLite extension, so `content.db` stays readable by every tool, and no `unsafe` code is needed to load one (ADR 0012).
 
 At most one vector pack is active at a time (`semantic.vector_pack` setting, §7.4).
 
@@ -536,7 +540,7 @@ Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.
 | `tafsir` | `.sqlite.zst` | `tafsir` + `tafsir_paragraphs` |
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; for QAC also the original file and `NOTICE` (§5.3.1) |
 | `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` names the embedding space and backend (below) |
-| `model` | `.tar.zst` | `model.onnx`, `tokenizer.json`, `config.json`; only for vector packs with the `local` backend |
+| `model` | `.tar.zst` | `model.sqlite` (only `pack_info`), `model/model.onnx`, `model/tokenizer.json`; the model's settings are in `meta`. Only for vector packs with the `local` backend |
 
 **Vector pack metadata** (ADR 0012). A vector pack defines its embedding space: `embedding_model`, canonical with a backend prefix (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` and `normalized`. `backend` says where queries are embedded:
 - `local`: `model_pack` names the model pack, which is also in `requires`. Its `embedding_model` and `dim` must match.
@@ -626,8 +630,8 @@ The primary address is independent of the GitHub organization and repository nam
 4. Stream the download to `<app_data>/downloads/<id>.part`. Progress is reported through the `pack://progress` event. Downloads can be cancelled and resume via HTTP Range.
 5. **Verify sha256.** On mismatch, delete the file and report an error.
 6. Install:
-   - SQLite packs: in a single transaction, `ATTACH` → delete existing rows for the `pack_id` → `INSERT … SELECT` only from the expected tables/columns → update FTS/vec → upsert `packs` → `DETACH`.
-   - `model` (and archive packs): extract to a temporary directory, then move atomically (rename) to `<app_data>/models/<id>/` (or the pack's target directory).
+   - SQLite packs: in a single transaction, `ATTACH` → delete existing rows for the `pack_id` → `INSERT … SELECT` only from the expected tables/columns → update FTS → upsert `packs` → `DETACH`. A vector pack is checked first: one vector per verse of `content.db`, each `dim` finite values, of unit length if `normalized`.
+   - `model` (and archive packs): extract to a temporary directory, then move atomically (rename) to `<app_data>/packs/<id>/`.
 7. Delete the downloaded file.
 
 **Update:** a reinstall through the same flow. If a tafsir is updated, entries in `tafsir_translations` with the old `pack_version` are marked "source updated"; the user may translate again.
@@ -745,7 +749,7 @@ pub trait Embedder: Send + Sync {
 - **Lazy loading:** the embedder is built on first use and kept until either pack's version or the address changes.
 - **Compatibility:** if the embedder's `embedding_model` and `dim` differ from the active vector pack's, semantic features are disabled and the interface explains why.
 - **Privacy:** with an API pack, queries (and in chat the ranked tafsir paragraphs, §10) are sent to the provider through `net.rs` (§14.1). The pack is under "Advanced" and says so before download (`terms_ack`).
-- **Query:** `SELECT verse_id, distance FROM vec_<pack> WHERE embedding MATCH ? AND k = ?`
+- **Query:** cosine similarity of the query vector with every verse vector of the active pack, in memory (§5.4); the `k` best, optionally leaving out verses (the verse a cross-reference starts from).
 - Embeddings are computed **per verse**. Tafsir is never embedded; it reaches the chat through the verses it belongs to (§10).
 
 ### 7.5 Word panel

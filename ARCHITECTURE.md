@@ -220,8 +220,13 @@ OpenAI-compatible server, with the user's key).
 - `embed/mod.rs` defines the `Embedder` trait (batches, query or passage, local or remote).
 - `embed/service.rs` picks the active vector pack (`semantic.vector_pack`), reports a
   `SemanticStatus` (`get_semantic_status`) and builds the embedder lazily, once per pack version.
+- `embed/index.rs` keeps the active pack's verse vectors in memory and finds the nearest ones
+  (cosine similarity, full scan). The vectors are in `content.db.verse_vectors`, a table the first
+  vector pack install creates (`db::content::ensure_vector_table`), not a migration.
+- Vector packs (`vectors`) and model packs (`model`, an archive whose files go to
+  `packs/<id>/model/`) install like other packs; `packs/install.rs` checks every vector first.
 - `embed/onnx.rs` and `embed/api.rs` will hold the two backends; until then the status is
-  `not_built`. Vector and model packs are not installable yet.
+  `not_built`.
 
 Modules for later milestones (`related`, `llm`, `secrets`) already exist as documented, empty
 files; their `//!` comments say what they will hold and in which milestone.

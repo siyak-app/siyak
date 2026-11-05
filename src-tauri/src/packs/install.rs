@@ -30,6 +30,8 @@ use tokio_util::sync::CancellationToken;
 use super::download::Progress;
 use super::manifest::{PackEntry, PackKind, Phase};
 use crate::db::content::{MIGRATIONS as CONTENT_MIGRATIONS, seed_marker};
+use crate::embed::index::decode_vector;
+use crate::embed::space::VectorPackSpec;
 use crate::error::{AppError, AppErrorCode, AppResult};
 
 /// Tables (and their columns) a pack of each type may contain besides `pack_info`.
@@ -62,6 +64,9 @@ pub fn pack_tables(kind: PackKind) -> &'static [(&'static str, &'static [&'stati
                 ],
             ),
         ],
+        PackKind::Vectors => &[("vectors", &["verse_id", "embedding"])],
+        // The model's files are archive members; its database holds only pack_info.
+        PackKind::Model => &[],
     }
 }
 
@@ -87,7 +92,11 @@ pub fn archive_layout(kind: PackKind) -> Option<(&'static str, &'static [&'stati
                 "qac/quranic-corpus-morphology-0.4.txt",
             ],
         )),
-        PackKind::Translation | PackKind::Tafsir => None,
+        PackKind::Model => Some((
+            "model.sqlite",
+            &["model.sqlite", "model/model.onnx", "model/tokenizer.json"],
+        )),
+        PackKind::Translation | PackKind::Tafsir | PackKind::Vectors => None,
     }
 }
 
@@ -95,7 +104,7 @@ pub fn archive_layout(kind: PackKind) -> Option<(&'static str, &'static [&'stati
 pub fn notice_member(kind: PackKind) -> Option<&'static str> {
     match kind {
         PackKind::Morphology => Some("qac/NOTICE"),
-        PackKind::Translation | PackKind::Tafsir => None,
+        PackKind::Translation | PackKind::Tafsir | PackKind::Vectors | PackKind::Model => None,
     }
 }
 
@@ -259,6 +268,9 @@ fn check_and_copy(
     check_pack_structure(conn, kind).map_err(|msg| invalid(entry, msg))?;
     let source_version = check_pack_info(conn, entry, kind)?;
     check_verses_exist(conn, entry, kind)?;
+    if kind == PackKind::Vectors {
+        check_vectors(conn, entry)?;
+    }
 
     let tx = conn.transaction()?;
     upsert_packs_row(&tx, entry, &source_version)?;
@@ -306,6 +318,8 @@ fn check_verses_exist(conn: &Connection, entry: &PackEntry, kind: PackKind) -> A
         PackKind::Translation => &[("translations", "verse_id")],
         PackKind::Tafsir => &[("tafsir", "verse_from"), ("tafsir", "verse_to")],
         PackKind::Morphology => &[("words", "verse_id")],
+        PackKind::Vectors => &[("vectors", "verse_id")],
+        PackKind::Model => &[],
     };
     for (table, column) in references {
         let missing = conn
@@ -552,7 +566,82 @@ fn copy_rows(tx: &Transaction<'_>, pack_id: &str, kind: PackKind) -> AppResult<O
             }
             Ok(replaced)
         }
+        PackKind::Vectors => {
+            crate::db::content::ensure_vector_table(tx)?;
+            tx.execute("DELETE FROM verse_vectors WHERE pack_id = ?1", [pack_id])?;
+            tx.execute(
+                "INSERT INTO verse_vectors (pack_id, verse_id, embedding)
+                 SELECT ?1, verse_id, embedding FROM pack.vectors ORDER BY verse_id",
+                [pack_id],
+            )?;
+            Ok(None)
+        }
+        // Only the packs row and the files.
+        PackKind::Model => Ok(None),
     }
+}
+
+/// Checks the vectors against the manifest's metadata before anything is
+/// copied: one vector per verse of `content.db` and no other, each `dim`
+/// finite float32 values, of unit length if the pack says it is normalized.
+fn check_vectors(conn: &Connection, entry: &PackEntry) -> AppResult<()> {
+    let meta = entry.meta.clone().unwrap_or_default();
+    let spec = VectorPackSpec::from_meta(&meta).map_err(|msg| invalid(entry, msg))?;
+    let (rows, distinct): (i64, i64) = conn.query_row(
+        "SELECT count(*), count(DISTINCT verse_id) FROM pack.vectors",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    if rows != distinct {
+        return Err(invalid(entry, "a verse has more than one vector"));
+    }
+    let missing: i64 = conn.query_row(
+        "SELECT count(*) FROM main.verses WHERE id NOT IN (SELECT verse_id FROM pack.vectors)",
+        [],
+        |r| r.get(0),
+    )?;
+    if missing > 0 {
+        return Err(invalid(entry, format!("{missing} verses have no vector")));
+    }
+    let bytes = i64::from(spec.space.dim) * 4;
+    let mut stmt = conn
+        .prepare("SELECT verse_id, embedding FROM pack.vectors WHERE typeof(embedding) = 'blob'")?;
+    let mut checked = 0_i64;
+    let mut query = stmt.query([])?;
+    while let Some(row) = query.next()? {
+        let verse: i64 = row.get(0)?;
+        let blob: Vec<u8> = row.get(1)?;
+        if i64::try_from(blob.len()).ok() != Some(bytes) {
+            return Err(invalid(
+                entry,
+                format!(
+                    "the vector of verse {verse} has {} bytes, expected {bytes}",
+                    blob.len()
+                ),
+            ));
+        }
+        let mut norm = 0.0_f64;
+        for value in decode_vector(&blob) {
+            if !value.is_finite() {
+                return Err(invalid(
+                    entry,
+                    format!("the vector of verse {verse} is not finite"),
+                ));
+            }
+            norm += f64::from(value) * f64::from(value);
+        }
+        if spec.space.normalized && (norm.sqrt() - 1.0).abs() > 1e-3 {
+            return Err(invalid(
+                entry,
+                format!("the vector of verse {verse} is not of unit length"),
+            ));
+        }
+        checked += 1;
+    }
+    if checked != rows {
+        return Err(invalid(entry, "an embedding is not a blob"));
+    }
+    Ok(())
 }
 
 fn column_list(kind: PackKind, table: &str) -> String {
@@ -643,8 +732,9 @@ pub fn uninstall(conn: &mut Connection, data_dir: &Path, pack_id: &str) -> AppRe
                 tx.execute(&format!("DELETE FROM main.{table}"), [])?;
             }
         }
-        // Tafsir rows and paragraphs go with the packs row (ON DELETE CASCADE).
-        Some(PackKind::Tafsir) | None => {}
+        // Tafsir rows and paragraphs and the vectors of a vector pack go with
+        // the packs row (ON DELETE CASCADE); a model pack has only files.
+        Some(PackKind::Tafsir | PackKind::Vectors | PackKind::Model) | None => {}
     }
     tx.execute("DELETE FROM packs WHERE id = ?1", [pack_id])?;
     tx.commit()?;
@@ -1820,6 +1910,210 @@ mod tests {
             .collect();
         assert_eq!(left, ["morphology.qac"]);
         assert!(!downloads_dir(&data).exists() && !tmp_dir(&data).exists());
+    }
+
+    /// Unit vector `i` of `dim` components, scaled by `scale`.
+    fn axis(i: usize, dim: usize, scale: f32) -> Vec<f32> {
+        (0..dim)
+            .map(|j| if j == i % dim { scale } else { 0.0 })
+            .collect()
+    }
+
+    fn le_bytes(vector: &[f32]) -> Vec<u8> {
+        vector.iter().flat_map(|x| x.to_le_bytes()).collect()
+    }
+
+    /// `(verse_id, embedding bytes)` of a test vector pack.
+    type VectorRow = (i64, Vec<u8>);
+
+    fn vector_meta(dim: u32) -> serde_json::Map<String, serde_json::Value> {
+        serde_json::json!({
+            "embedding_model": "openai/text-embedding-3-small",
+            "dim": dim,
+            "normalized": true,
+            "backend": "api",
+            "provider": "openai",
+            "api_model": "text-embedding-3-small"
+        })
+        .as_object()
+        .unwrap()
+        .clone()
+    }
+
+    impl Env {
+        /// A vector pack with one row per `(verse_id, embedding bytes)`.
+        fn vectors(
+            &self,
+            id: &str,
+            version: &str,
+            rows: &[(i64, Vec<u8>)],
+        ) -> (PathBuf, PackEntry) {
+            let db = self.path(&format!("{id}-{version}.sqlite"));
+            let _ = fs::remove_file(&db);
+            let conn = Connection::open(&db).unwrap();
+            pack_info(&conn, id, "vectors", version, 2);
+            // No primary key, so duplicates can be written.
+            conn.execute_batch("CREATE TABLE vectors (verse_id INTEGER NOT NULL, embedding BLOB)")
+                .unwrap();
+            for (verse, blob) in rows {
+                conn.execute(
+                    "INSERT INTO vectors VALUES (?1, ?2)",
+                    rusqlite::params![verse, blob],
+                )
+                .unwrap();
+            }
+            drop(conn);
+            let (file, mut entry) = self.finish(&db, id, "vectors", version);
+            entry.meta = Some(vector_meta(4));
+            (file, entry)
+        }
+
+        /// Vectors for every verse of the test database (1..=20).
+        fn all_vectors(&self, id: &str, version: &str, offset: usize) -> (PathBuf, PackEntry) {
+            let rows: Vec<VectorRow> = (1..=20)
+                .map(|v| (v, le_bytes(&axis(v as usize + offset, 4, 1.0))))
+                .collect();
+            self.vectors(id, version, &rows)
+        }
+    }
+
+    #[test]
+    fn installs_a_vector_pack_and_removes_it() {
+        let mut env = Env::new();
+        let (file, entry) = env.all_vectors("vectors.openai", "1.0.0", 0);
+        env.install(&file, &entry).unwrap();
+        assert_eq!(env.count("SELECT count(*) FROM verse_vectors"), 20);
+        let meta: String = env
+            .conn
+            .query_row(
+                "SELECT meta_json FROM packs WHERE id = 'vectors.openai'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(meta.contains(r#""backend": "api""#), "{meta}");
+
+        let spec = VectorPackSpec::from_meta(&vector_meta(4)).unwrap();
+        let index =
+            crate::embed::index::VectorIndex::load(&env.conn, "vectors.openai", &spec.space)
+                .unwrap();
+        assert_eq!(index.len(), 20);
+        assert_eq!(index.vector(2).unwrap(), axis(2, 4, 1.0));
+        // Verses 2, 6, 10, … share an axis with verse 2.
+        let near: Vec<u32> = index
+            .nearest(&axis(2, 4, 1.0), 3, &[2])
+            .iter()
+            .map(|n| n.verse_id)
+            .collect();
+        assert_eq!(near, [6, 10, 14]);
+
+        // A new version replaces the vectors.
+        let (file, entry) = env.all_vectors("vectors.openai", "1.1.0", 1);
+        env.install(&file, &entry).unwrap();
+        assert_eq!(env.count("SELECT count(*) FROM verse_vectors"), 20);
+        let index =
+            crate::embed::index::VectorIndex::load(&env.conn, "vectors.openai", &spec.space)
+                .unwrap();
+        assert_eq!(index.vector(2).unwrap(), axis(3, 4, 1.0));
+
+        let data_dir = env.dir.path().to_owned();
+        uninstall(&mut env.conn, &data_dir, "vectors.openai").unwrap();
+        assert_eq!(env.count("SELECT count(*) FROM verse_vectors"), 0);
+    }
+
+    #[test]
+    fn refuses_invalid_vector_packs() {
+        let good = |v: i64| (v, le_bytes(&axis(v as usize, 4, 1.0)));
+        let all = || -> Vec<VectorRow> { (1..=20).map(good).collect() };
+        let mut cases: Vec<(&str, Vec<VectorRow>)> = Vec::new();
+        cases.push(("missing verse", (1..=19).map(good).collect()));
+        let mut rows = all();
+        rows.push(good(3));
+        cases.push(("duplicate verse", rows));
+        let mut rows = all();
+        rows[4].1 = le_bytes(&[1.0, 0.0, 0.0]);
+        cases.push(("wrong size", rows));
+        let mut rows = all();
+        rows[4].1 = le_bytes(&[f32::NAN, 0.0, 0.0, 0.0]);
+        cases.push(("not finite", rows));
+        let mut rows = all();
+        rows[4].1 = le_bytes(&axis(0, 4, 2.0));
+        cases.push(("not unit length", rows));
+        for (name, rows) in cases {
+            let mut env = Env::new();
+            let before = dump(&env.conn);
+            let (file, entry) = env.vectors("vectors.openai", "1.0.0", &rows);
+            let err = env.install(&file, &entry).unwrap_err();
+            assert_eq!(err.code, AppErrorCode::PackInvalid, "{name}: {err:?}");
+            assert_eq!(dump(&env.conn), before, "{name}");
+        }
+
+        // A text instead of a blob.
+        let mut env = Env::new();
+        let (file, entry) = env.vectors("vectors.openai", "1.0.0", &all());
+        let db = env.path("vectors.openai-1.0.0.sqlite");
+        let conn = Connection::open(&db).unwrap();
+        conn.execute("UPDATE vectors SET embedding = 'x' WHERE verse_id = 1", [])
+            .unwrap();
+        drop(conn);
+        let (file2, mut entry2) = env.finish(&db, "vectors.openai", "vectors", "1.0.0");
+        entry2.meta = entry.meta.clone();
+        drop((file, entry));
+        assert_eq!(
+            env.install(&file2, &entry2).unwrap_err().code,
+            AppErrorCode::PackInvalid
+        );
+
+        // Metadata the app cannot use makes the pack unsupported.
+        let mut env = Env::new();
+        let (file, mut entry) = env.vectors("vectors.openai", "1.0.0", &all());
+        entry.meta = Some(serde_json::Map::new());
+        assert_eq!(
+            env.install(&file, &entry).unwrap_err().code,
+            AppErrorCode::PackUnsupported
+        );
+    }
+
+    #[test]
+    fn installs_a_model_pack_as_files() {
+        let mut env = Env::new();
+        let db = env.path("model.sqlite");
+        let conn = Connection::open(&db).unwrap();
+        pack_info(&conn, "model.e5-small", "model", "1.0.0", 2);
+        drop(conn);
+        let archive = env.path("model.e5-small.tar.zst");
+        tar_zst(
+            &archive,
+            &[
+                Member::file("model.sqlite", &fs::read(&db).unwrap()),
+                Member::file("model/model.onnx", b"onnx"),
+                Member::file("model/tokenizer.json", b"{}"),
+            ],
+        );
+        let mut entry = entry_for(&archive, "model.e5-small", "model", "1.0.0", 10 << 20);
+        entry.meta = Some(
+            serde_json::json!({ "embedding_model": "local/e5-small", "dim": 384 })
+                .as_object()
+                .unwrap()
+                .clone(),
+        );
+        env.install(&archive, &entry).unwrap();
+        let dir = packs_dir(env.dir.path()).join("model.e5-small");
+        assert_eq!(fs::read(dir.join("model/model.onnx")).unwrap(), b"onnx");
+        assert!(dir.join("model/tokenizer.json").is_file());
+        assert!(!dir.join("model.sqlite").exists());
+        assert_eq!(
+            env.count("SELECT count(*) FROM packs WHERE id = 'model.e5-small' AND type = 'model'"),
+            1
+        );
+
+        let data_dir = env.dir.path().to_owned();
+        uninstall(&mut env.conn, &data_dir, "model.e5-small").unwrap();
+        assert!(!dir.exists());
+        assert_eq!(
+            env.count("SELECT count(*) FROM packs WHERE id = 'model.e5-small'"),
+            0
+        );
     }
 
     #[test]

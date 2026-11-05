@@ -354,6 +354,8 @@
     "kind_translation": "Mealler",
     "kind_tafsir": "Tefsirler",
     "kind_morphology": "Kelime analizi",
+    "kind_vectors": "Anlamına göre arama",
+    "kind_model": "Anlamına göre arama modelleri",
     "kind_other": "Diğer",
     "install": "Kur",
     "update": "{{version}} sürümüne güncelle",

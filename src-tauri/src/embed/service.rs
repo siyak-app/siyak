@@ -10,9 +10,12 @@
 
 use std::sync::{Arc, Mutex};
 
+use rusqlite::Connection;
+
 use serde::Serialize;
 use specta::Type;
 
+use super::index::VectorIndex;
 use super::space::{Backend, ModelPackSpec, VectorPackSpec};
 use super::{ApiProvider, Embedder};
 use crate::db::user::Settings;
@@ -157,6 +160,8 @@ pub struct Semantic {
     factory: Arc<dyn EmbedderFactory>,
     /// The embedder of the last active pack, with its [`ActivePack::cache_key`].
     cache: Mutex<Option<(String, Arc<dyn Embedder>)>>,
+    /// The vectors of the last active pack, keyed by `id@version`.
+    index: Mutex<Option<(String, Arc<VectorIndex>)>>,
 }
 
 impl Semantic {
@@ -166,6 +171,7 @@ impl Semantic {
             keys,
             factory,
             cache: Mutex::new(None),
+            index: Mutex::new(None),
         }
     }
 
@@ -190,6 +196,35 @@ impl Semantic {
             },
             Err(status) => status,
         })
+    }
+
+    /// The vectors of the active vector pack, loaded from `content` on first
+    /// use and kept until the pack's version changes. Needs no embedder:
+    /// "verses like this one" compares verse vectors only (spec §7.6).
+    pub fn index(
+        &self,
+        content: &Connection,
+        packs: &[InstalledPack],
+        settings: &Settings,
+    ) -> AppResult<Arc<VectorIndex>> {
+        let Some(pack) = active_vector_pack(packs, settings) else {
+            return Err(unavailable("-", "no vector pack is installed"));
+        };
+        let spec = VectorPackSpec::from_meta(&meta(pack))
+            .map_err(|message| unavailable(&pack.id, &message))?;
+        let key = format!("{}@{}", pack.id, pack.version);
+        let mut cache = self
+            .index
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((cached, index)) = cache.as_ref()
+            && *cached == key
+        {
+            return Ok(Arc::clone(index));
+        }
+        let index = Arc::new(VectorIndex::load(content, &pack.id, &spec.space)?);
+        *cache = Some((key, Arc::clone(&index)));
+        Ok(index)
     }
 
     /// The embedder of the active vector pack, built on first use and kept
@@ -682,6 +717,43 @@ mod tests {
         let (semantic, _) = service(&[], 16);
         let packs = [local_vectors("vectors.e5"), model_pack(8)];
         let err = semantic.embedder(&packs, &Settings::new()).err().unwrap();
+        assert_eq!(err.code, AppErrorCode::SemanticUnavailable);
+    }
+
+    #[test]
+    fn the_index_is_loaded_once_per_pack_version() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = OFF;
+             CREATE TABLE packs (id TEXT PRIMARY KEY);
+             CREATE TABLE verses (id INTEGER PRIMARY KEY);",
+        )
+        .unwrap();
+        crate::db::content::ensure_vector_table(&conn).unwrap();
+        let blob: Vec<u8> = [1.0_f32; 8].iter().flat_map(|x| x.to_le_bytes()).collect();
+        conn.execute(
+            "INSERT INTO verse_vectors VALUES ('vectors.e5', 1, ?1)",
+            [&blob],
+        )
+        .unwrap();
+        // No embedder is needed: this build has none.
+        let semantic = Semantic::unbuilt();
+        let mut packs = vec![local_vectors("vectors.e5")];
+        let none = Settings::new();
+        let index = semantic.index(&conn, &packs, &none).unwrap();
+        assert_eq!((index.len(), index.dim()), (1, 8));
+
+        // Cached: a second vector is not seen until the version changes.
+        conn.execute(
+            "INSERT INTO verse_vectors VALUES ('vectors.e5', 2, ?1)",
+            [&blob],
+        )
+        .unwrap();
+        assert_eq!(semantic.index(&conn, &packs, &none).unwrap().len(), 1);
+        packs[0].version = "1.1.0".into();
+        assert_eq!(semantic.index(&conn, &packs, &none).unwrap().len(), 2);
+
+        let err = semantic.index(&conn, &[translation()], &none).unwrap_err();
         assert_eq!(err.code, AppErrorCode::SemanticUnavailable);
     }
 

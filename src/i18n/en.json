@@ -354,6 +354,8 @@
     "kind_translation": "Translations",
     "kind_tafsir": "Tafsirs",
     "kind_morphology": "Word analysis",
+    "kind_vectors": "Semantic search",
+    "kind_model": "Semantic search models",
     "kind_other": "Other",
     "install": "Install",
     "update": "Update to {{version}}",

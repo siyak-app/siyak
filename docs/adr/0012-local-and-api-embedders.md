@@ -33,6 +33,12 @@ user's own computer.
   under "Advanced" and show, before download, that searches are sent to the provider.
 - Vectors for API packs are built once in the `siyak-data` pipeline with the maintainers' key and
   published like any pack, so the user pays only for their own queries.
+- **Nearest neighbours are found in Rust, in memory.** Verse vectors are a plain `verse_vectors`
+  table in `content.db` (created by the first vector pack install); the active pack's vectors are
+  loaded once and scanned per query. The spec first named `sqlite-vec`, but loading it from Rust
+  needs `unsafe` code, which the workspace forbids, and its `vec0` tables would make `content.db`
+  unreadable by tools without the extension (pipeline, xtask, backups). For 6,236 verses a full
+  scan takes milliseconds.
 
 ## Alternatives considered
 
@@ -40,6 +46,8 @@ user's own computer.
   OpenAI-compatible servers the user already runs.
 - **Let users embed all verses with their own key.** No redistribution question for the vectors,
   but every user pays for and waits for 6,236 embeddings, and results differ between users.
+- **`sqlite-vec`.** Indexed search inside SQLite, but see above; a full scan is fast enough for
+  one Quran.
 - **Combine several spaces at once (ensemble).** Better recall is possible, but it multiplies
   packs, cost and complexity. Not in v1.
 

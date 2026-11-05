@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::db::content::LocalizedTitle;
+use crate::embed::space::{ModelPackSpec, VectorPackSpec};
 use crate::error::{AppError, AppErrorCode, AppResult};
 use crate::net::{Net, Purpose};
 
@@ -51,6 +52,10 @@ pub enum PackKind {
     Tafsir,
     /// The morphology tables, shipped in an archive with extra files.
     Morphology,
+    /// Verse embeddings of one vector space (spec §6.1, ADR 0012).
+    Vectors,
+    /// An ONNX embedding model for local vector packs, shipped in an archive.
+    Model,
 }
 
 impl PackKind {
@@ -60,6 +65,8 @@ impl PackKind {
             "translation" => Some(Self::Translation),
             "tafsir" => Some(Self::Tafsir),
             "morphology" => Some(Self::Morphology),
+            "vectors" => Some(Self::Vectors),
+            "model" => Some(Self::Model),
             _ => None,
         }
     }
@@ -70,12 +77,14 @@ impl PackKind {
             Self::Translation => "translation",
             Self::Tafsir => "tafsir",
             Self::Morphology => "morphology",
+            Self::Vectors => "vectors",
+            Self::Model => "model",
         }
     }
 
     /// Whether packs of this kind are `.tar.zst` archives (pack-format §4.4).
     pub fn is_archive(self) -> bool {
-        self == Self::Morphology
+        matches!(self, Self::Morphology | Self::Model)
     }
 
     /// The file name a pack of this kind is published under.
@@ -166,8 +175,21 @@ fn default_min_app_version() -> String {
 
 impl PackEntry {
     /// The pack's kind, if this app supports its type.
+    ///
+    /// Vector and model packs also need valid embedding metadata; with invalid
+    /// metadata they are listed as unsupported instead of failing the manifest.
     pub fn pack_kind(&self) -> Option<PackKind> {
-        PackKind::parse(&self.kind)
+        let kind = PackKind::parse(&self.kind)?;
+        let empty = serde_json::Map::new();
+        let meta = self.meta.as_ref().unwrap_or(&empty);
+        let valid = match kind {
+            PackKind::Vectors => VectorPackSpec::from_meta(meta)
+                .and_then(|spec| spec.check_requires(&self.requires))
+                .is_ok(),
+            PackKind::Model => ModelPackSpec::from_meta(meta).is_ok(),
+            PackKind::Translation | PackKind::Tafsir | PackKind::Morphology => true,
+        };
+        valid.then_some(kind)
     }
 
     /// The last path segment of `url`: the pack's file name.
@@ -955,7 +977,7 @@ pub(crate) mod tests {
 
     /// A manifest entry for tests.
     pub(crate) fn entry(id: &str, kind: &str, version: &str) -> serde_json::Value {
-        let ext = if kind == "morphology" {
+        let ext = if kind == "morphology" || kind == "model" {
             "tar"
         } else {
             "sqlite"
@@ -1021,15 +1043,62 @@ pub(crate) mod tests {
         let mut value = sample();
         value["future"] = serde_json::json!({ "x": 1 });
         value["packs"][0]["future_field"] = serde_json::json!([1, 2]);
-        let mut vectors = entry("vectors.e5", "vectors", "1.0.0");
-        vectors["url"] = "https://github.com/x/vectors.e5.sqlite.zst".into();
-        vectors["requires"] = serde_json::json!(["model.e5"]);
-        vectors["terms_ack"] = true.into();
-        value["packs"].as_array_mut().unwrap().push(vectors);
+        let mut future = entry("audio.x", "audio", "1.0.0");
+        future["url"] = "https://github.com/x/audio.x.mp3".into();
+        future["terms_ack"] = true.into();
+        value["packs"].as_array_mut().unwrap().push(future);
         let manifest = parse(&bytes(&value)).unwrap();
-        let vectors = manifest.pack("vectors.e5").unwrap();
-        assert_eq!(vectors.pack_kind(), None);
-        assert!(vectors.terms_ack);
+        let future = manifest.pack("audio.x").unwrap();
+        assert_eq!(future.pack_kind(), None);
+        assert!(future.terms_ack);
+    }
+
+    #[test]
+    fn vector_and_model_packs_need_valid_embedding_metadata() {
+        let mut vectors = entry("vectors.e5", "vectors", "1.0.0");
+        vectors["requires"] = serde_json::json!(["model.e5"]);
+        vectors["meta"] = serde_json::json!({
+            "embedding_model": "local/e5-small", "dim": 384,
+            "backend": "local", "model_pack": "model.e5"
+        });
+        let mut model = entry("model.e5", "model", "1.0.0");
+        model["meta"] = serde_json::json!({ "embedding_model": "local/e5-small", "dim": 384 });
+        let mut api = entry("vectors.voyage", "vectors", "1.0.0");
+        api["meta"] = serde_json::json!({
+            "embedding_model": "voyage/voyage-4", "dim": 1024,
+            "backend": "api", "provider": "voyage", "api_model": "voyage-4"
+        });
+        // Each broken one stays in the manifest, listed as unsupported.
+        let mut no_requires = vectors.clone();
+        no_requires["id"] = "vectors.a".into();
+        no_requires["url"] = "https://github.com/x/vectors.a.sqlite.zst".into();
+        no_requires["requires"] = serde_json::json!([]);
+        let mut no_meta = entry("vectors.b", "vectors", "1.0.0");
+        no_meta["requires"] = serde_json::json!(["model.e5"]);
+        let mut bad_model = entry("model.c", "model", "1.0.0");
+        bad_model["meta"] = serde_json::json!({ "embedding_model": "openai/x", "dim": 3 });
+
+        let manifest = parse(&bytes(&manifest_json(vec![
+            vectors,
+            model,
+            api,
+            no_requires,
+            no_meta,
+            bad_model,
+        ])))
+        .unwrap();
+        let kind = |id: &str| manifest.pack(id).unwrap().pack_kind();
+        assert_eq!(kind("vectors.e5"), Some(PackKind::Vectors));
+        assert_eq!(kind("model.e5"), Some(PackKind::Model));
+        assert_eq!(kind("vectors.voyage"), Some(PackKind::Vectors));
+        for id in ["vectors.a", "vectors.b", "model.c"] {
+            assert_eq!(kind(id), None, "{id}");
+        }
+        assert_eq!(PackKind::Model.file_name("model.e5"), "model.e5.tar.zst");
+        assert_eq!(
+            PackKind::Vectors.file_name("vectors.e5"),
+            "vectors.e5.sqlite.zst"
+        );
     }
 
     #[test]

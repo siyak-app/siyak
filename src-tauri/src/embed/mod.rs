@@ -7,13 +7,15 @@
 //! - **api**: an embedding API with the user's key ([`api`]): OpenAI, Voyage,
 //!   Gemini or an OpenAI-compatible server.
 //!
-//! [`space`] reads pack metadata, [`service`] picks the active vector pack,
+//! [`space`] reads pack metadata, [`index`] finds the nearest verse vectors,
+//! [`service`] picks the active vector pack,
 //! reports why semantic features are unavailable and loads the embedder lazily.
 //! Tafsir is never embedded ahead of time (ADR 0003).
 
 pub mod api;
 #[cfg(test)]
 pub(crate) mod fake;
+pub mod index;
 pub mod onnx;
 pub mod service;
 pub mod space;
