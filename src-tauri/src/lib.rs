@@ -192,9 +192,9 @@ fn data_dir(app: &tauri::App) -> AppResult<PathBuf> {
 const DEV_DATA_VAR: &str = "SIYAK_DEV_DATA";
 
 /// The database the content database is created from. Release builds use the
-/// bundled `core.db`. Debug builds use the small committed development
-/// database so contributors never need the data pipeline (spec §16.3), or the
-/// real `core.db` with `SIYAK_DEV_DATA=full`; each gets its own content file.
+/// bundled `core.db`. Debug builds use it too, so published packs install, or
+/// the small development database with `SIYAK_DEV_DATA=dev` (spec §16.3); each
+/// gets its own content file. Both are committed, so neither needs the pipeline.
 ///
 /// Chosen with `cfg!` rather than `#[cfg]` so both branches are always compiled.
 fn seed(app: &tauri::App) -> AppResult<Seed> {
@@ -211,16 +211,16 @@ fn seed(app: &tauri::App) -> AppResult<Seed> {
 /// The seed of a debug build for a `SIYAK_DEV_DATA` value.
 fn dev_seed(value: Option<&str>) -> AppResult<Seed> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    match value.unwrap_or("dev") {
-        "dev" | "" => Ok(Seed {
-            path: root.join("../dev-data/dev-content.db"),
-            file_name: db::content::FILE_NAME,
-            marker: Some("dev"),
-        }),
-        "full" => Ok(Seed {
+    match value.unwrap_or("full") {
+        "full" | "" => Ok(Seed {
             path: root.join("resources/core.db"),
             file_name: "content.full.db",
             marker: Some("full"),
+        }),
+        "dev" => Ok(Seed {
+            path: root.join("../dev-data/dev-content.db"),
+            file_name: db::content::FILE_NAME,
+            marker: Some("dev"),
         }),
         other => Err(AppError::new(
             AppErrorCode::SeedMissing,
@@ -237,14 +237,16 @@ mod tests {
     /// the registered commands, or the webview would be denied a command.
     #[test]
     fn dev_seeds_use_separate_content_files() {
-        let dev = dev_seed(None).unwrap();
+        let dev = dev_seed(Some("dev")).unwrap();
         assert_eq!(dev.file_name, "content.db");
         assert_eq!(dev.marker, Some("dev"));
         assert!(dev.path.is_file());
-        let full = dev_seed(Some("full")).unwrap();
-        assert_eq!(full.file_name, "content.full.db");
-        assert_eq!(full.marker, Some("full"));
-        assert!(full.path.is_file());
+        for value in [None, Some(""), Some("full")] {
+            let full = dev_seed(value).unwrap();
+            assert_eq!(full.file_name, "content.full.db");
+            assert_eq!(full.marker, Some("full"));
+            assert!(full.path.is_file());
+        }
         let err = dev_seed(Some("everything")).unwrap_err();
         assert_eq!(err.code, AppErrorCode::SeedMissing);
     }

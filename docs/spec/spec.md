@@ -1029,7 +1029,7 @@ Part of the landing page (§16.2).
 
 **The 15-minute goal:** a new contributor should be able to run the app within 15 minutes of cloning the repository.
 - One command: `pnpm install && pnpm tauri dev`.
-- `dev-data/dev-content.db`: sample data with a few surahs and translations; it grows with the milestones (partial morphology in M5, a small vector set in M7). Used automatically in dev builds; contributors never need to run the Python pipeline. Size target < 5 MB.
+- `dev-data/dev-content.db`: sample data with a few surahs and translations; it grows with the milestones (partial morphology in M5, a small vector set in M7). Used in dev builds with `SIYAK_DEV_DATA=dev`; by default they use the committed `core.db`, so published packs install. Either way, contributors never need to run the Python pipeline. Size target < 5 MB.
 - `.devcontainer/`: Rust, Node, pnpm and the Linux webview dependencies ready to go.
 - Platform prerequisites in `CONTRIBUTING.md` (Windows: WebView2/MSVC; macOS: Xcode CLT; Linux: WebKitGTK packages).
 

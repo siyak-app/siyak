@@ -1030,7 +1030,7 @@ Landing page'in bir parçasıdır (§16.2).
 
 **İlk 15 dakika hedefi:** Yeni bir contributor repo'yu klonladıktan sonra 15 dakika içinde uygulamayı çalıştırabilmelidir.
 - Tek komut: `pnpm install && pnpm tauri dev`.
-- `dev-data/dev-content.db`: Birkaç sure ve meal içeren örnek veri; milestone'larla büyür (M5'te kısmi morfoloji, M7'de küçük bir vektör seti). Dev build'de otomatik kullanılır; contributor'ın Python pipeline'ını çalıştırması gerekmez. Boyut hedefi < 5 MB.
+- `dev-data/dev-content.db`: Birkaç sure ve meal içeren örnek veri; milestone'larla büyür (M5'te kısmi morfoloji, M7'de küçük bir vektör seti). Dev build'de `SIYAK_DEV_DATA=dev` ile kullanılır; varsayılan olarak depodaki `core.db` kullanılır, böylece yayımlanan paketler kurulabilir. Her iki durumda da contributor'ın Python pipeline'ını çalıştırması gerekmez. Boyut hedefi < 5 MB.
 - `.devcontainer/`: Rust, Node, pnpm ve Linux webview bağımlılıkları hazır.
 - `CONTRIBUTING.md`'de platforma özel önkoşullar (Windows: WebView2/MSVC; macOS: Xcode CLT; Linux: WebKitGTK paketleri).
 

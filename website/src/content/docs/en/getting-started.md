@@ -19,5 +19,5 @@ pnpm install
 pnpm tauri dev
 ```
 
-The app opens with a small development dataset (Al-Fatiha and the last three surahs with the
-Pickthall translation), so you do not need the data pipeline.
+The app opens with the complete Quran text and the Pickthall translation, so you do not need the
+data pipeline.

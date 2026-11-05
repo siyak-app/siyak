@@ -411,6 +411,7 @@
     "pack_hash_mismatch": "The downloaded file is damaged or has been changed. It was not installed.",
     "pack_too_large": "The pack is larger than expected. It was not installed.",
     "pack_invalid": "The pack's contents are not valid. It was not installed.",
+    "pack_needs_full_data": "This pack covers the whole Quran, but the app is running on the small development data. It was not installed. Restart the app without SIYAK_DEV_DATA=dev.",
     "pack_schema_unsupported": "This pack was built for a different version of Siyak.",
     "disk_space_insufficient": "There is not enough free disk space for this pack.",
     "install_cancelled": "The installation was cancelled.",

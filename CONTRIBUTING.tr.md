@@ -67,8 +67,8 @@ pnpm tauri dev
 ```
 
 İlk `pnpm tauri dev` Rust çekirdeğini derler ve birkaç dakika sürer; sonraki çalıştırmalar
-hızlıdır. Uygulama küçük bir geliştirme veri setiyle (`dev-data/`) açılır; veri hattına (pipeline)
-hiç ihtiyacınız olmaz.
+hızlıdır. Uygulama Kuran'ın tam verisiyle (`src-tauri/resources/core.db`) açılır; veri hattına
+(pipeline) hiç ihtiyacınız olmaz.
 
 Uygulama verileri (iki veritabanı) işletim sisteminin `com.kemalozyon.siyak` için ayırdığı veri
 dizininde durur: macOS'ta `~/Library/Application Support/com.kemalozyon.siyak`, Windows'ta
@@ -77,16 +77,17 @@ uygulamayı sıfırlar.
 
 ### Kuran verisi
 
-Debug derlemeler küçük geliştirme veri setini kullanır. Release derlemeler,
-[`siyak-data`](https://github.com/siyak-app/siyak-data) tarafından üretilen tam veriyi,
-`src-tauri/resources/core.db`'yi içerir. Kaynağı [`dev-data/README.md`](dev-data/README.md#real-data-coredb)
+Debug ve release derlemeler, [`siyak-data`](https://github.com/siyak-app/siyak-data) tarafından
+üretilen tam veriyi, `src-tauri/resources/core.db`'yi kullanır. Kaynağı [`dev-data/README.md`](dev-data/README.md#real-data-coredb)
 dosyasında kayıtlıdır: şu an siyak-data commit'i `72bc795`, sha256 `76ed118ad4be…`,
 `core_version` 1. Bakımcılar onu `cargo xtask sync-core` ile günceller.
 
-Debug derlemeyi tam veriyle çalıştırmak için `SIYAK_DEV_DATA=full pnpm tauri dev` kullanın. Her veri
-setinin kendi içerik veritabanı vardır (geliştirme verisi için `content.db`, tam veri için
-`content.full.db`); böylece hiçbir şeyi sıfırlamadan ikisi arasında geçiş yapabilirsiniz. `user.db`
-ortaktır. Debug derlemeler hangi veri setinin yüklü olduğunu üst çubukta gösterir.
+Debug derlemeyi, morfolojiyi hazır içeren küçük geliştirme veri setiyle (`dev-data/`) çalıştırmak
+için `SIYAK_DEV_DATA=dev pnpm tauri dev` kullanın. Her veri setinin kendi içerik veritabanı vardır
+(geliştirme verisi için `content.db`, tam veri için `content.full.db`); böylece hiçbir şeyi
+sıfırlamadan ikisi arasında geçiş yapabilirsiniz. `user.db` ortaktır. Debug derlemeler hangi veri
+setinin yüklü olduğunu üst çubukta gösterir. Yayımlanan paketler Kuran'ın tamamını kapsadığı için
+yalnızca tam veriye kurulur; geliştirme verisinde uygulama bunları reddeder ve nedenini söyler.
 
 Paketleri yayımlamadan denemek için onları `siyak-data` içinde derleyin ve bir debug derlemeyi
 çıktısına yönlendirin: `SIYAK_PACK_SOURCE=../siyak-data/dist pnpm tauri dev`. Uygulama bu durumda

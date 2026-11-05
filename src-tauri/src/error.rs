@@ -60,6 +60,8 @@ pub enum AppErrorCode {
     PackTooLarge,
     /// The pack's structure or `pack_info` is not what its manifest entry describes.
     PackInvalid,
+    /// The pack names verses the development data lacks; debug builds only.
+    PackNeedsFullData,
     /// The pack was built for a content schema this app does not know.
     PackSchemaUnsupported,
     /// There is not enough free disk space for the download and installation.

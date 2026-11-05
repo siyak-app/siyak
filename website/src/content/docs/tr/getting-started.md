@@ -21,5 +21,5 @@ pnpm install
 pnpm tauri dev
 ```
 
-Uygulama küçük bir geliştirme veri setiyle açılır (Fâtiha ve son üç sure, Pickthall meali); veri
-hattına (pipeline) ihtiyacınız olmaz.
+Uygulama Kuran'ın tam metni ve Pickthall mealiyle açılır; veri hattına (pipeline) ihtiyacınız
+olmaz.

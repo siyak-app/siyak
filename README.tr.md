@@ -9,8 +9,8 @@ uygulamasıdır. Arapça metin ve mealler, tefsir, kelime ve kök analizi, arama
 arayüzde bir araya gelir: okuyucu için sade kalır, araştırmacı için derinleşir. Her şey kendi
 bilgisayarınızda çalışır.
 
-> **Durum: pre-alpha.** Henüz yayımlanmış bir sürüm yok. İskelet, küçük bir geliştirme veri setiyle
-> çalışıyor; [kilometre taşlarına](docs/spec/spec.md#17-milestones) bakabilirsiniz.
+> **Durum: pre-alpha.** Henüz yayımlanmış bir sürüm yok;
+> [kilometre taşlarına](docs/spec/spec.md#17-milestones) bakabilirsiniz.
 
 ## İlkeler
 
@@ -32,7 +32,7 @@ bilgisayarınızda çalışır.
 3. `pnpm install`
 4. `pnpm tauri dev`
 
-Uygulama, geliştirme veri setindeki Fâtiha ve birkaç sureyle açılır.
+Uygulama, Kuran'ın tam metniyle açılır.
 
 ## Daha fazlası
 
@@ -47,7 +47,7 @@ Uygulama, geliştirme veri setindeki Fâtiha ve birkaç sureyle açılır.
 
 Kod: tercihinize göre [MIT](LICENSE-MIT) veya [Apache-2.0](LICENSE-APACHE) lisansı.
 
-Verilerin kendi lisansları vardır. Geliştirme veri seti [Tanzil Projesi](https://tanzil.net)'nin
+Verilerin kendi lisansları vardır. Uygulamadaki veriler [Tanzil Projesi](https://tanzil.net)'nin
 Kur'an metnini (CC BY 3.0, değiştirilmeden) ve kamu malı Pickthall mealini kullanır; ayrıntılar
 [dev-data/README.md](dev-data/README.md) dosyasında. Arapça yazı tipi
 [Amiri Quran](https://github.com/aliftype/amiri)'dır (SIL Open Font License).

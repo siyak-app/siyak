@@ -251,6 +251,8 @@ export type AppErrorCode =
 "pack_too_large" | 
 /**  The pack's structure or `pack_info` is not what its manifest entry describes. */
 "pack_invalid" | 
+/**  The pack names verses the development data lacks; debug builds only. */
+"pack_needs_full_data" | 
 /**  The pack was built for a content schema this app does not know. */
 "pack_schema_unsupported" | 
 /**  There is not enough free disk space for the download and installation. */

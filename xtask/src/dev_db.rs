@@ -1,5 +1,5 @@
-//! Builds `dev-data/dev-content.db`, the small seed database used by debug
-//! builds so contributors never need the data pipeline (spec §16.3).
+//! Builds `dev-data/dev-content.db`, the small seed database of debug builds
+//! started with `SIYAK_DEV_DATA=dev` (spec §16.3).
 //!
 //! Inputs are the committed files in `dev-data/fixtures/` (see
 //! `dev-data/README.md` for sources and licenses). The output is deterministic:

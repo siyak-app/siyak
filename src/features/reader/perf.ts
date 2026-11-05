@@ -3,7 +3,7 @@
  * surahs. WebKit has no Long Tasks API, so it samples the gaps between
  * animation frames while scrolling the reader from top to bottom.
  *
- * In `pnpm tauri dev`, open a surah (al-Baqarah with `SIYAK_DEV_DATA=full`),
+ * In `pnpm tauri dev`, open a surah (al-Baqarah),
  * open the web inspector and run `await __siyakPerf.scrollTest()`.
  *
  * @packageDocumentation

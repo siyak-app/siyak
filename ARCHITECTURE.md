@@ -41,8 +41,8 @@ Both live in the operating system's app data directory (`app_data_dir()`, e.g.
 - **First launch:** if the content file is missing, a seed is copied into place. Release builds
   seed `content.db` from the bundled `resources/core.db`, the real Quran data built by `siyak-data`
   and copied in with `cargo xtask sync-core`. Debug builds pick the seed with `SIYAK_DEV_DATA`: unset
-  or `dev` seeds `content.db` from the small `dev-data/dev-content.db`, `full` seeds a separate
-  `content.full.db` from `resources/core.db`. Switching never mixes the two; `user.db` is shared,
+  or `full` seeds a separate `content.full.db` from `resources/core.db`, `dev` seeds `content.db`
+  from the small `dev-data/dev-content.db`. Switching never mixes the two; `user.db` is shared,
   because user data refers to verses by their stable global id. The seed is recorded as
   `content_meta.seed`, and debug builds show it in a badge in the header.
 - **Migrations:** ordered SQL files in `src-tauri/migrations/{content,user}/NNNN_name.sql`, embedded

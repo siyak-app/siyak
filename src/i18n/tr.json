@@ -411,6 +411,7 @@
     "pack_hash_mismatch": "İndirilen dosya bozuk ya da değiştirilmiş. Kurulmadı.",
     "pack_too_large": "Paket beklenenden büyük. Kurulmadı.",
     "pack_invalid": "Paketin içeriği geçerli değil. Kurulmadı.",
+    "pack_needs_full_data": "Bu paket Kur'an'ın tamamını kapsıyor, ama uygulama küçük geliştirme verisiyle çalışıyor. Kurulmadı. Uygulamayı SIYAK_DEV_DATA=dev olmadan yeniden başlatın.",
     "pack_schema_unsupported": "Bu paket Siyak'ın farklı bir sürümü için hazırlanmış.",
     "disk_space_insufficient": "Bu paket için diskte yeterli boş alan yok.",
     "install_cancelled": "Kurulum iptal edildi.",

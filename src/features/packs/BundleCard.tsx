@@ -7,6 +7,7 @@ import { appErrorCode, useAcknowledgeTerms, useInstallBundle } from "@/lib/queri
 
 import { formatBytes, packTitle } from "./packFormat";
 import { JobProgress, TermsCheckbox, TermsList } from "./PackRow";
+import { usePackFailures } from "./usePackEvents";
 
 /**
  * A pack set installed with one click (spec §6.3): its members, total size
@@ -18,6 +19,7 @@ export function BundleCard({ bundle, catalog }: { bundle: BundleView; catalog: C
   const language = i18n.resolvedLanguage;
   const install = useInstallBundle();
   const acknowledge = useAcknowledgeTerms();
+  const failures = usePackFailures((state) => state.failures);
   const [accepted, setAccepted] = useState(false);
 
   const members = bundle.packs.flatMap((id) => catalog.packs.filter((p) => p.id === id));
@@ -82,6 +84,16 @@ export function BundleCard({ bundle, catalog }: { bundle: BundleView; catalog: C
           {errorCode ? t(`errors.${errorCode}`) : t("errors.unknown")}
         </p>
       )}
+      {members.map((pack) => {
+        const failure = failures[pack.id];
+        return (
+          failure && (
+            <p key={pack.id} role="alert" className="text-xs text-destructive">
+              {packTitle(pack.title, pack.title_fallback, language)}: {t(`errors.${failure}`)}
+            </p>
+          )
+        );
+      })}
       {bundle.missing.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("packs.bundle_installed")}</p>
       ) : (

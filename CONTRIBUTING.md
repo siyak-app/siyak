@@ -65,7 +65,8 @@ pnpm tauri dev
 ```
 
 The first `pnpm tauri dev` compiles the Rust core and takes a few minutes; later runs are fast. The
-app opens with a small development dataset (`dev-data/`), so you never need the data pipeline.
+app opens with the complete Quran data (`src-tauri/resources/core.db`), so you never need the data
+pipeline.
 
 App data (the two databases) is stored in the OS app data directory for `com.kemalozyon.siyak`,
 e.g. `~/Library/Application Support/com.kemalozyon.siyak` on macOS,
@@ -74,17 +75,18 @@ Deleting that directory resets the app.
 
 ### Quran data
 
-Debug builds use the small development dataset. Release builds bundle
-`src-tauri/resources/core.db`, the complete data built by
+Debug and release builds use `src-tauri/resources/core.db`, the complete data built by
 [`siyak-data`](https://github.com/siyak-app/siyak-data). Its origin is recorded in
 [`dev-data/README.md`](dev-data/README.md#real-data-coredb): currently siyak-data commit
 `72bc795`, sha256 `76ed118ad4be…`, `core_version` 1. Maintainers update it with
 `cargo xtask sync-core`.
 
-To run a debug build on the complete data, start it with `SIYAK_DEV_DATA=full pnpm tauri dev`. Each
-dataset gets its own content database (`content.db` for the development data, `content.full.db` for
-the full data), so you can switch back and forth without resetting anything; `user.db` is shared.
-Debug builds show which dataset is loaded in the header.
+To run a debug build on the small development dataset (`dev-data/`), which already includes
+morphology, start it with `SIYAK_DEV_DATA=dev pnpm tauri dev`. Each dataset gets its own content
+database (`content.db` for the development data, `content.full.db` for the full data), so you can
+switch back and forth without resetting anything; `user.db` is shared. Debug builds show which
+dataset is loaded in the header. Published packs cover the whole Quran, so they install only on the
+full data; on the development data the app refuses them and says so.
 
 To try packs without publishing them, build them in `siyak-data` and point a debug build at its
 output: `SIYAK_PACK_SOURCE=../siyak-data/dist pnpm tauri dev`. The app then reads `manifest.json`

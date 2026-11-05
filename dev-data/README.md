@@ -1,8 +1,8 @@
 # Development data
 
-`dev-content.db` is a small seed database that debug builds copy to `content.db` on first launch,
-so contributors can run Siyak without the data pipeline (spec §16.3). Release builds bundle the
-real data instead, `src-tauri/resources/core.db` (see [Real data](#real-data-coredb) below).
+`dev-content.db` is a small seed database that debug builds started with `SIYAK_DEV_DATA=dev` copy
+to `content.db` on first launch (spec §16.3). Other debug builds and release builds use the real
+data, `src-tauri/resources/core.db` (see [Real data](#real-data-coredb) below).
 
 ## Contents
 

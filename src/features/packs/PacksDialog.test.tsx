@@ -6,6 +6,7 @@ import type { Catalog, PackView } from "@/lib/bindings";
 import { useUiStore } from "@/stores/ui";
 
 import { PacksDialog } from "./PacksDialog";
+import { BundleCard } from "./BundleCard";
 import { usePackFailures } from "./usePackEvents";
 
 const calls: string[] = [];
@@ -158,6 +159,25 @@ describe("PacksDialog", () => {
     usePackFailures.setState({ failures: { "tr.old": "pack_hash_mismatch" } });
     const dialog = open();
     expect(within(dialog).getByRole("alert")).toHaveTextContent("damaged or has been changed");
+  });
+
+  it("shows why a pack of a bundle failed", () => {
+    usePackFailures.setState({ failures: { "ar.jalalayn": "pack_needs_full_data" } });
+    render(
+      <BundleCard
+        catalog={catalog}
+        bundle={{
+          id: "recommended",
+          title: { tr: "Önerilen", en: "Recommended" },
+          description: null,
+          packs: ["ar.jalalayn"],
+          missing: ["ar.jalalayn"],
+          size: 1000,
+          installed_size: 2000,
+        }}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/^Jalalayn: .*SIYAK_DEV_DATA=dev/);
   });
 
   it("lists installed packs with their licenses under Sources", () => {

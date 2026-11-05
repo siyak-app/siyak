@@ -29,7 +29,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::download::Progress;
 use super::manifest::{PackEntry, PackKind, Phase};
-use crate::db::content::MIGRATIONS as CONTENT_MIGRATIONS;
+use crate::db::content::{MIGRATIONS as CONTENT_MIGRATIONS, seed_marker};
 use crate::error::{AppError, AppErrorCode, AppResult};
 
 /// Tables (and their columns) a pack of each type may contain besides `pack_info`.
@@ -258,6 +258,7 @@ fn check_and_copy(
     }
     check_pack_structure(conn, kind).map_err(|msg| invalid(entry, msg))?;
     let source_version = check_pack_info(conn, entry, kind)?;
+    check_verses_exist(conn, entry, kind)?;
 
     let tx = conn.transaction()?;
     upsert_packs_row(&tx, entry, &source_version)?;
@@ -295,6 +296,42 @@ fn check_and_copy(
         let _ = fs::remove_dir_all(packs.join(previous));
     }
     Ok(Installed { replaced })
+}
+
+/// Fails unless every verse the attached pack names is in `content.db`, before
+/// anything is copied. Real packs cover the whole Quran, so on the development
+/// data (spec §16.3) this is expected, and the error says how to get past it.
+fn check_verses_exist(conn: &Connection, entry: &PackEntry, kind: PackKind) -> AppResult<()> {
+    let references: &[(&str, &str)] = match kind {
+        PackKind::Translation => &[("translations", "verse_id")],
+        PackKind::Tafsir => &[("tafsir", "verse_from"), ("tafsir", "verse_to")],
+        PackKind::Morphology => &[("words", "verse_id")],
+    };
+    for (table, column) in references {
+        let missing = conn
+            .query_row(
+                &format!(
+                    "SELECT 1 FROM pack.{table}
+                     WHERE {column} NOT IN (SELECT id FROM main.verses) LIMIT 1"
+                ),
+                [],
+                |_| Ok(()),
+            )
+            .optional()?;
+        if missing.is_none() {
+            continue;
+        }
+        let message = format!("{table}.{column} names a verse content.db does not have");
+        return Err(if seed_marker(conn)?.as_deref() == Some("dev") {
+            AppError::new(
+                AppErrorCode::PackNeedsFullData,
+                format!("{}: {message}", entry.id),
+            )
+        } else {
+            invalid(entry, message)
+        });
+    }
+    Ok(())
 }
 
 /// Fails unless the attached pack holds only allowed tables/columns and
@@ -1425,8 +1462,12 @@ mod tests {
         let (file, entry) = env.translation("tr.test", "1.0.0", &[(1, "bir")]);
         env.install(&file, &entry).unwrap();
         let before = dump(&env.conn);
-        // Verse 999 does not exist: the foreign key fails half-way through.
-        let (file, entry) = env.translation("tr.test", "1.1.0", &[(2, "iki"), (999, "yok")]);
+        // A reversed range breaks a CHECK half-way through the copy.
+        let (file, entry) = env.tafsir(
+            "ar.bad",
+            "1.0.0",
+            &[(1, 1, "commentary", P1), (3, 2, "commentary", P2)],
+        );
         assert_eq!(
             env.install(&file, &entry).unwrap_err().code,
             AppErrorCode::QueryFailed
@@ -1436,6 +1477,84 @@ mod tests {
             env.count("SELECT count(*) FROM pragma_database_list WHERE name = 'pack'"),
             0
         );
+    }
+
+    /// Packs that name verse 999, which `content_db` does not have.
+    fn packs_with_a_missing_verse(env: &Env) -> Vec<(PathBuf, PackEntry)> {
+        vec![
+            env.translation("tr.test", "1.1.0", &[(2, "iki"), (999, "yok")]),
+            env.tafsir("ar.from", "1.0.0", &[(999, 999, "commentary", P1)]),
+            env.tafsir("ar.to", "1.0.0", &[(1, 999, "commentary", P1)]),
+        ]
+    }
+
+    #[test]
+    fn a_pack_naming_a_missing_verse_is_invalid() {
+        let mut env = Env::new();
+        let (file, entry) = env.translation("tr.test", "1.0.0", &[(1, "bir")]);
+        env.install(&file, &entry).unwrap();
+        let before = dump(&env.conn);
+        for (file, entry) in packs_with_a_missing_verse(&env) {
+            let err = env.install(&file, &entry).unwrap_err();
+            assert_eq!(err.code, AppErrorCode::PackInvalid, "{}", entry.id);
+            assert_eq!(dump(&env.conn), before);
+        }
+    }
+
+    #[test]
+    fn on_the_development_data_a_missing_verse_asks_for_the_full_data() {
+        let mut env = Env::new();
+        let (file, entry) = env.translation("tr.test", "1.0.0", &[(1, "bir")]);
+        env.install(&file, &entry).unwrap();
+        env.conn
+            .execute("INSERT INTO content_meta VALUES ('seed', 'dev')", [])
+            .unwrap();
+        let before = dump(&env.conn);
+        for (file, entry) in packs_with_a_missing_verse(&env) {
+            let err = env.install(&file, &entry).unwrap_err();
+            assert_eq!(err.code, AppErrorCode::PackNeedsFullData, "{}", entry.id);
+            assert_eq!(dump(&env.conn), before);
+        }
+    }
+
+    #[test]
+    fn the_full_data_marker_does_not_ask_for_the_full_data() {
+        let mut env = Env::new();
+        env.conn
+            .execute("INSERT INTO content_meta VALUES ('seed', 'full')", [])
+            .unwrap();
+        let (file, entry) = env.translation("tr.test", "1.0.0", &[(999, "yok")]);
+        assert_eq!(
+            env.install(&file, &entry).unwrap_err().code,
+            AppErrorCode::PackInvalid
+        );
+    }
+
+    #[test]
+    fn a_morphology_pack_naming_a_missing_verse_keeps_the_installed_one() {
+        let mut env = Env::new();
+        let (file, entry) = env.morphology("morphology.qac", "1.0.0", "old");
+        env.install(&file, &entry).unwrap();
+        let (file, entry) = env.morphology("morphology.qac", "1.1.0", "new");
+        // The update names the verses of the installed pack; content.db loses one.
+        env.conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
+        let missing: i64 = env
+            .conn
+            .query_row("SELECT verse_id FROM words LIMIT 1", [], |r| r.get(0))
+            .unwrap();
+        env.conn
+            .execute("DELETE FROM translations WHERE verse_id = ?1", [missing])
+            .unwrap();
+        env.conn
+            .execute("DELETE FROM verses WHERE id = ?1", [missing])
+            .unwrap();
+        env.conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        let before = dump(&env.conn);
+        assert_eq!(
+            env.install(&file, &entry).unwrap_err().code,
+            AppErrorCode::PackInvalid
+        );
+        assert_eq!(dump(&env.conn), before);
     }
 
     fn malicious_translation(env: &Env, extra_sql: &str) -> (PathBuf, PackEntry) {
