@@ -187,6 +187,7 @@
     "group_arabic": "In the Arabic text",
     "group_translations": "In translations",
     "group_roots": "Roots and dictionary forms",
+    "group_meaning": "Similar in meaning",
     "see_all": "See all {{count}} results",
     "total": "Results: {{count}}",
     "show_more": "Show more",
@@ -194,6 +195,7 @@
     "mode_all": "All",
     "mode_text": "Text",
     "mode_root": "Root",
+    "mode_meaning": "Meaning",
     "surah_range": "Surahs",
     "surah_from": "From",
     "surah_to": "To",
@@ -202,7 +204,30 @@
     "revelation_meccan": "Mecca",
     "revelation_medinan": "Medina",
     "packs": "Translations",
-    "packs_hint": "With none checked, all of them are searched."
+    "packs_hint": "With none checked, all of them are searched.",
+    "meaning_searching": "Searching by meaning… The first search loads the model, which takes a few seconds.",
+    "meaning_hint": "Verses close in meaning to your words, closest first. They need not contain the words themselves.",
+    "meaning_see_all": "More verses similar in meaning"
+  },
+  "semantic": {
+    "pack_required": "Searching by meaning needs the semantic search packs.",
+    "pack_required_named": "Searching by meaning needs the pack {{title}} ({{size}}).",
+    "model_missing": "The semantic search pack needs its model pack, {{pack}}.",
+    "key_missing": "This semantic search pack uses {{provider}}: add your {{provider}} API key to use it.",
+    "base_url_missing": "This semantic search pack needs the address of your server.",
+    "unusable": "The semantic search pack {{pack}} cannot be used with this version of Siyak.",
+    "open_packs": "Open Packs",
+    "remote": "Your searches are sent to {{provider}}."
+  },
+  "related": {
+    "select_verse": "Select a verse to see related verses.",
+    "loading": "Loading…",
+    "by_meaning": "Similar in meaning",
+    "by_meaning_hint": "Verses whose meaning is close to this one.",
+    "by_roots": "Shared roots",
+    "by_roots_hint": "Verses that share rare roots and names with this one.",
+    "shared": "Shared:",
+    "none": "Nothing found."
   },
   "tafsir": {
     "loading": "Loading…",

@@ -187,6 +187,7 @@
     "group_arabic": "Arapça metinde",
     "group_translations": "Meallerde",
     "group_roots": "Kökler ve sözlük biçimleri",
+    "group_meaning": "Anlamca yakın",
     "see_all": "{{count}} sonucun tümünü gör",
     "total": "Sonuç: {{count}}",
     "show_more": "Daha fazla göster",
@@ -194,6 +195,7 @@
     "mode_all": "Tümü",
     "mode_text": "Metin",
     "mode_root": "Kök",
+    "mode_meaning": "Anlam",
     "surah_range": "Sureler",
     "surah_from": "Başlangıç",
     "surah_to": "Bitiş",
@@ -202,7 +204,30 @@
     "revelation_meccan": "Mekke",
     "revelation_medinan": "Medine",
     "packs": "Mealler",
-    "packs_hint": "Hiçbiri işaretli değilse hepsinde aranır."
+    "packs_hint": "Hiçbiri işaretli değilse hepsinde aranır.",
+    "meaning_searching": "Anlamına göre aranıyor… İlk aramada model yüklenir, bu birkaç saniye sürer.",
+    "meaning_hint": "Yazdıklarınıza anlamca yakın ayetler, en yakından başlayarak. Ayetlerde aynı kelimelerin geçmesi gerekmez.",
+    "meaning_see_all": "Anlamca yakın başka ayetler"
+  },
+  "semantic": {
+    "pack_required": "Anlamına göre arama için anlamsal arama paketleri gerekli.",
+    "pack_required_named": "Anlamına göre arama için {{title}} paketi gerekli ({{size}}).",
+    "model_missing": "Anlamsal arama paketi, {{pack}} model paketi olmadan çalışmaz.",
+    "key_missing": "Bu anlamsal arama paketi {{provider}} kullanır: kullanmak için {{provider}} API anahtarınızı ekleyin.",
+    "base_url_missing": "Bu anlamsal arama paketi için sunucunuzun adresi gerekli.",
+    "unusable": "{{pack}} anlamsal arama paketi Siyak'ın bu sürümüyle kullanılamıyor.",
+    "open_packs": "Paketleri aç",
+    "remote": "Aramalarınız şu sağlayıcıya gönderilir: {{provider}}."
+  },
+  "related": {
+    "select_verse": "İlgili ayetleri görmek için bir ayet seçin.",
+    "loading": "Yükleniyor…",
+    "by_meaning": "Anlamca yakın",
+    "by_meaning_hint": "Anlamı bu ayete yakın ayetler.",
+    "by_roots": "Ortak kökler",
+    "by_roots_hint": "Bu ayetle nadir kökleri ve özel isimleri paylaşan ayetler.",
+    "shared": "Ortak:",
+    "none": "Bir şey bulunamadı."
   },
   "tafsir": {
     "loading": "Yükleniyor…",

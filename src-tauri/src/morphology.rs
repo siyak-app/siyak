@@ -119,7 +119,7 @@ pub struct WordDetail {
 }
 
 /// What a concordance lists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum ConcordanceTarget {
     /// Every word with this root.

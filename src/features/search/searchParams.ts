@@ -1,5 +1,5 @@
-/** Modes of the search screen; Meaning arrives with its packs (M7). */
-export const SEARCH_MODES = ["all", "text", "root"] as const;
+/** Modes of the search screen (spec §7.1). */
+export const SEARCH_MODES = ["all", "text", "root", "meaning"] as const;
 
 /** A mode of the search screen. */
 export type SearchMode = (typeof SEARCH_MODES)[number];

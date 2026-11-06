@@ -764,6 +764,10 @@ Opens when a word is clicked in the reader:
 Related verses for a verse are merged from two sources:
 1. **Semantic similarity:** KNN with the verse's own vector (k=10, excluding the verse itself). Requires a vector pack.
 2. **Shared roots/lemmas:** an overlap score weighted by the inverse frequency (IDF) of the verse's roots/lemmas. Requires a morphology pack. This keeps very frequent roots (e.g. "قول") from dominating.
+   - Terms: the roots of the verse's words, and the dictionary forms of proper nouns without a root (موسى, فرعون). Particles and pronouns do not count.
+   - Terms found in more than 10% of all verses (ا ل ه, ق و ل, ك و ن, ر ب ب, ع ل م, ا م ن) are left out: they neither rank nor appear as a reason.
+   - Score: the cosine of the two verses' IDF-weighted term sets, so a long verse does not win by size. k=10, the verse itself left out.
+   - Each result lists the shared terms, rarest first; each opens its concordance.
 
 Results are shown in two separate sections, with their reasons ("similar in meaning", "shared roots: ر ح م, غ ف ر"). The user always sees why a verse is considered related. If a curated cross-reference dataset is found, it is added as a third source (§18).
 

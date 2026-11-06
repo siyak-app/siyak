@@ -751,6 +751,8 @@ pub struct PackView {
     pub terms_acknowledged: bool,
     /// The installed morphology pack this one would replace.
     pub replaces: Option<String>,
+    /// Packs installed with this one (a vector pack's model pack).
+    pub requires: Vec<String>,
     /// The running or queued job for this pack.
     pub job: Option<JobView>,
 }
@@ -873,6 +875,7 @@ pub fn catalog(input: &CatalogInput<'_>) -> Catalog {
                 .then(|| morphology.clone())
                 .flatten()
                 .filter(|m| *m != entry.id),
+            requires: entry.requires.clone(),
             job: input.jobs.get(&entry.id).cloned(),
         });
     }
@@ -913,6 +916,7 @@ pub fn catalog(input: &CatalogInput<'_>) -> Catalog {
             terms_ack_required: false,
             terms_acknowledged: false,
             replaces: None,
+            requires: Vec::new(),
             job: input.jobs.get(&local.id).cloned(),
         });
     }

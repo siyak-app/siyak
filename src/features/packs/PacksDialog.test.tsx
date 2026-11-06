@@ -39,6 +39,7 @@ function pack(overrides: Partial<PackView>): PackView {
     terms_ack_required: false,
     terms_acknowledged: false,
     replaces: null,
+    requires: [],
     job: null,
     ...overrides,
   };

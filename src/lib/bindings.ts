@@ -83,6 +83,22 @@ export const commands = {
 	 *  what the user can do about it (install a pack, store a key).
 	 */
 	getSemanticStatus: () => typedError<SemanticStatus, AppError>(__TAURI_INVOKE("get_semantic_status")),
+	/**
+	 *  The verses closest in meaning to a query, best first, each with the given
+	 *  translation. Fails with `semantic_unavailable` unless the status is ready.
+	 */
+	searchMeaning: (query: string, translationId: string | null, limit: number) => typedError<RelatedVerse[], AppError>(__TAURI_INVOKE("search_meaning", { query, translationId, limit })),
+	/**
+	 *  The verses closest in meaning to a verse, best first; the verse itself is
+	 *  left out. Needs only the vector pack: verse vectors are compared, nothing
+	 *  is embedded.
+	 */
+	relatedByMeaning: (verseId: number, translationId: string | null, limit: number) => typedError<RelatedVerse[], AppError>(__TAURI_INVOKE("related_by_meaning", { verseId, translationId, limit })),
+	/**
+	 *  The verses that share the most rare roots and proper nouns with a verse,
+	 *  best first, each with the shared terms; empty without a morphology pack.
+	 */
+	relatedByRoots: (verseId: number, translationId: string | null, limit: number) => typedError<RelatedVerse[], AppError>(__TAURI_INVOKE("related_by_roots", { verseId, translationId, limit })),
 	/**  Returns all stored settings as `key → JSON text`. */
 	getSettings: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("get_settings")),
 	/**  Stores a setting. `value` must be JSON text, e.g. `"\"tr\""` or `"{\"size\":20}"`. */
@@ -785,6 +801,8 @@ export type PackView = {
 	terms_acknowledged: boolean,
 	/**  The installed morphology pack this one would replace. */
 	replaces: string | null,
+	/**  Packs installed with this one (a vector pack's model pack). */
+	requires: string[],
 	/**  The running or queued job for this pack. */
 	job: JobView | null,
 };
@@ -820,6 +838,23 @@ reason: InvalidReference } |
 { kind: "latin_root" } | 
 /**  Any other text: searched in the translations. */
 { kind: "text" };
+
+/**  A verse found by meaning or by shared roots. */
+export type RelatedVerse = {
+	/**  Surah number. */
+	surah: number,
+	/**  Verse number within the surah. */
+	ayah: number,
+	/**  Uthmani script. */
+	text_ar: string,
+	/**  The requested translation, if the verse has one. */
+	translation: VerseTranslation | null,
+	/**
+	 *  The shared roots and dictionary forms, rarest first; empty for verses
+	 *  related by meaning.
+	 */
+	shared: SharedTerm[],
+};
 
 /**  Where a surah was revealed. */
 export type RevelationType = 
@@ -934,6 +969,14 @@ backend: string } |
 pack: string; 
 /**  The provider queries are sent to; `None` if they stay on this computer. */
 provider: ApiProvider | null };
+
+/**  A root or dictionary form two verses share. */
+export type SharedTerm = {
+	/**  Its concordance. */
+	target: ConcordanceTarget,
+	/**  The root (`ر ح م`) or dictionary form, in Arabic letters. */
+	text: string,
+};
 
 /**  A row of the `surahs` table. */
 export type Surah = {

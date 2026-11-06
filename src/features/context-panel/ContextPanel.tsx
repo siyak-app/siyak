@@ -1,8 +1,9 @@
-import { type LucideIcon, MessagesSquareIcon, WaypointsIcon } from "lucide-react";
+import { MessagesSquareIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NotesPanel } from "@/features/notes/NotesPanel";
+import { RelatedPanel } from "@/features/related/RelatedPanel";
 import { TafsirPanel } from "@/features/tafsir/TafsirPanel";
 import { surahName } from "@/features/reader/surahName";
 import { verseNumber, verseReference } from "@/features/reader/verseCopy";
@@ -11,20 +12,12 @@ import { useSurahs } from "@/lib/queries";
 import { CONTEXT_TABS, type ContextTab } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
-/** The tabs that have no content yet. */
-const LATER_TABS = ["related", "chat"] as const;
-
-const TAB_ICONS: Record<(typeof LATER_TABS)[number], LucideIcon> = {
-  related: WaypointsIcon,
-  chat: MessagesSquareIcon,
-};
-
 const isContextTab = (value: string): value is ContextTab =>
   CONTEXT_TABS.some((tab) => tab === value);
 
 /**
  * Right pane: context for the selected verse or word (spec §13.2).
- * TODO(M7): related. TODO(M8): chat.
+ * TODO(M8): chat.
  */
 export function ContextPanel() {
   const { t, i18n } = useTranslation();
@@ -69,19 +62,16 @@ export function ContextPanel() {
       <TabsContent value="notes" className="flex min-h-0 flex-1 flex-col">
         <NotesPanel verse={selected} />
       </TabsContent>
-      {LATER_TABS.map((tab) => {
-        const Icon = TAB_ICONS[tab];
-        return (
-          <TabsContent
-            key={tab}
-            value={tab}
-            className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted-foreground"
-          >
-            <Icon aria-hidden className="size-8 opacity-60" />
-            <p className="text-sm">{t("context_panel.coming_soon")}</p>
-          </TabsContent>
-        );
-      })}
+      <TabsContent value="related" className="flex min-h-0 flex-1 flex-col">
+        <RelatedPanel verse={selected} />
+      </TabsContent>
+      <TabsContent
+        value="chat"
+        className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted-foreground"
+      >
+        <MessagesSquareIcon aria-hidden className="size-8 opacity-60" />
+        <p className="text-sm">{t("context_panel.coming_soon")}</p>
+      </TabsContent>
     </Tabs>
   );
 }

@@ -36,6 +36,7 @@ use crate::error::{AppError, AppErrorCode, AppResult};
 use crate::net::{Net, UserDbLog};
 use crate::packs::manifest::{ManifestStore, PackSource};
 use crate::packs::service::{Packs, PacksConfig};
+use crate::related::Related;
 
 /// First line of the generated bindings file.
 const BINDINGS_HEADER: &str =
@@ -50,6 +51,7 @@ pub struct AppState {
     databases: AppResult<Databases>,
     packs: AppResult<Packs>,
     semantic: Semantic,
+    related: Related,
 }
 
 impl AppState {
@@ -66,6 +68,11 @@ impl AppState {
     /// Returns the semantic service (spec §7.4).
     pub fn semantic(&self) -> &Semantic {
         &self.semantic
+    }
+
+    /// Returns the cross-reference service (spec §7.6).
+    pub fn related(&self) -> &Related {
+        &self.related
     }
 
     /// Locks the `content.db` connection.
@@ -142,6 +149,7 @@ fn open_state(app: &tauri::App) -> AppState {
                 databases: Err(err.clone()),
                 packs: Err(err),
                 semantic: Semantic::unbuilt(),
+                related: Related::default(),
             };
         }
     };
@@ -156,6 +164,7 @@ fn open_state(app: &tauri::App) -> AppState {
         databases: Ok(databases),
         packs,
         semantic: Semantic::new(Arc::new(NoKeyStore), Arc::new(local)),
+        related: Related::default(),
     }
 }
 

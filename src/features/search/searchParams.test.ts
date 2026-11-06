@@ -13,7 +13,7 @@ describe("parseSearchParams", () => {
 
   it("falls back for anything unusable", () => {
     expect(parseSearchParams({})).toEqual({ q: "", mode: "all" });
-    expect(parseSearchParams({ q: ["x"], mode: "meaning" })).toEqual({ q: "", mode: "all" });
+    expect(parseSearchParams({ q: ["x"], mode: "other" })).toEqual({ q: "", mode: "all" });
     expect(parseSearchParams({ q: 36 })).toEqual({ q: "36", mode: "all" });
   });
 });

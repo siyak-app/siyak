@@ -34,10 +34,12 @@ import {
   type Note,
   type NoteInput,
   type QueryClass,
+  type RelatedVerse,
   type RootSearch,
   type SearchFilters,
   type SearchResults,
   type SearchScope,
+  type SemanticStatus,
   type Surah,
   type TafsirInfo,
   type TafsirPassage,
@@ -105,6 +107,16 @@ export interface SearchTextVariables {
   /** Surah limits. */
   filters: SearchFilters;
   /** Most results to return. */
+  limit: number;
+}
+
+/** Variables of {@link useSearchMeaning}. */
+export interface MeaningVariables {
+  /** The query as typed. */
+  query: string;
+  /** The translation to show with each verse. */
+  translationId: string | null;
+  /** Most verses to return. */
   limit: number;
 }
 
@@ -187,6 +199,16 @@ export const queryKeys = {
   concordance: (variables: ConcordanceVariables) => ["concordance", variables] as const,
   /** Key of {@link useSearchRoots}. */
   searchRoots: (query: string) => ["search-roots", query] as const,
+  /** Key of {@link useSemanticStatus}. */
+  semanticStatus: ["semantic-status"] as const,
+  /** Key of {@link useSearchMeaning}. */
+  searchMeaning: (variables: MeaningVariables) => ["search-meaning", variables] as const,
+  /** Key of {@link useRelatedByMeaning}. */
+  relatedByMeaning: (verseId: number | null, translationId: string | null) =>
+    ["related-by-meaning", verseId, translationId] as const,
+  /** Key of {@link useRelatedByRoots}. */
+  relatedByRoots: (verseId: number | null, translationId: string | null) =>
+    ["related-by-roots", verseId, translationId] as const,
   /** Key of {@link useCatalog}. */
   catalog: ["catalog"] as const,
   /** Key of {@link useNetworkLog}. */
@@ -444,6 +466,64 @@ export function useSearchRoots(query: string, enabled = true) {
     queryFn: () => unwrap(commands.searchRoots(query)),
     staleTime: Infinity,
     enabled,
+  });
+}
+
+/** Whether semantic search and cross-references work, and if not, why. */
+export function useSemanticStatus() {
+  return useQuery<SemanticStatus>({
+    queryKey: queryKeys.semanticStatus,
+    queryFn: () => unwrap(commands.getSemanticStatus()),
+    staleTime: Infinity,
+  });
+}
+
+/**
+ * The verses closest in meaning to a query. The first search loads the model,
+ * which takes a few seconds; a longer list keeps the shown verses meanwhile.
+ */
+export function useSearchMeaning(variables: MeaningVariables, enabled = true) {
+  const { query, translationId, limit } = variables;
+  return useQuery<RelatedVerse[]>({
+    queryKey: queryKeys.searchMeaning(variables),
+    queryFn: () => unwrap(commands.searchMeaning(query, translationId, limit)),
+    staleTime: Infinity,
+    enabled,
+    placeholderData: (previous, previousQuery) => {
+      const before = previousQuery?.queryKey[1] as MeaningVariables | undefined;
+      return before?.query === query ? previous : undefined;
+    },
+  });
+}
+
+/** Most related verses shown per section of the Related tab. */
+const RELATED_LIMIT = 10;
+
+/** The verses closest in meaning to a verse; waits while `verseId` is `null`. */
+export function useRelatedByMeaning(
+  verseId: number | null,
+  translationId: string | null,
+  enabled = true,
+) {
+  return useQuery<RelatedVerse[]>({
+    queryKey: queryKeys.relatedByMeaning(verseId, translationId),
+    queryFn: () => unwrap(commands.relatedByMeaning(verseId ?? 0, translationId, RELATED_LIMIT)),
+    staleTime: Infinity,
+    enabled: enabled && verseId !== null,
+  });
+}
+
+/** The verses sharing the most rare roots with a verse; waits while `verseId` is `null`. */
+export function useRelatedByRoots(
+  verseId: number | null,
+  translationId: string | null,
+  enabled = true,
+) {
+  return useQuery<RelatedVerse[]>({
+    queryKey: queryKeys.relatedByRoots(verseId, translationId),
+    queryFn: () => unwrap(commands.relatedByRoots(verseId ?? 0, translationId, RELATED_LIMIT)),
+    staleTime: Infinity,
+    enabled: enabled && verseId !== null,
   });
 }
 
@@ -728,6 +808,10 @@ export function invalidateContent(queryClient: ReturnType<typeof useQueryClient>
       ["compare"] as const,
       queryKeys.morphologyPack,
       ["verse-words"] as const,
+      queryKeys.semanticStatus,
+      ["search-meaning"] as const,
+      ["related-by-meaning"] as const,
+      ["related-by-roots"] as const,
       ["word"] as const,
       ["concordance"] as const,
       ["search-roots"] as const,

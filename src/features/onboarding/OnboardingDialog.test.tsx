@@ -33,6 +33,7 @@ const QAC = {
   terms_ack_required: true,
   terms_acknowledged: false,
   replaces: null,
+  requires: [],
   job: null,
 } as unknown as PackView;
 

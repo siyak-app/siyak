@@ -19,8 +19,9 @@ rules must not be broken. The full design, including features that are not built
 │ commands/morphology ──▶ morphology (words, concordance)     │
 │ commands/{notes,collections,export} ──▶ notes, collections, │
 │                                         export              │
-│ commands/semantic ──▶ embed (vector space, local/API)       │
-│ later: related, llm, secrets                                │
+│ commands/semantic ──▶ embed (vector space, local/API),      │
+│                       related (cross-references)            │
+│ later: llm, secrets                                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -232,6 +233,16 @@ OpenAI-compatible server, with the user's key).
   tokenization, inputs and pooling; the ignored test `matches_the_pipeline` compares the two on
   reference vectors (`SIYAK_TEST_MODEL_DIR`).
 - `embed/api.rs` will hold the API backend; until then API packs report `not_built`.
+- `commands/semantic.rs` answers Meaning search (`search_meaning`: embeds the query, then the
+  index) and the Related tab: `related_by_meaning` compares verse vectors only (no model needed),
+  `related_by_roots` uses `related.rs`. The first model load blocks a runtime thread
+  (`block_in_place`) for a few seconds.
+- `related.rs` scores shared roots: each verse's roots, plus rootless proper nouns, weighted by
+  IDF; terms in more than 10% of verses are dropped; verses rank by the cosine of their weighted
+  term sets. The index is built once per morphology pack install (`Related`, in `AppState`), and
+  `verse_cards` turns verse ids into result cards.
+- The interface: `src/features/related/` (the Related tab, the result list, the card that says
+  which pack is missing) and the Meaning mode of `src/features/search/SearchView.tsx`.
 
-Modules for later milestones (`related`, `llm`, `secrets`) already exist as documented, empty
+Modules for later milestones (`llm`, `secrets`) already exist as documented, empty
 files; their `//!` comments say what they will hold and in which milestone.

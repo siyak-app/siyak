@@ -765,6 +765,10 @@ Okuma ekranında bir kelimeye tıklanınca açılır:
 Bir ayet için ilişkili ayetler iki kaynaktan birleştirilir:
 1. **Anlamsal benzerlik:** Ayetin kendi vektörüyle KNN (k=10, ayetin kendisi hariç). Vektör paketi gerektirir.
 2. **Ortak kök/lemma:** Ayetteki kök/lemmaların ters sıklığına (IDF) göre ağırlıklı ortaklık skoru. Morfoloji paketi gerektirir. Böylece çok sık geçen kökler (örn. "قول") sonucu domine etmez.
+   - Terimler: ayetteki kelimelerin kökleri ve kökü olmayan özel isimlerin sözlük biçimleri (موسى, فرعون). Edatlar ve zamirler sayılmaz.
+   - Ayetlerin %10'undan fazlasında geçen terimler (ا ل ه, ق و ل, ك و ن, ر ب ب, ع ل م, ا م ن) dışarıda kalır: ne sıralamayı etkiler ne gerekçe olarak görünür.
+   - Skor: iki ayetin IDF ağırlıklı terim kümelerinin kosinüsü; böylece uzun ayetler sırf uzun oldukları için öne geçmez. k=10, ayetin kendisi hariç.
+   - Her sonuç ortak terimleri en nadirden başlayarak listeler; her terim kendi konkordansını açar.
 
 Sonuçlar iki ayrı bölümde ve gerekçesiyle gösterilir ("anlamca benzer", "ortak kökler: ر ح م, غ ف ر"). Kullanıcı neden ilişkili bulunduğunu her zaman görür. Hazır, küratörlü bir çapraz referans veri seti bulunursa üçüncü kaynak olarak eklenir (§18).
 

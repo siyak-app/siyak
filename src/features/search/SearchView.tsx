@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { surahName } from "@/features/reader/surahName";
 import { translationTitle } from "@/features/reader/translationTitle";
 import { verseNumber, verseReference } from "@/features/reader/verseCopy";
+import { RelatedVerseList } from "@/features/related/RelatedVerseList";
+import { PROVIDER_NAMES } from "@/features/related/providerNames";
+import { SemanticRequired } from "@/features/related/SemanticRequired";
 import { RadioField } from "@/features/settings/fields";
 import { RootGroup, RootResults } from "@/features/word/RootResults";
 import type {
@@ -20,7 +23,14 @@ import type {
   SearchScope,
   TranslationInfo,
 } from "@/lib/bindings";
-import { useClassifyQuery, useSearchText, useSurahs, useTranslations } from "@/lib/queries";
+import {
+  useClassifyQuery,
+  useSearchMeaning,
+  useSearchText,
+  useSemanticStatus,
+  useSurahs,
+  useTranslations,
+} from "@/lib/queries";
 import { useUiStore } from "@/stores/ui";
 
 import { SEARCH_MODES, type SearchMode, type SearchParams } from "./searchParams";
@@ -29,15 +39,19 @@ import { SEARCH_MODES, type SearchMode, type SearchParams } from "./searchParams
 const ALL_LIMIT = 5;
 /** Results added by each "Show more" in Text mode. */
 const PAGE = 50;
+/** Verses shown in Meaning mode, and added by each "Show more", up to the core's limit. */
+const MEANING_PAGE = 20;
+const MEANING_MAX = 50;
 
 const NO_FILTERS: SearchFilters = { surah_from: null, surah_to: null, revelation: null };
 
 /**
  * The search screen (spec §7.1, §7.2). All shows the first matches of the
  * group the query belongs to, Text the full list with filters, Root the
- * concordance (spec §7.3). The Arabic text is searched for Arabic queries, the
- * translations for anything else; in All, an Arabic query or a Latin-script
- * root also looks for a root or dictionary form.
+ * concordance (spec §7.3), Meaning the verses closest in meaning (spec §7.4).
+ * The Arabic text is searched for Arabic queries, the translations for
+ * anything else; in All, an Arabic query or a Latin-script root also looks
+ * for a root or dictionary form, and other text for verses similar in meaning.
  */
 export function SearchView({ q, mode }: SearchParams) {
   const { t } = useTranslation();
@@ -65,6 +79,8 @@ export function SearchView({ q, mode }: SearchParams) {
       body = <Note>{t(`command_palette.errors.${result.reason}`)}</Note>;
     } else if (mode === "root") {
       body = <RootResults q={q} />;
+    } else if (mode === "meaning") {
+      body = <MeaningResults key={q} q={q} />;
     } else {
       const scope: SearchScope = result.kind === "arabic" ? "arabic" : "translations";
       if (mode === "text") {
@@ -79,7 +95,12 @@ export function SearchView({ q, mode }: SearchParams) {
           </>
         );
       } else {
-        body = <AllResults q={q} scope={scope} />;
+        body = (
+          <>
+            <AllResults q={q} scope={scope} />
+            <MeaningGroup q={q} />
+          </>
+        );
       }
     }
   }
@@ -152,6 +173,90 @@ function AllResults({ q, scope }: { q: string; scope: SearchScope }) {
         </Button>
       )}
     </section>
+  );
+}
+
+/** The first translation the reader shows: found verses read the same way. */
+function useReaderTranslation() {
+  return useUiStore((state) => state.preferences["reader.translations"][0] ?? null);
+}
+
+/** The first verses similar in meaning, with a link to the longer list (spec §7.1). */
+function MeaningGroup({ q }: { q: string }) {
+  const { t } = useTranslation();
+  const status = useSemanticStatus();
+  const ready = status.data?.state === "ready";
+  const results = useSearchMeaning(
+    { query: q, translationId: useReaderTranslation(), limit: ALL_LIMIT },
+    ready,
+  );
+  let body;
+  if (status.isError) body = <ErrorMessage error={status.error} />;
+  else if (!status.data) body = <Note>{t("search.searching")}</Note>;
+  else if (status.data.state !== "ready") body = <SemanticRequired status={status.data} />;
+  else if (results.isError) body = <ErrorMessage error={results.error} />;
+  else if (!results.data) body = <Note>{t("search.meaning_searching")}</Note>;
+  else if (results.data.length === 0) body = <Note>{t("search.no_results")}</Note>;
+  else
+    body = (
+      <>
+        <RelatedVerseList verses={results.data} />
+        <Button asChild variant="outline" size="sm" className="justify-self-start">
+          <Link to="/search" search={{ q, mode: "meaning" }}>
+            {t("search.meaning_see_all")}
+          </Link>
+        </Button>
+      </>
+    );
+  return (
+    <section className="grid gap-3">
+      <h2 className="text-sm font-medium">{t("search.group_meaning")}</h2>
+      {body}
+    </section>
+  );
+}
+
+/** Verses closest in meaning, closest first; "Show more" asks for a longer list. */
+function MeaningResults({ q }: { q: string }) {
+  const { t } = useTranslation();
+  const status = useSemanticStatus();
+  const [limit, setLimit] = useState(MEANING_PAGE);
+  const ready = status.data?.state === "ready";
+  const results = useSearchMeaning(
+    { query: q, translationId: useReaderTranslation(), limit },
+    ready,
+  );
+  if (status.isError) return <ErrorMessage error={status.error} />;
+  if (!status.data) return <Note>{t("search.searching")}</Note>;
+  if (status.data.state !== "ready") return <SemanticRequired status={status.data} />;
+  const provider = status.data.provider;
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm text-muted-foreground">
+        {t("search.meaning_hint")}
+        {provider && ` ${t("semantic.remote", { provider: PROVIDER_NAMES[provider] })}`}
+      </p>
+      {results.isError && <ErrorMessage error={results.error} />}
+      {!results.isError && !results.data && <Note>{t("search.meaning_searching")}</Note>}
+      {results.data?.length === 0 && <Note>{t("search.no_results")}</Note>}
+      {results.data && results.data.length > 0 && (
+        <>
+          <RelatedVerseList verses={results.data} />
+          {results.data.length >= limit && limit < MEANING_MAX && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="justify-self-start"
+              onClick={() => {
+                setLimit(Math.min(limit + MEANING_PAGE, MEANING_MAX));
+              }}
+            >
+              {t("search.show_more")}
+            </Button>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

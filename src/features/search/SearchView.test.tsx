@@ -7,11 +7,13 @@ import i18n from "@/i18n";
 import type {
   MorphologyPack,
   QueryClass,
+  RelatedVerse,
   RootSearch,
   SearchHit,
   SearchResults,
+  SemanticStatus,
 } from "@/lib/bindings";
-import type { SearchTextVariables } from "@/lib/queries";
+import type { MeaningVariables, SearchTextVariables } from "@/lib/queries";
 import { DEFAULT_PREFERENCES, useUiStore } from "@/stores/ui";
 
 import { SearchView } from "./SearchView";
@@ -22,6 +24,9 @@ let results: SearchResults;
 const searches: SearchTextVariables[] = [];
 let morphologyPack: MorphologyPack | null;
 let rootSearch: RootSearch;
+let semanticStatus: SemanticStatus;
+let meaning: RelatedVerse[];
+const meaningSearches: MeaningVariables[] = [];
 const ROOT = { id: 7, root: "ص ب ر", occurrences: 103 };
 const LEMMA = { id: 9, lemma: "صَبْر", occurrences: 20 };
 
@@ -70,6 +75,11 @@ vi.mock("@/lib/queries", () => ({
     isError: false,
   }),
   useClassifyQuery: () => ({ data: classified, isError: false }),
+  useSemanticStatus: () => ({ data: semanticStatus, isError: false }),
+  useSearchMeaning: (variables: MeaningVariables, enabled: boolean) => {
+    if (enabled) meaningSearches.push(variables);
+    return { data: enabled ? meaning : undefined, isError: false };
+  },
   useSearchText: (variables: SearchTextVariables) => {
     searches.push(variables);
     return { data: results, isError: false };
@@ -110,6 +120,14 @@ const TRANSLATION: SearchHit = {
   ],
 };
 
+const SIMILAR: RelatedVerse = {
+  surah: 2,
+  ayah: 45,
+  text_ar: "وَٱسْتَعِينُوا۟ بِٱلصَّبْرِ",
+  translation: { pack_id: "en.pickthall", lang: "en", text: "Seek help in patience and prayer" },
+  shared: [],
+};
+
 const ARABIC: SearchHit = {
   surah: 2,
   ayah: 153,
@@ -128,6 +146,9 @@ describe("SearchView", () => {
     results = { total: 1, hits: [TRANSLATION] };
     morphologyPack = { id: "morphology.qac", source: "Quranic Arabic Corpus" };
     rootSearch = { roots: [], lemmas: [] };
+    semanticStatus = { state: "no_vector_pack" };
+    meaning = [SIMILAR];
+    meaningSearches.length = 0;
     await i18n.changeLanguage("en");
     useUiStore.getState().hydrate(DEFAULT_PREFERENCES);
   });
@@ -283,5 +304,62 @@ describe("SearchView", () => {
     classified = { kind: "latin_root" };
     render(<SearchView q="s-b-r" mode="text" />, { wrapper: TooltipProvider });
     expect(searches[0]?.scope).toBe("translations");
+  });
+
+  it("shows verses similar in meaning under the matches in All mode", () => {
+    semanticStatus = { state: "ready", pack: "vectors.bge-m3", provider: null };
+    render(<SearchView q="patience" mode="all" />, { wrapper: TooltipProvider });
+    expect(meaningSearches[0]).toMatchObject({ query: "patience", limit: 5 });
+    const group = screen.getByRole("heading", { name: "Similar in meaning" }).closest("section");
+    if (!group) throw new Error("no group");
+    expect(within(group).getByRole("link", { name: /Seek help in patience/ })).toHaveAttribute(
+      "href",
+      "/read/2/45",
+    );
+    expect(
+      within(group).getByRole("link", { name: "More verses similar in meaning" }),
+    ).toHaveAttribute("href", "/search?q=patience&mode=meaning");
+  });
+
+  it("names what is missing instead of verses similar in meaning", () => {
+    render(<SearchView q="patience" mode="all" />, { wrapper: TooltipProvider });
+    expect(meaningSearches).toHaveLength(0);
+    expect(
+      screen.getByText("Searching by meaning needs the semantic search packs."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Packs" })).toBeInTheDocument();
+  });
+
+  it("lists verses by meaning in Meaning mode and asks for more", () => {
+    semanticStatus = { state: "ready", pack: "vectors.bge-m3", provider: null };
+    meaning = Array.from({ length: 20 }, (_, index) => ({ ...SIMILAR, ayah: index + 1 }));
+    render(<SearchView q="patience" mode="meaning" />, { wrapper: TooltipProvider });
+    expect(searches).toHaveLength(0);
+    expect(meaningSearches.at(-1)).toMatchObject({ query: "patience", limit: 20 });
+    expect(screen.getAllByRole("link", { name: /Seek help/ })).toHaveLength(20);
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(meaningSearches.at(-1)).toMatchObject({ limit: 40 });
+    expect(screen.queryByText(/are sent to/)).not.toBeInTheDocument();
+  });
+
+  it("says where queries go when an API pack is active", () => {
+    semanticStatus = { state: "ready", pack: "vectors.voyage", provider: "voyage" };
+    meaning = [SIMILAR];
+    render(<SearchView q="patience" mode="meaning" />, { wrapper: TooltipProvider });
+    expect(screen.getByText(/Your searches are sent to Voyage AI\./)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
+  });
+
+  it("names the missing model pack in Meaning mode", () => {
+    semanticStatus = {
+      state: "model_pack_missing",
+      pack: "vectors.bge-m3",
+      model_pack: "model.bge-m3",
+    };
+    render(<SearchView q="patience" mode="meaning" />, { wrapper: TooltipProvider });
+    expect(
+      screen.getByText("The semantic search pack needs its model pack, model.bge-m3."),
+    ).toBeInTheDocument();
+    expect(meaningSearches).toHaveLength(0);
   });
 });
