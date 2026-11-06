@@ -8,7 +8,8 @@
 //!
 //! Roots and lemmas are found by [`crate::morphology::search_roots`].
 //!
-//! TODO(M7): semantic search via [`crate::embed`].
+//! Semantic search (Meaning mode) is answered by `commands::semantic` with
+//! [`crate::embed`].
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};

@@ -1,4 +1,202 @@
-//! API keys in the OS keychain (service `com.kemalozyon.siyak`, account `<provider>`).
-//! Keys are never written to a database and never returned to the webview (spec §14.2).
+//! API keys in the OS keychain (service `com.kemalozyon.siyak`, account
+//! `<provider>`). Keys are never written to a database and never returned to
+//! the webview: the interface only learns whether a key is saved (spec §14.2).
 //!
-//! TODO(M8): `set_api_key`, `delete_api_key`, `has_api_key`.
+//! The embedding APIs use these keys now (spec §7.4); the AI layer shares them
+//! (spec §8). A key read once is kept in memory, so a request does not ask the
+//! keychain each time (unsigned development builds may make macOS ask the user
+//! for every read).
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use crate::embed::ApiProvider;
+use crate::error::{AppError, AppErrorCode, AppResult};
+
+/// The keychain service of the app's keys; also its Tauri identifier.
+pub const SERVICE: &str = "com.kemalozyon.siyak";
+
+/// Longest key accepted. Provider keys are far shorter.
+const MAX_KEY_LEN: usize = 1024;
+
+/// Where API keys are kept.
+pub trait KeyStore: Send + Sync {
+    /// The key of `provider`, if one is saved.
+    fn key(&self, provider: ApiProvider) -> AppResult<Option<String>>;
+
+    /// Saves (or replaces) the key of `provider`.
+    fn set_key(&self, provider: ApiProvider, key: &str) -> AppResult<()>;
+
+    /// Removes the key of `provider`; succeeds if none was saved.
+    fn delete_key(&self, provider: ApiProvider) -> AppResult<()>;
+
+    /// Whether the key of `provider` is saved.
+    fn has_key(&self, provider: ApiProvider) -> AppResult<bool> {
+        Ok(self.key(provider)?.is_some())
+    }
+}
+
+/// A key store that has no keys and cannot save any (the app before its
+/// databases open).
+pub struct NoKeyStore;
+
+impl KeyStore for NoKeyStore {
+    fn key(&self, _provider: ApiProvider) -> AppResult<Option<String>> {
+        Ok(None)
+    }
+
+    fn set_key(&self, _provider: ApiProvider, _key: &str) -> AppResult<()> {
+        Err(keychain_error("no keychain is available"))
+    }
+
+    fn delete_key(&self, _provider: ApiProvider) -> AppResult<()> {
+        Ok(())
+    }
+}
+
+/// Checks a key the user entered and returns it without surrounding spaces.
+/// A key goes into an HTTP header, so it must be one line of visible ASCII.
+pub fn clean_key(key: &str) -> AppResult<&str> {
+    let key = key.trim();
+    if key.is_empty() || key.len() > MAX_KEY_LEN || !key.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err(AppError::new(
+            AppErrorCode::InvalidInput,
+            "an API key is one line of letters, digits and symbols",
+        ));
+    }
+    Ok(key)
+}
+
+/// The OS keychain, with the keys read so far kept in memory.
+#[derive(Default)]
+pub struct Keychain {
+    /// Keys by provider; `None` means "read, and not saved".
+    cache: Mutex<HashMap<ApiProvider, Option<String>>>,
+}
+
+impl Keychain {
+    fn entry(provider: ApiProvider) -> AppResult<keyring::Entry> {
+        keyring::Entry::new(SERVICE, provider.as_str()).map_err(keychain_error)
+    }
+
+    fn cache(&self) -> std::sync::MutexGuard<'_, HashMap<ApiProvider, Option<String>>> {
+        self.cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl KeyStore for Keychain {
+    fn key(&self, provider: ApiProvider) -> AppResult<Option<String>> {
+        if let Some(cached) = self.cache().get(&provider) {
+            return Ok(cached.clone());
+        }
+        let key = match Self::entry(provider)?.get_password() {
+            Ok(key) => Some(key),
+            Err(keyring::Error::NoEntry) => None,
+            Err(err) => return Err(keychain_error(err)),
+        };
+        self.cache().insert(provider, key.clone());
+        Ok(key)
+    }
+
+    fn set_key(&self, provider: ApiProvider, key: &str) -> AppResult<()> {
+        let key = clean_key(key)?;
+        Self::entry(provider)?
+            .set_password(key)
+            .map_err(keychain_error)?;
+        self.cache().insert(provider, Some(key.to_owned()));
+        Ok(())
+    }
+
+    fn delete_key(&self, provider: ApiProvider) -> AppResult<()> {
+        match Self::entry(provider)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(err) => return Err(keychain_error(err)),
+        }
+        self.cache().insert(provider, None);
+        Ok(())
+    }
+}
+
+/// A keychain error. Its message never contains the key: keyring errors name
+/// the entry, not its secret.
+fn keychain_error(err: impl std::fmt::Display) -> AppError {
+    AppError::new(AppErrorCode::KeychainFailed, format!("keychain: {err}"))
+}
+
+/// Keys kept in memory, for tests.
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct MemoryKeys(pub Mutex<HashMap<ApiProvider, String>>);
+
+#[cfg(test)]
+impl MemoryKeys {
+    /// A store holding `key` for `provider`.
+    pub(crate) fn with(provider: ApiProvider, key: &str) -> Self {
+        let keys = Self::default();
+        keys.0.lock().unwrap().insert(provider, key.to_owned());
+        keys
+    }
+}
+
+#[cfg(test)]
+impl KeyStore for MemoryKeys {
+    fn key(&self, provider: ApiProvider) -> AppResult<Option<String>> {
+        Ok(self.0.lock().unwrap().get(&provider).cloned())
+    }
+
+    fn set_key(&self, provider: ApiProvider, key: &str) -> AppResult<()> {
+        let key = clean_key(key)?;
+        self.0.lock().unwrap().insert(provider, key.to_owned());
+        Ok(())
+    }
+
+    fn delete_key(&self, provider: ApiProvider) -> AppResult<()> {
+        self.0.lock().unwrap().remove(&provider);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_are_trimmed_and_kept_to_one_line() {
+        assert_eq!(clean_key("  sk-abc_123  ").unwrap(), "sk-abc_123");
+        for bad in [
+            "",
+            "   ",
+            "sk abc",
+            "sk-abc\nX-Other: 1",
+            "anahtarı",
+            &"x".repeat(2000),
+        ] {
+            let err = clean_key(bad).unwrap_err();
+            assert_eq!(err.code, AppErrorCode::InvalidInput, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn memory_keys_save_replace_and_delete() {
+        let keys = MemoryKeys::default();
+        assert!(!keys.has_key(ApiProvider::Voyage).unwrap());
+        keys.set_key(ApiProvider::Voyage, " pa-1 ").unwrap();
+        keys.set_key(ApiProvider::Voyage, "pa-2").unwrap();
+        assert_eq!(
+            keys.key(ApiProvider::Voyage).unwrap().as_deref(),
+            Some("pa-2")
+        );
+        keys.delete_key(ApiProvider::Voyage).unwrap();
+        keys.delete_key(ApiProvider::Voyage).unwrap();
+        assert!(!keys.has_key(ApiProvider::Voyage).unwrap());
+    }
+
+    #[test]
+    fn no_key_store_refuses_to_save() {
+        let err = NoKeyStore.set_key(ApiProvider::OpenAi, "sk-1").unwrap_err();
+        assert_eq!(err.code, AppErrorCode::KeychainFailed);
+        assert_eq!(NoKeyStore.key(ApiProvider::OpenAi).unwrap(), None);
+    }
+}

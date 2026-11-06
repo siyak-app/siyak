@@ -21,7 +21,8 @@ rules must not be broken. The full design, including features that are not built
 │                                         export              │
 │ commands/semantic ──▶ embed (vector space, local/API),      │
 │                       related (cross-references)            │
-│ later: llm, secrets                                         │
+│ commands/keys ──▶ secrets (OS keychain)                     │
+│ later: llm                                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -116,7 +117,9 @@ columns into `content.db` in one transaction.
   reading never waits for an install. Progress reaches the webview as the `pack://progress`,
   `pack://done` and `pack://error` events; `usePackEvents` patches them into the cached catalog.
 - `net.rs` is the only HTTP client: a fixed host allow-list, redirects checked hop by hop and a
-  connection log without content in `user.db` (Settings → Privacy).
+  connection log without content in `user.db` (Settings → Privacy). `post_json` sends the embedding
+  APIs' requests: no redirects, and the user's OpenAI-compatible server is reached only at the
+  address they entered (`user_server_url`).
 - Debug builds can read packs from a local directory with `SIYAK_PACK_SOURCE` (see CONTRIBUTING).
 
 The context panel's Tafsir tab reads a passage through `get_tafsir` and follows the selected verse.
@@ -177,7 +180,7 @@ These hold in every change; a pull request that weakens one needs an ADR.
    grants only the app's own commands and listening to its events. Links (a pack's source) are
    opened by the Rust side from addresses it already holds.
 3. **API keys never reach the webview.** They live in the OS keychain and the interface only learns
-   whether a key is saved (`secrets.rs`, M8).
+   whether a key is saved (`secrets.rs`; Settings → Providers).
 4. **Packs are untrusted input.** Only expected tables and columns are copied; no SQL, triggers or
    views from a pack are executed; every download is checked against its sha256.
 5. **Machine output is labelled.** AI answers and translations are always shown next to their
@@ -232,7 +235,15 @@ OpenAI-compatible server, with the user's key).
   thread. The pipeline (`siyak-data`, `pipeline/build_embeddings.py`) embeds verses with the same
   tokenization, inputs and pooling; the ignored test `matches_the_pipeline` compares the two on
   reference vectors (`SIYAK_TEST_MODEL_DIR`).
-- `embed/api.rs` will hold the API backend; until then API packs report `not_built`.
+- `embed/api.rs` is the API backend: `ApiFactory` builds an `ApiEmbedder` for OpenAI, Voyage,
+  Gemini or an OpenAI-compatible server from the vector pack's metadata (model, dimension,
+  prefixes, Gemini task type). It reads the key from the `KeyStore` for each request, posts
+  through `net.rs` (purpose `embed`) and checks and normalizes the vectors. `lib.rs` combines it
+  with `OnnxFactory` in `Backends`; tests run it against a local server (`Endpoints`).
+- `secrets.rs` keeps API keys in the OS keychain (`keyring`; `Keychain`, cached in memory after
+  the first read); `commands/keys.rs` saves, removes and reports them without returning a key.
+  Settings → Providers (`src/features/settings/ProviderSettings.tsx`) enters keys, the
+  OpenAI-compatible server address and the active vector pack.
 - `commands/semantic.rs` answers Meaning search (`search_meaning`: embeds the query, then the
   index) and the Related tab: `related_by_meaning` compares verse vectors only (no model needed),
   `related_by_roots` uses `related.rs`. The first model load blocks a runtime thread
@@ -244,5 +255,5 @@ OpenAI-compatible server, with the user's key).
 - The interface: `src/features/related/` (the Related tab, the result list, the card that says
   which pack is missing) and the Meaning mode of `src/features/search/SearchView.tsx`.
 
-Modules for later milestones (`llm`, `secrets`) already exist as documented, empty
+Modules for later milestones (`llm`) already exist as documented, empty
 files; their `//!` comments say what they will hold and in which milestone.

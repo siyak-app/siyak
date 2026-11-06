@@ -12,21 +12,36 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { LanguagePreference } from "@/lib/settings";
-import { useUiStore } from "@/stores/ui";
+import { SETTINGS_TABS, type SettingsTab, useUiStore } from "@/stores/ui";
 
 import { AppearanceSettings } from "./AppearanceSettings";
 import { BackupSettings } from "./BackupSettings";
 import { DisplaySettings } from "./DisplaySettings";
 import { RadioField } from "./fields";
 import { PrivacySettings } from "./PrivacySettings";
+import { ProviderSettings } from "./ProviderSettings";
 
 const LANGUAGES: readonly LanguagePreference[] = ["system", "tr", "en"];
 
-/** Settings: appearance, display & behaviour, the interface language, data and privacy. */
+const isTab = (value: string): value is SettingsTab =>
+  (SETTINGS_TABS as readonly string[]).includes(value);
+
+/**
+ * Settings: appearance, display & behaviour, the interface language, API
+ * providers, data and privacy. Other screens open it on a tab through the UI
+ * store (`setSettingsTab`).
+ */
 export function SettingsDialog() {
   const { t } = useTranslation();
+  const tab = useUiStore((state) => state.settingsTab);
+  const setTab = useUiStore((state) => state.setSettingsTab);
   return (
-    <Dialog>
+    <Dialog
+      open={tab !== null}
+      onOpenChange={(open) => {
+        setTab(open ? "appearance" : null);
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label={t("layout.open_settings")}>
           <SettingsIcon />
@@ -37,11 +52,18 @@ export function SettingsDialog() {
           <DialogTitle>{t("settings.title")}</DialogTitle>
           <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
-        <Tabs defaultValue="appearance" className="min-h-0 flex-1">
+        <Tabs
+          value={tab ?? "appearance"}
+          onValueChange={(value) => {
+            if (isTab(value)) setTab(value);
+          }}
+          className="min-h-0 flex-1"
+        >
           <TabsList className="w-full">
             <TabsTrigger value="appearance">{t("settings.tab_appearance")}</TabsTrigger>
             <TabsTrigger value="display">{t("settings.tab_display")}</TabsTrigger>
             <TabsTrigger value="language">{t("settings.tab_language")}</TabsTrigger>
+            <TabsTrigger value="providers">{t("settings.tab_providers")}</TabsTrigger>
             <TabsTrigger value="data">{t("settings.tab_data")}</TabsTrigger>
             <TabsTrigger value="privacy">{t("settings.tab_privacy")}</TabsTrigger>
           </TabsList>
@@ -54,6 +76,9 @@ export function SettingsDialog() {
             </TabsContent>
             <TabsContent value="language">
               <LanguageSettings />
+            </TabsContent>
+            <TabsContent value="providers">
+              <ProviderSettings />
             </TabsContent>
             <TabsContent value="data">
               <BackupSettings />

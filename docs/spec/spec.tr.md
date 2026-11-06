@@ -545,7 +545,7 @@ Her iki DB için `PRAGMA user_version` tabanlı, sıralı SQL migration'lar. `us
 
 **Vektör paketi meta verisi** (ADR 0012). Vektör paketi kendi vektör uzayını tanımlar: backend önekiyle kanonik `embedding_model` (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` ve `normalized`. `backend` sorguların nerede embed edileceğini söyler:
 - `local`: `model_pack` model paketini belirtir; bu paket `requires` içinde de yer alır. `embedding_model` ve `dim` değerleri eşleşmelidir.
-- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (sağlayıcının model kimliği) ve isteğe bağlı `api_dimensions` (vektörlerini kısaltabilen modeller için, `dim`'e eşit). Model paketi yoktur. Vektörler pipeline'da bir kez, bakımcıların anahtarıyla üretilir.
+- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (sağlayıcının model kimliği) ve isteğe bağlı `api_dimensions` (vektörlerini kısaltabilen modeller için, `dim`'e eşit), `query_prefix` ile `passage_prefix` (sorgu ve pasajların önüne eklenir; örneğin `gemini-embedding-2` için `task: search result | query: `) ve `task_type` (yalnızca Gemini: `gemini-embedding-001` için `RETRIEVAL_QUERY`/`RETRIEVAL_DOCUMENT` gönderilir). Model paketi yoktur. Vektörler pipeline'da bir kez, bakımcıların anahtarıyla üretilir.
 
 Meta verisi geçersiz bir vektör paketi "desteklenmiyor" olarak listelenir; manifestin geri kalanı kullanılmaya devam eder.
 
@@ -743,10 +743,10 @@ pub trait Embedder: Send + Sync {
 
 - **İki backend** (ADR 0012); hangisinin kullanılacağını aktif vektör paketinin meta verisi belirler (§6.1):
   - **Lokal (varsayılan):** `OnnxEmbedder`, model paketinin meta verisine göre yapılandırılır (önekler, pooling, token sınırı). İnternetsiz ve anahtarsız çalışır; çıkarım ayrı bir thread'de yapılır. Kurulu model paketinden `model/model.onnx` (int8 ağırlıklar) ve `model/tokenizer.json` dosyalarını yükler; ONNX Runtime'ı `ort` crate'i üzerinden statik bağlı çalıştırır (ayrıca kurulacak kütüphane yok). Girdi olarak `input_ids` ile `attention_mask`'i, model istiyorsa `token_type_ids` ya da `position_ids`'i verir; 16'lık gruplar halinde embed eder, pooling uygular (`mean`, `cls` ya da `last`) ve normalize eder. Ayet vektörleri pipeline'da aynı dosyalardan aynı yolla hesaplanır; böylece sorgular ve ayetler aynı uzaydadır.
-  - **API:** OpenAI, Voyage, Gemini ya da OpenAI-uyumlu bir sunucu (Ollama, LM Studio). Sağlayıcının keychain'deki anahtarını kullanır (§14.2); bu anahtar AI katmanıyla ortaktır (§8). OpenAI-uyumlu sunucu için kullanıcının girdiği adres gerekir (`semantic.base_url`). Anthropic'in embedding modeli olmadığı için Claude listede yoktur.
+  - **API:** OpenAI, Voyage, Gemini ya da OpenAI-uyumlu bir sunucu (Ollama, LM Studio). Sağlayıcının keychain'deki anahtarını kullanır (§14.2); bu anahtar AI katmanıyla ortaktır (§8). OpenAI-uyumlu sunucu için kullanıcının girdiği adres gerekir (`semantic.base_url`: HTTPS ya da yalnızca bu bilgisayara düz HTTP); anahtar yalnızca kayıtlıysa gönderilir. Anahtar her istekte okunur (ilk keychain okumasından sonra bellekte tutulur), böylece yeni bir anahtar hemen geçerli olur. İstekler paketin modelini, boyutunu, öneklerini, Voyage'ın `input_type`'ını ve Gemini'nin görev türünü taşır; istek başına en çok 96 metin gönderilir; vektörler `dim`'e göre denetlenir ve uzay normalize ise burada normalize edilir. Reddedilen anahtarın (401/403), istek sınırının (429) ve diğer hataların kendi hata kodları vardır. Anthropic'in embedding modeli olmadığı için Claude listede yoktur.
 - **Sorgu ve pasaj** farklı embed edilir (e5 `query: `/`passage: ` önekleri, Voyage `input_type`, Gemini görev türleri); her backend `TextKind`'ı kendisi eşler.
 - **Aktif paket:** Aynı anda en fazla bir vektör paketi aktiftir: `semantic.vector_pack` ayarında adı geçen, yoksa ilk kurulu paket.
-- **Durum:** `get_semantic_status`, anlamsal özelliklerin neden kullanılabildiğini ya da kullanılamadığını döner: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `not_built` veya `ready` (sorgular bilgisayardan çıkıyorsa sağlayıcıyla birlikte). Arayüz her birini bir eyleme çevirir (kur, anahtar ekle, adres gir).
+- **Durum:** `get_semantic_status`, anlamsal özelliklerin neden kullanılabildiğini ya da kullanılamadığını döner: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `base_url_invalid`, `not_built` veya `ready` (sorgular bilgisayardan çıkıyorsa sağlayıcıyla birlikte). Arayüz her birini bir eyleme çevirir (kur, anahtar ekle, adres gir); anahtarlar ve adres Ayarlar → Sağlayıcılar'dan girilir, birden çok paket kuruluysa etkin paket de orada seçilir.
 - **Lazy-load:** Embedder ilk kullanımda oluşturulur; paketlerden birinin sürümü ya da adres değişene kadar tutulur.
 - **Uyumluluk:** Embedder'ın `embedding_model` ve `dim` değerleri aktif vektör paketininkilerle eşleşmezse anlamsal özellikler devre dışı kalır ve arayüz nedenini gösterir.
 - **Gizlilik:** API paketiyle sorgular (sohbette ayrıca sıralanan tefsir paragrafları, §10) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler "Gelişmiş" altındadır ve indirmeden önce bunu söyler (`terms_ack`).
@@ -970,12 +970,13 @@ Referans mockup: "Okuma Ekranı Mockup" canvas'ı (sade ve araştırma varsayıl
 - Tüm HTTP istekleri `net.rs` içindeki tek bir client'tan geçer. Bu client'ın sabit bir host izin listesi vardır:
   - `quran.kemalozyon.com` (manifest, fiyatlar, güncelleme meta verisi)
   - `github.com`, `objects.githubusercontent.com` (paketler, güncellemeler)
-  - Sağlayıcı API host'ları (Anthropic, OpenAI, Gemini; embedding için Voyage)
-  - Kullanıcının OpenAI-uyumlu sağlayıcı için açıkça girdiği `base_url`
+  - Sağlayıcı API host'ları (Anthropic, OpenAI, Gemini; embedding için Voyage). Embedding host'ları M7'den beri listede: `api.openai.com`, `api.voyageai.com`, `generativelanguage.googleapis.com`.
+  - Kullanıcının OpenAI-uyumlu sağlayıcı için açıkça girdiği `base_url`: HTTPS ya da yalnızca `localhost`, `127.0.0.1` veya `[::1]`'e düz HTTP; içinde kimlik bilgisi, sorgu veya parça bulunamaz
+- Anahtar taşıyan istekler (POST) yönlendirme izlemez; böylece anahtar asla başka bir host'a iletilmez.
 - **Bağlantı günlüğü:** Her istek için host, zaman, amaç (`pack`, `update`, `chat`, `translate`, `embed`) ve durum kaydı tutulur; içerik kaydedilmez. Son 500 kayıt bellekte ve `user.db`'de tutulur. Ayarlar → Gizlilik'ten görüntülenir.
 
 ### 14.2 API anahtarları
-- OS keychain'de saklanır (servis: `com.kemalozyon.siyak`, hesap: `<provider>`). Webview'e asla dönmez; arayüz yalnızca "kayıtlı / kayıtlı değil" bilgisini görür.
+- OS keychain'de saklanır (servis: `com.kemalozyon.siyak`, hesap: `<provider>`). Webview'e asla dönmez; arayüz yalnızca "kayıtlı / kayıtlı değil" bilgisini görür (`get_api_keys`, `set_api_key`, `delete_api_key`; embedding API'leri için M7'de geldi). Anahtar tek satır, görünür ASCII karakterlerden oluşmalıdır.
 - Anahtar ekleme ekranındaki rehber:
   1. "Bu uygulama için ayrı bir anahtar oluşturun."
   2. "Sağlayıcı panelinden bu anahtara/projeye harcama limiti koyun."
@@ -1142,8 +1143,8 @@ Kurallar dokümanda değil, CI'da zorunlu tutulur. Her PR'da çalışan `ci.yml`
 | M4 | Tefsir + karşılaştırma + arama | Tefsir paneli (paragraflı), karşılaştırma ekranı, tek arama kutusu (Tümü + Kelime), FTS5 |
 | M5 | Morfoloji | Morfoloji paketi, tıklanabilir kelimeler, kelime kartı ve paneli, Kök modu, konkordans |
 | M6 | Koleksiyonlar | Yer imi, notlar, koleksiyonlar, Markdown/atıf/JSON dışa aktarma |
-| M7 | Anlamsal katman | Model seçimi, lokal (ONNX) ve API embedder'lar, vektör paketi, Anlam modu, çapraz referans |
-| M8 | AI | Sağlayıcı katmanı, keychain, ağ izin listesi + günlük, tefsir özet/çeviri + maliyet, RAG sohbet |
+| M7 | Anlamsal katman | Model seçimi, lokal (ONNX) ve API embedder'lar, keychain, vektör paketi, Anlam modu, çapraz referans |
+| M8 | AI | Sağlayıcı katmanı, sohbet sağlayıcı host'ları, tefsir özet/çeviri + maliyet, RAG sohbet |
 | M9 | Release + web sitesi | Updater, provenance, landing page, kullanıcı rehberi (iki dil), v0.1.0 |
 
 Sıralama mantığı: Açık kaynak altyapısı en başta kurulur (M0), çünkü sonradan eklemek pahalıdır ve erken gelen contributor'ları kaybettirir. AI'sız değer önce gelir (M2–M6); uygulama M6 sonunda anahtarsız haliyle yayımlanabilir bir araştırma aracıdır.

@@ -20,7 +20,12 @@ export function SemanticRequired({
 }) {
   const { t, i18n } = useTranslation();
   const setPacksDialogOpen = useUiStore((state) => state.setPacksDialogOpen);
+  const setSettingsTab = useUiStore((state) => state.setSettingsTab);
   const needsPacks = status.state === "no_vector_pack" || status.state === "model_pack_missing";
+  const needsSettings =
+    status.state === "key_missing" ||
+    status.state === "base_url_missing" ||
+    status.state === "base_url_invalid";
   const catalog = useCatalog(needsPacks);
   const language = i18n.resolvedLanguage;
 
@@ -45,6 +50,9 @@ export function SemanticRequired({
     case "base_url_missing":
       message = t("semantic.base_url_missing");
       break;
+    case "base_url_invalid":
+      message = t("semantic.base_url_invalid");
+      break;
     default:
       message = t("semantic.unusable", { pack: status.pack });
   }
@@ -60,6 +68,17 @@ export function SemanticRequired({
           }}
         >
           {t("semantic.open_packs")}
+        </Button>
+      )}
+      {needsSettings && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSettingsTab("providers");
+          }}
+        >
+          {t("semantic.open_settings")}
         </Button>
       )}
     </div>

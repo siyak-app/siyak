@@ -4,7 +4,7 @@ import { ErrorMessage } from "@/components/ErrorMessage";
 import { formatBytes } from "@/features/packs/packFormat";
 import { useNetworkLog } from "@/lib/queries";
 
-const PURPOSES = ["manifest", "pack", "update", "chat", "translate"] as const;
+const PURPOSES = ["manifest", "pack", "embed", "update", "chat", "translate"] as const;
 
 /** Settings → Privacy: the connection log (spec §14.1). */
 export function PrivacySettings() {

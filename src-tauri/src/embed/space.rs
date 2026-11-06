@@ -9,7 +9,7 @@
 //! model of a model pack, or by an embedding API with the user's key. The pack
 //! metadata names the backend; the app has no other configuration for it.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use specta::Type;
 
@@ -43,7 +43,7 @@ impl EmbeddingSpace {
 }
 
 /// Embedding APIs a vector pack can name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 pub enum ApiProvider {
     /// OpenAI embeddings.
     #[serde(rename = "openai")]
@@ -127,6 +127,16 @@ pub enum Backend {
         /// Output dimension to request from models that can shorten their
         /// vectors; equals the space's dimension when present.
         dimensions: Option<u32>,
+        /// Text put before a query, e.g. `task: search result | query: ` for
+        /// `gemini-embedding-2`; the pipeline embeds verses with the passage
+        /// prefix.
+        query_prefix: String,
+        /// Text put before a passage (tafsir paragraphs, spec §10).
+        passage_prefix: String,
+        /// Whether to send Gemini's `taskType` (`RETRIEVAL_QUERY` or
+        /// `RETRIEVAL_DOCUMENT`); `gemini-embedding-001` uses it, newer models
+        /// take prefixes instead.
+        task_type: bool,
     },
 }
 
@@ -181,10 +191,21 @@ impl VectorPackSpec {
                 if dimensions.is_some_and(|d| d != space.dim) {
                     return Err("api_dimensions differs from dim".into());
                 }
+                let task_type = match meta.get("task_type") {
+                    None | Some(Value::Null) => false,
+                    Some(Value::Bool(b)) => *b,
+                    Some(_) => return Err("task_type must be a boolean".into()),
+                };
+                if task_type && provider != ApiProvider::Gemini {
+                    return Err("task_type is only for gemini packs".into());
+                }
                 Backend::Api {
                     provider,
                     model: text(meta, "api_model")?,
                     dimensions,
+                    query_prefix: optional_text(meta, "query_prefix")?.unwrap_or_default(),
+                    passage_prefix: optional_text(meta, "passage_prefix")?.unwrap_or_default(),
+                    task_type,
                 }
             }
             other => return Err(format!("unknown backend {other:?}")),
@@ -393,8 +414,41 @@ mod tests {
                 provider: ApiProvider::OpenAi,
                 model: "text-embedding-3-small".into(),
                 dimensions: Some(512),
+                query_prefix: String::new(),
+                passage_prefix: String::new(),
+                task_type: false,
             }
         );
+    }
+
+    #[test]
+    fn reads_api_prefixes_and_gemini_task_types() {
+        let mut value = api();
+        value["provider"] = "gemini".into();
+        value["embedding_model"] = "gemini/gemini-embedding-001".into();
+        value["api_model"] = "gemini-embedding-001".into();
+        value["query_prefix"] = "task: search result | query: ".into();
+        value["passage_prefix"] = "title: none | text: ".into();
+        value["task_type"] = true.into();
+        let spec = VectorPackSpec::from_meta(&meta(value.clone())).unwrap();
+        let Backend::Api {
+            query_prefix,
+            passage_prefix,
+            task_type,
+            ..
+        } = spec.backend
+        else {
+            panic!("not an api pack");
+        };
+        assert_eq!(query_prefix, "task: search result | query: ");
+        assert_eq!(passage_prefix, "title: none | text: ");
+        assert!(task_type);
+
+        value["task_type"] = "yes".into();
+        assert!(VectorPackSpec::from_meta(&meta(value)).is_err());
+        let mut openai = api();
+        openai["task_type"] = true.into();
+        assert!(VectorPackSpec::from_meta(&meta(openai)).is_err());
     }
 
     #[test]

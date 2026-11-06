@@ -82,6 +82,14 @@ pub enum AppErrorCode {
     /// Semantic search needs a vector pack with a working embedder (spec §7.4);
     /// `get_semantic_status` says what is missing.
     SemanticUnavailable,
+    /// The OS keychain could not read, save or delete an API key (spec §14.2).
+    KeychainFailed,
+    /// The provider rejected the API key (HTTP 401 or 403).
+    ProviderKeyRejected,
+    /// The provider limits requests or the key's quota is used up (HTTP 429).
+    ProviderRateLimited,
+    /// The provider answered with another error or an unexpected response.
+    ProviderFailed,
 }
 
 /// Error returned by every command: `{ code, message }` on the frontend.

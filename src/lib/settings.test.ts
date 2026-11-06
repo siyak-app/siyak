@@ -28,6 +28,8 @@ const SAMPLE: Settings = {
   "typography.arabic": { size: 32, line_height: 2.4 },
   "typography.translation": { size: 18, line_height: 1.8 },
   "reader.last_position": { surah: 2, ayah: 255 },
+  "semantic.vector_pack": "vectors.bge-m3",
+  "semantic.base_url": "http://localhost:11434/v1",
 };
 
 describe("settings", () => {

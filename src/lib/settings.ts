@@ -84,6 +84,10 @@ export interface Settings {
   "typography.translation": Typography;
   /** Where the reader was last, opened on the next launch. */
   "reader.last_position": VersePosition | null;
+  /** Id of the active vector pack; `null` for the first installed (spec §7.4). */
+  "semantic.vector_pack": string | null;
+  /** Address of the OpenAI-compatible embedding server, e.g. `http://localhost:11434/v1`. */
+  "semantic.base_url": string | null;
 }
 
 /** A setting key. */
@@ -180,6 +184,14 @@ export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
       (value): value is VersePosition =>
         isObject(value) && isPositiveInteger(value.surah) && isPositiveInteger(value.ayah),
     ),
+  },
+  "semantic.vector_pack": {
+    default: null,
+    validate: nullable((value): value is string => typeof value === "string"),
+  },
+  "semantic.base_url": {
+    default: null,
+    validate: nullable((value): value is string => typeof value === "string"),
   },
 };
 

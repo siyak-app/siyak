@@ -9,6 +9,7 @@
 pub mod collections;
 pub mod content;
 pub mod export;
+pub mod keys;
 pub mod morphology;
 pub mod notes;
 pub mod packs;
@@ -48,6 +49,9 @@ pub fn builder() -> Builder<tauri::Wry> {
             semantic::search_meaning,
             semantic::related_by_meaning,
             semantic::related_by_roots,
+            keys::get_api_keys,
+            keys::set_api_key,
+            keys::delete_api_key,
             settings::get_settings,
             settings::set_setting,
             settings::set_settings,

@@ -65,6 +65,7 @@ function open(tab?: string) {
 describe("SettingsDialog", () => {
   beforeEach(async () => {
     saved.length = 0;
+    useUiStore.setState({ settingsTab: null });
     await i18n.changeLanguage("en");
     useUiStore.getState().hydrate({ ...DEFAULT_PREFERENCES, experience_profile: "reader" });
   });

@@ -21,6 +21,7 @@ use super::{ApiProvider, Embedder};
 use crate::db::user::Settings;
 use crate::error::{AppError, AppErrorCode, AppResult};
 use crate::packs::manifest::InstalledPack;
+pub use crate::secrets::{KeyStore, NoKeyStore};
 
 /// Setting that names the active vector pack (JSON string). Without it, or if
 /// it names a pack that is not installed, the first installed one is used.
@@ -64,6 +65,12 @@ pub enum SemanticStatus {
     },
     /// The address of the OpenAI-compatible server is not entered.
     BaseUrlMissing {
+        /// The vector pack.
+        pack: String,
+    },
+    /// The entered address is not usable: not HTTP(S), plain HTTP to another
+    /// computer, or with credentials in it (spec §14.1).
+    BaseUrlInvalid {
         /// The vector pack.
         pack: String,
     },
@@ -116,21 +123,6 @@ impl ActivePack {
     }
 }
 
-/// Answers whether an API key is stored, without reading it.
-pub trait KeyStore: Send + Sync {
-    /// Whether the key of `provider` is in the keychain.
-    fn has_key(&self, provider: ApiProvider) -> AppResult<bool>;
-}
-
-/// A key store without keys, until the keychain is wired up.
-pub struct NoKeyStore;
-
-impl KeyStore for NoKeyStore {
-    fn has_key(&self, _provider: ApiProvider) -> AppResult<bool> {
-        Ok(false)
-    }
-}
-
 /// Builds embedders for a backend.
 pub trait EmbedderFactory: Send + Sync {
     /// Whether this build can run `backend`.
@@ -151,6 +143,22 @@ impl EmbedderFactory for UnbuiltFactory {
 
     fn create(&self, pack: &ActivePack) -> AppResult<Arc<dyn Embedder>> {
         Err(unavailable(&pack.id, "no embedder in this build"))
+    }
+}
+
+/// Several factories; the first that supports a backend builds its embedders.
+pub struct Backends(pub Vec<Arc<dyn EmbedderFactory>>);
+
+impl EmbedderFactory for Backends {
+    fn supports(&self, backend: &Backend) -> bool {
+        self.0.iter().any(|f| f.supports(backend))
+    }
+
+    fn create(&self, pack: &ActivePack) -> AppResult<Arc<dyn Embedder>> {
+        match self.0.iter().find(|f| f.supports(&pack.spec.backend)) {
+            Some(factory) => factory.create(pack),
+            None => UnbuiltFactory.create(pack),
+        }
     }
 }
 
@@ -178,6 +186,11 @@ impl Semantic {
     /// The service of this build: no keys, no backends.
     pub fn unbuilt() -> Self {
         Self::new(Arc::new(NoKeyStore), Arc::new(UnbuiltFactory))
+    }
+
+    /// Where API keys are kept.
+    pub fn keys(&self) -> &Arc<dyn KeyStore> {
+        &self.keys
     }
 
     /// Whether semantic features are available, and if not, why.
@@ -312,8 +325,11 @@ impl Semantic {
             Backend::Api { provider, .. } => {
                 if provider.needs_base_url() {
                     base_url = string_setting(settings, BASE_URL_SETTING);
-                    if base_url.is_none() {
+                    let Some(address) = &base_url else {
                         return Ok(Err(SemanticStatus::BaseUrlMissing { pack }));
+                    };
+                    if crate::net::user_server_url(address).is_err() {
+                        return Ok(Err(SemanticStatus::BaseUrlInvalid { pack }));
                     }
                 }
                 if provider.needs_key() && !self.keys.has_key(*provider)? {
@@ -457,8 +473,16 @@ mod tests {
     struct Keys(HashSet<ApiProvider>);
 
     impl KeyStore for Keys {
-        fn has_key(&self, provider: ApiProvider) -> AppResult<bool> {
-            Ok(self.0.contains(&provider))
+        fn key(&self, provider: ApiProvider) -> AppResult<Option<String>> {
+            Ok(self.0.contains(&provider).then(|| "key".to_owned()))
+        }
+
+        fn set_key(&self, _provider: ApiProvider, _key: &str) -> AppResult<()> {
+            unreachable!("status checks never save keys")
+        }
+
+        fn delete_key(&self, _provider: ApiProvider) -> AppResult<()> {
+            unreachable!("status checks never delete keys")
         }
     }
 
@@ -634,10 +658,45 @@ mod tests {
             semantic.status(&packs, &blank).unwrap(),
             SemanticStatus::BaseUrlMissing { .. }
         ));
+        for bad in ["localhost:11434", "http://192.168.1.5:11434/v1"] {
+            let address = settings(&[(BASE_URL_SETTING, bad)]);
+            assert_eq!(
+                semantic.status(&packs, &address).unwrap(),
+                SemanticStatus::BaseUrlInvalid {
+                    pack: "vectors.ollama".into()
+                },
+                "{bad}"
+            );
+        }
         let address = settings(&[(BASE_URL_SETTING, "http://localhost:11434/v1")]);
         assert!(matches!(
             semantic.status(&packs, &address).unwrap(),
             SemanticStatus::Ready { .. }
+        ));
+    }
+
+    #[test]
+    fn backends_pick_the_factory_that_supports_the_pack() {
+        let packs = [api_vectors("vectors.openai", ApiProvider::OpenAi)];
+        let factory = Factory {
+            created: AtomicUsize::new(0),
+            dim: 8,
+        };
+        let backends = Backends(vec![Arc::new(UnbuiltFactory), Arc::new(factory)]);
+        let semantic = Semantic::new(
+            Arc::new(Keys([ApiProvider::OpenAi].into())),
+            Arc::new(backends),
+        );
+        assert!(matches!(
+            semantic.status(&packs, &Settings::new()).unwrap(),
+            SemanticStatus::Ready { .. }
+        ));
+        assert!(semantic.embedder(&packs, &Settings::new()).is_ok());
+        let none = Semantic::new(Arc::new(NoKeyStore), Arc::new(Backends(Vec::new())));
+        assert!(matches!(
+            none.status(&[local_vectors("vectors.local")], &Settings::new())
+                .unwrap(),
+            SemanticStatus::ModelPackMissing { .. }
         ));
     }
 

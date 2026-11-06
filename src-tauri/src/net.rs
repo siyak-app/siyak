@@ -6,7 +6,10 @@
 //! host, time, purpose, status and body size of a request are logged, never
 //! its path, query or content.
 //!
-//! TODO(M8): provider hosts, the user-entered OpenAI-compatible `base_url`.
+//! Embedding APIs are reached with [`Net::post_json`]: their hosts are on the
+//! allow-list, and the address of an OpenAI-compatible server is allowed only
+//! because the user entered it ([`user_server_url`]). POST requests follow no
+//! redirects, so a key is never sent on to another host.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -26,7 +29,14 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "github.com",
     "release-assets.githubusercontent.com",
     "objects.githubusercontent.com",
+    // Embedding APIs (spec §7.4); the AI layer adds its own hosts (spec §8).
+    "api.openai.com",
+    "api.voyageai.com",
+    "generativelanguage.googleapis.com",
 ];
+
+/// Hosts an OpenAI-compatible server may use plain HTTP on: this computer.
+const LOOPBACK_HOSTS: &[&str] = &["localhost", "127.0.0.1", "[::1]"];
 
 /// Most redirects followed for one request.
 const MAX_REDIRECTS: usize = 5;
@@ -38,6 +48,8 @@ pub enum Purpose {
     Manifest,
     /// Downloading a pack file.
     Pack,
+    /// Embedding a query or passages with an API (spec §7.4).
+    Embedding,
 }
 
 impl Purpose {
@@ -46,6 +58,7 @@ impl Purpose {
         match self {
             Self::Manifest => "manifest",
             Self::Pack => "pack",
+            Self::Embedding => "embed",
         }
     }
 }
@@ -134,7 +147,46 @@ impl AllowList {
     }
 }
 
+/// Checks the address of an OpenAI-compatible server the user entered: HTTPS,
+/// or plain HTTP to this computer (Ollama, LM Studio), with no credentials in
+/// it. Returns it without a trailing slash.
+pub fn user_server_url(address: &str) -> AppResult<Url> {
+    let invalid = |why: &str| {
+        AppError::new(
+            AppErrorCode::HostNotAllowed,
+            format!("server address: {why}"),
+        )
+    };
+    let mut url = Url::parse(address.trim()).map_err(|err| invalid(&err.to_string()))?;
+    let host = url.host_str().ok_or_else(|| invalid("no host"))?.to_owned();
+    match url.scheme() {
+        "https" => {}
+        "http" if LOOPBACK_HOSTS.iter().any(|h| h.eq_ignore_ascii_case(&host)) => {}
+        "http" => return Err(invalid("plain HTTP is allowed only to this computer")),
+        _ => return Err(invalid("not an HTTP address")),
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(invalid("credentials in the address"));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(invalid("a query or fragment"));
+    }
+    let path = url.path().trim_end_matches('/').to_owned();
+    url.set_path(&path);
+    Ok(url)
+}
+
+/// Whether `url` is on the server at `server` (same scheme, host and port).
+fn same_server(url: &Url, server: &Url) -> bool {
+    url.scheme() == server.scheme()
+        && url.host_str() == server.host_str()
+        && url.port_or_known_default() == server.port_or_known_default()
+        && url.username().is_empty()
+        && url.password().is_none()
+}
+
 /// The app's HTTP client.
+#[derive(Clone)]
 pub struct Net {
     client: reqwest::Client,
     allow: AllowList,
@@ -207,6 +259,69 @@ impl Net {
             AppErrorCode::NetworkFailed,
             format!("more than {MAX_REDIRECTS} redirects"),
         ))
+    }
+
+    /// Sends a JSON POST request and reads the response body (at most `limit`
+    /// bytes) whatever its status. `url` must be on the allow-list, or on
+    /// `user_server`: the checked address of the user's OpenAI-compatible
+    /// server ([`user_server_url`]). Redirects are not followed.
+    ///
+    /// `headers` carry the API key; neither they nor the body are logged.
+    pub async fn post_json(
+        &self,
+        url: &Url,
+        user_server: Option<&Url>,
+        purpose: Purpose,
+        headers: &[(&str, &str)],
+        body: &serde_json::Value,
+        limit: usize,
+    ) -> AppResult<(StatusCode, Vec<u8>)> {
+        let host = match user_server {
+            Some(server) if same_server(url, server) => {
+                url.host_str().unwrap_or_default().to_owned()
+            }
+            _ => self.check(url)?,
+        };
+        let body = serde_json::to_vec(body)
+            .map_err(|err| AppError::new(AppErrorCode::InvalidInput, err.to_string()))?;
+        let mut request = self
+            .client
+            .post(url.clone())
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body);
+        for (name, value) in headers {
+            let mut value = HeaderValue::from_str(value).map_err(|_| {
+                AppError::new(AppErrorCode::InvalidInput, format!("invalid {name} header"))
+            })?;
+            value.set_sensitive(true);
+            request = request.header(*name, value);
+        }
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(err) => {
+                self.log.record(&host, purpose, None, 0);
+                return Err(AppError::new(
+                    AppErrorCode::NetworkFailed,
+                    format!("{host}: {}", without_url(&err)),
+                ));
+            }
+        };
+        let status = response.status();
+        let mut response = Response {
+            inner: response,
+            host,
+            purpose,
+            received: AtomicU64::new(0),
+            log: Arc::clone(&self.log),
+        };
+        if status.is_redirection() {
+            return Err(AppError::new(
+                AppErrorCode::NetworkFailed,
+                format!("{}: answered with a redirect ({status})", response.host),
+            ));
+        }
+        let body = response.bytes_limited(limit).await?;
+        Ok((status, body))
     }
 
     fn check(&self, url: &Url) -> AppResult<String> {
@@ -534,5 +649,160 @@ mod tests {
             .unwrap();
         let err = response.bytes_limited(3).await.unwrap_err();
         assert_eq!(err.code, AppErrorCode::DownloadFailed);
+    }
+
+    #[test]
+    fn production_allow_list_has_the_embedding_apis() {
+        let allow = AllowList::production();
+        for host in [
+            "api.openai.com",
+            "api.voyageai.com",
+            "generativelanguage.googleapis.com",
+        ] {
+            assert!(allow.permits(&url(&format!("https://{host}/v1/embeddings"))));
+        }
+        assert!(!allow.permits(&url("https://localhost:11434/v1/embeddings")));
+    }
+
+    #[test]
+    fn user_servers_need_https_unless_on_this_computer() {
+        for ok in [
+            "http://localhost:11434/v1/",
+            "http://127.0.0.1:1234/v1",
+            "http://[::1]:8080",
+            "https://llm.example.org/v1",
+        ] {
+            let parsed = user_server_url(ok).unwrap();
+            assert!(
+                !parsed.path().ends_with('/') || parsed.path() == "/",
+                "{parsed}"
+            );
+        }
+        assert_eq!(
+            user_server_url(" http://localhost:11434/v1/ ")
+                .unwrap()
+                .as_str(),
+            "http://localhost:11434/v1"
+        );
+        for bad in [
+            "http://192.168.1.5:11434/v1",
+            "http://localhost.example.org/v1",
+            "ftp://localhost/",
+            "https://user:pw@llm.example.org/",
+            "https://llm.example.org/v1?key=1",
+            "localhost:11434",
+            "",
+        ] {
+            let err = user_server_url(bad).unwrap_err();
+            assert_eq!(err.code, AppErrorCode::HostNotAllowed, "{bad}");
+        }
+    }
+
+    fn post_router() -> Router {
+        use axum::routing::post;
+        Router::new()
+            .route(
+                "/echo",
+                post(|headers: HeaderMap, body: String| async move {
+                    let auth = headers
+                        .get(header::AUTHORIZATION)
+                        .map(|v| v.to_str().unwrap().to_owned())
+                        .unwrap_or_default();
+                    format!("{auth}|{body}")
+                }),
+            )
+            .route(
+                "/moved",
+                post(|| async {
+                    (
+                        AxumStatus::TEMPORARY_REDIRECT,
+                        [(header::LOCATION, "/echo")],
+                    )
+                }),
+            )
+    }
+
+    #[tokio::test]
+    async fn posts_json_with_headers_and_logs_without_content() {
+        let base = serve(post_router()).await;
+        let (net, log) = local_net();
+        let (status, body) = net
+            .post_json(
+                &url(&format!("{base}/echo")),
+                None,
+                Purpose::Embedding,
+                &[("authorization", "Bearer sk-1")],
+                &serde_json::json!({ "input": ["sabır"] }),
+                1000,
+            )
+            .await
+            .unwrap();
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            String::from_utf8(body).unwrap(),
+            r#"Bearer sk-1|{"input":["sabır"]}"#
+        );
+        let entries = log.0.lock().unwrap().clone();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].0, "127.0.0.1");
+        assert_eq!(entries[0].1, "embed");
+        assert_eq!(entries[0].2, Some(200));
+    }
+
+    #[tokio::test]
+    async fn posts_follow_no_redirects() {
+        let base = serve(post_router()).await;
+        let (net, log) = local_net();
+        let err = net
+            .post_json(
+                &url(&format!("{base}/moved")),
+                None,
+                Purpose::Embedding,
+                &[("authorization", "Bearer sk-1")],
+                &serde_json::json!({}),
+                1000,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, AppErrorCode::NetworkFailed);
+        assert_eq!(
+            log.0.lock().unwrap().len(),
+            1,
+            "the echo route was not called"
+        );
+    }
+
+    #[tokio::test]
+    async fn posts_reach_the_user_server_and_nothing_else() {
+        let base = serve(post_router()).await;
+        let log = Arc::new(test_support::MemoryLog::default());
+        // An empty allow-list: only the user's server is reachable.
+        let net =
+            Net::with_allow_list(AllowList::for_tests(&[]), log as Arc<dyn NetLogSink>).unwrap();
+        let server = user_server_url(&base.replace("127.0.0.1", "localhost")).unwrap();
+        let echo = url(&format!("{server}/echo"));
+        net.post_json(
+            &echo,
+            Some(&server),
+            Purpose::Embedding,
+            &[],
+            &serde_json::json!({}),
+            1000,
+        )
+        .await
+        .unwrap();
+        let elsewhere = url("https://example.org/echo");
+        let err = net
+            .post_json(
+                &elsewhere,
+                Some(&server),
+                Purpose::Embedding,
+                &[],
+                &serde_json::json!({}),
+                1000,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, AppErrorCode::HostNotAllowed);
     }
 }

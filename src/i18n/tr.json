@@ -100,6 +100,7 @@
     "tab_appearance": "Tema ve yazı",
     "tab_display": "Görünüm ve davranış",
     "tab_language": "Dil",
+    "tab_providers": "Sağlayıcılar",
     "theme_sepia": "Sepya",
     "arabic_text": "Arapça metin",
     "translation_text": "Mealler",
@@ -142,6 +143,7 @@
     "network_no_response": "Yanıt yok",
     "network_purpose_manifest": "Paket listesi",
     "network_purpose_pack": "Paket indirme",
+    "network_purpose_embed": "Anlamsal arama",
     "network_purpose_update": "Uygulama güncellemesi",
     "network_purpose_chat": "Sohbet",
     "network_purpose_translate": "Çeviri",
@@ -159,7 +161,25 @@
     "import_replace_confirm": "Evet, verilerimin yerine koy",
     "import_report": "Eklenen: {{bookmarks}} yer imi, {{notes}} not, {{collections}} koleksiyon, {{items}} koleksiyon ögesi, {{translations}} tefsir çevirisi.",
     "import_skipped_one": "{{count}} kayıt alınmadı: ayeti veya paketi burada yok.",
-    "import_skipped_other": "{{count}} kayıt alınmadı: ayetleri veya paketleri burada yok."
+    "import_skipped_other": "{{count}} kayıt alınmadı: ayetleri veya paketleri burada yok.",
+    "providers_title": "Embedding sağlayıcıları",
+    "providers_hint": "API'li anlamsal arama paketleri aramalarınızı bir sağlayıcıda, sizin anahtarınızla işler. Anahtarlar sistem anahtar zincirinde saklanır ve bir daha gösterilmez.",
+    "key_advice_separate": "Bu uygulama için ayrı bir anahtar oluşturun.",
+    "key_advice_limit": "Sağlayıcı panelinden bu anahtara/projeye harcama limiti koyun.",
+    "key_advice_only_provider": "Anahtarınız yalnızca bu bilgisayardan seçtiğiniz sağlayıcıya gönderilir. Şüphelenirseniz sağlayıcı panelinden iptal edin.",
+    "key_label": "{{provider}} API anahtarı",
+    "key_optional": "(anahtar isteğe bağlı)",
+    "key_saved": "Kayıtlı",
+    "key_not_saved": "Kayıtlı değil",
+    "key_replace_placeholder": "Kayıtlı anahtarı değiştirmek için yenisini girin",
+    "key_save": "Kaydet",
+    "key_remove": "Kaldır",
+    "server_label": "OpenAI uyumlu sunucu adresi",
+    "server_placeholder": "http://localhost:11434/v1",
+    "server_hint": "Örneğin Ollama veya LM Studio. Düz HTTP yalnızca bu bilgisayara izinli; diğer sunucular HTTPS gerektirir.",
+    "server_save": "Kaydet",
+    "active_pack": "Anlamsal arama paketi",
+    "active_pack_hint": "Anlamına göre arama ve benzer ayetler bu paketi kullanır."
   },
   "compare": {
     "loading": "Yükleniyor…",
@@ -215,8 +235,10 @@
     "model_missing": "Anlamsal arama paketi, {{pack}} model paketi olmadan çalışmaz.",
     "key_missing": "Bu anlamsal arama paketi {{provider}} kullanır: kullanmak için {{provider}} API anahtarınızı ekleyin.",
     "base_url_missing": "Bu anlamsal arama paketi için sunucunuzun adresi gerekli.",
+    "base_url_invalid": "Sunucu adresi kullanılamıyor: HTTPS kullanın; düz HTTP yalnızca bu bilgisayara izinli.",
     "unusable": "{{pack}} anlamsal arama paketi Siyak'ın bu sürümüyle kullanılamıyor.",
     "open_packs": "Paketleri aç",
+    "open_settings": "Ayarları aç",
     "remote": "Aramalarınız şu sağlayıcıya gönderilir: {{provider}}."
   },
   "related": {
@@ -447,7 +469,11 @@
     "invalid_input": "Bu giriş geçerli değil.",
     "backup_invalid": "Bu dosya bir Siyak yedeği değil.",
     "backup_unsupported": "Bu yedek uygulamanın daha yeni bir sürümüyle alınmış. Uygulamayı güncelleyip yeniden deneyin.",
-    "semantic_unavailable": "Anlamına göre arama için bir anlamsal arama paketi gerekli. Paketler'den kurabilirsiniz."
+    "semantic_unavailable": "Anlamına göre arama için bir anlamsal arama paketi gerekli. Paketler'den kurabilirsiniz.",
+    "keychain_failed": "Sistem anahtar zinciri API anahtarını kaydedemedi veya okuyamadı.",
+    "provider_key_rejected": "Sağlayıcı API anahtarını reddetti. Ayarlar → Sağlayıcılar'dan kontrol edin.",
+    "provider_rate_limited": "Sağlayıcı istekleri sınırlıyor veya anahtarın kotası doldu. Daha sonra tekrar deneyin.",
+    "provider_failed": "Sağlayıcı bir hatayla yanıt verdi. Daha sonra tekrar deneyin."
   },
   "term": {
     "lemma": {

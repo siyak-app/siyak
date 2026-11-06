@@ -9,6 +9,19 @@ import {
 } from "@/lib/settings";
 import type { ItemRef } from "@/lib/bindings";
 
+/** Tabs of the Settings dialog, in display order. */
+export const SETTINGS_TABS = [
+  "appearance",
+  "display",
+  "language",
+  "providers",
+  "data",
+  "privacy",
+] as const;
+
+/** A tab of the Settings dialog. */
+export type SettingsTab = (typeof SETTINGS_TABS)[number];
+
 /**
  * UI preferences: the settings of `@/lib/settings`, keyed by their `user.db`
  * setting key so that persisting a change is a single `set_setting` call.
@@ -38,6 +51,8 @@ interface UiState {
   selectedWord: number | null;
   /** Whether the Packs dialog is open; other screens may open it. Not persisted. */
   packsDialogOpen: boolean;
+  /** The open tab of the Settings dialog, `null` if it is closed. Not persisted. */
+  settingsTab: SettingsTab | null;
   /** What the "Add to collection" dialog is adding, if it is open. Not persisted. */
   collectionPicker: ItemRef | null;
   /** The next Notes tab to show should focus its editor (the `n` key). Not persisted. */
@@ -48,6 +63,7 @@ interface UiState {
   selectVerse: (verse: VersePosition | null) => void;
   selectWord: (verse: VersePosition, wordId: number) => void;
   setPacksDialogOpen: (open: boolean) => void;
+  setSettingsTab: (tab: SettingsTab | null) => void;
   openCollectionPicker: (item: ItemRef | null) => void;
   setNoteFocusPending: (pending: boolean) => void;
 }
@@ -62,6 +78,7 @@ export const useUiStore = create<UiState>()((set) => ({
   selectedVerse: null,
   selectedWord: null,
   packsDialogOpen: false,
+  settingsTab: null,
   collectionPicker: null,
   noteFocusPending: false,
   hydrate: (preferences) => {
@@ -85,6 +102,9 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setPacksDialogOpen: (open) => {
     set({ packsDialogOpen: open });
+  },
+  setSettingsTab: (tab) => {
+    set({ settingsTab: tab });
   },
   openCollectionPicker: (item) => {
     set({ collectionPicker: item });

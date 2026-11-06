@@ -12,6 +12,8 @@ import { serializeSetting, type SettingKey, type Settings } from "./settings";
 
 import {
   commands,
+  type ApiKeyStatus,
+  type ApiProvider,
   type AppError,
   type AppErrorCode,
   type BookmarkedVerse,
@@ -209,6 +211,8 @@ export const queryKeys = {
   /** Key of {@link useRelatedByRoots}. */
   relatedByRoots: (verseId: number | null, translationId: string | null) =>
     ["related-by-roots", verseId, translationId] as const,
+  /** Key of {@link useApiKeys}. */
+  apiKeys: ["api-keys"] as const,
   /** Key of {@link useCatalog}. */
   catalog: ["catalog"] as const,
   /** Key of {@link useNetworkLog}. */
@@ -492,6 +496,77 @@ export function useSearchMeaning(variables: MeaningVariables, enabled = true) {
     placeholderData: (previous, previousQuery) => {
       const before = previousQuery?.queryKey[1] as MeaningVariables | undefined;
       return before?.query === query ? previous : undefined;
+    },
+  });
+}
+
+/** Everything that depends on the active embedder: its status and results. */
+function invalidateSemantic(queryClient: ReturnType<typeof useQueryClient>) {
+  return invalidateKeys(queryClient, [
+    queryKeys.semanticStatus,
+    ["search-meaning"],
+    ["related-by-meaning"],
+  ]);
+}
+
+/** Which providers have an API key in the keychain; never the keys themselves. */
+export function useApiKeys() {
+  return useQuery<ApiKeyStatus[]>({
+    queryKey: queryKeys.apiKeys,
+    queryFn: () => unwrap(commands.getApiKeys()),
+    staleTime: Infinity,
+  });
+}
+
+/** Variables of {@link useSetApiKey}. */
+export interface SetApiKeyVariables {
+  provider: ApiProvider;
+  key: string;
+}
+
+/** Saves a provider's API key in the keychain. */
+export function useSetApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation<null, Error, SetApiKeyVariables>({
+    mutationFn: ({ provider, key }) => unwrap(commands.setApiKey(provider, key)),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys }),
+        invalidateSemantic(queryClient),
+      ]),
+  });
+}
+
+/** Removes a provider's API key from the keychain. */
+export function useDeleteApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation<null, Error, ApiProvider>({
+    mutationFn: (provider) => unwrap(commands.deleteApiKey(provider)),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys }),
+        invalidateSemantic(queryClient),
+      ]),
+  });
+}
+
+/** A setting the semantic service reads: the active vector pack or the server address. */
+export type SemanticSettingKey = "semantic.vector_pack" | "semantic.base_url";
+
+/**
+ * Stores a setting the semantic service reads and refreshes what depends on
+ * it, so a new address or pack takes effect at once.
+ */
+export function useSetSemanticSetting() {
+  const queryClient = useQueryClient();
+  return useMutation<null, Error, SetSettingVariables<SemanticSettingKey>>({
+    mutationFn: ({ key, value }) => unwrap(commands.setSetting(key, serializeSetting(key, value))),
+    onSuccess: async (_data, { key, value }) => {
+      queryClient.setQueryData<Partial<Record<string, string>>>(queryKeys.settings, (old) => ({
+        ...old,
+        [key]: serializeSetting(key, value),
+      }));
+      await invalidateSemantic(queryClient);
     },
   });
 }

@@ -99,6 +99,12 @@ export const commands = {
 	 *  best first, each with the shared terms; empty without a morphology pack.
 	 */
 	relatedByRoots: (verseId: number, translationId: string | null, limit: number) => typedError<RelatedVerse[], AppError>(__TAURI_INVOKE("related_by_roots", { verseId, translationId, limit })),
+	/**  Which providers have a saved key, in display order. */
+	getApiKeys: () => typedError<ApiKeyStatus[], AppError>(__TAURI_INVOKE("get_api_keys")),
+	/**  Saves (or replaces) a provider's key; surrounding spaces are dropped. */
+	setApiKey: (provider: ApiProvider, key: string) => typedError<null, AppError>(__TAURI_INVOKE("set_api_key", { provider, key })),
+	/**  Removes a provider's key from the keychain. */
+	deleteApiKey: (provider: ApiProvider) => typedError<null, AppError>(__TAURI_INVOKE("delete_api_key", { provider })),
 	/**  Returns all stored settings as `key → JSON text`. */
 	getSettings: () => typedError<{ [key in string]: string }, AppError>(__TAURI_INVOKE("get_settings")),
 	/**  Stores a setting. `value` must be JSON text, e.g. `"\"tr\""` or `"{\"size\":20}"`. */
@@ -210,6 +216,14 @@ export const PACK_ERROR_EVENT = "pack://error" as const;
 export const PACK_PROGRESS_EVENT = "pack://progress" as const;
 
 /* Types */
+/**  Whether a provider's key is saved. */
+export type ApiKeyStatus = {
+	/**  The provider. */
+	provider: ApiProvider,
+	/**  Whether its key is in the keychain. */
+	saved: boolean,
+};
+
 /**  Embedding APIs a vector pack can name. */
 export type ApiProvider = 
 /**  OpenAI embeddings. */
@@ -311,7 +325,15 @@ export type AppErrorCode =
  *  Semantic search needs a vector pack with a working embedder (spec §7.4);
  *  `get_semantic_status` says what is missing.
  */
-"semantic_unavailable";
+"semantic_unavailable" | 
+/**  The OS keychain could not read, save or delete an API key (spec §14.2). */
+"keychain_failed" | 
+/**  The provider rejected the API key (HTTP 401 or 403). */
+"provider_key_rejected" | 
+/**  The provider limits requests or the key's quota is used up (HTTP 429). */
+"provider_rate_limited" | 
+/**  The provider answered with another error or an unexpected response. */
+"provider_failed";
 
 /**  A bookmark with its verse. */
 export type BookmarkedVerse = {
@@ -955,6 +977,13 @@ pack: string;
 provider: ApiProvider } | 
 /**  The address of the OpenAI-compatible server is not entered. */
 { state: "base_url_missing"; 
+/**  The vector pack. */
+pack: string } | 
+/**
+ *  The entered address is not usable: not HTTP(S), plain HTTP to another
+ *  computer, or with credentials in it (spec §14.1).
+ */
+{ state: "base_url_invalid"; 
 /**  The vector pack. */
 pack: string } | 
 /**  This app version cannot run the pack's backend yet. */

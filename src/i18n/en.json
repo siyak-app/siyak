@@ -100,6 +100,7 @@
     "tab_appearance": "Appearance",
     "tab_display": "Display & behaviour",
     "tab_language": "Language",
+    "tab_providers": "Providers",
     "theme_sepia": "Sepia",
     "arabic_text": "Arabic text",
     "translation_text": "Translations",
@@ -142,6 +143,7 @@
     "network_no_response": "No response",
     "network_purpose_manifest": "Pack list",
     "network_purpose_pack": "Pack download",
+    "network_purpose_embed": "Semantic search",
     "network_purpose_update": "App update",
     "network_purpose_chat": "Chat",
     "network_purpose_translate": "Translation",
@@ -159,7 +161,25 @@
     "import_replace_confirm": "Yes, replace my data",
     "import_report": "Added: {{bookmarks}} bookmarks, {{notes}} notes, {{collections}} collections, {{items}} collection items, {{translations}} tafsir translations.",
     "import_skipped_one": "{{count}} entry was left out: its verse or pack is not available here.",
-    "import_skipped_other": "{{count}} entries were left out: their verses or packs are not available here."
+    "import_skipped_other": "{{count}} entries were left out: their verses or packs are not available here.",
+    "providers_title": "Embedding providers",
+    "providers_hint": "API semantic search packs embed your searches with a provider and your key. Keys are kept in the system keychain and never shown again.",
+    "key_advice_separate": "Create a separate key for this app.",
+    "key_advice_limit": "Set a spending limit for this key or project in your provider's dashboard.",
+    "key_advice_only_provider": "Your key is only sent from this computer to the provider you chose. If in doubt, revoke it in your provider's dashboard.",
+    "key_label": "{{provider}} API key",
+    "key_optional": "(key optional)",
+    "key_saved": "Saved",
+    "key_not_saved": "Not saved",
+    "key_replace_placeholder": "Enter a new key to replace the saved one",
+    "key_save": "Save",
+    "key_remove": "Remove",
+    "server_label": "OpenAI-compatible server address",
+    "server_placeholder": "http://localhost:11434/v1",
+    "server_hint": "For example Ollama or LM Studio. Plain HTTP is allowed only to this computer; other servers need HTTPS.",
+    "server_save": "Save",
+    "active_pack": "Semantic search pack",
+    "active_pack_hint": "Searching by meaning and similar verses use this pack."
   },
   "compare": {
     "loading": "Loading…",
@@ -215,8 +235,10 @@
     "model_missing": "The semantic search pack needs its model pack, {{pack}}.",
     "key_missing": "This semantic search pack uses {{provider}}: add your {{provider}} API key to use it.",
     "base_url_missing": "This semantic search pack needs the address of your server.",
+    "base_url_invalid": "The server address cannot be used: use HTTPS, or plain HTTP only to this computer.",
     "unusable": "The semantic search pack {{pack}} cannot be used with this version of Siyak.",
     "open_packs": "Open Packs",
+    "open_settings": "Open settings",
     "remote": "Your searches are sent to {{provider}}."
   },
   "related": {
@@ -447,7 +469,11 @@
     "invalid_input": "That entry is not valid.",
     "backup_invalid": "This file is not a Siyak backup.",
     "backup_unsupported": "This backup was made by a newer version of the app. Update the app and try again.",
-    "semantic_unavailable": "Semantic search needs a semantic search pack. Install one from Packs."
+    "semantic_unavailable": "Semantic search needs a semantic search pack. Install one from Packs.",
+    "keychain_failed": "The system keychain could not save or read the API key.",
+    "provider_key_rejected": "The provider rejected the API key. Check it in Settings → Providers.",
+    "provider_rate_limited": "The provider is limiting requests or the key's quota is used up. Try again later.",
+    "provider_failed": "The provider answered with an error. Try again later."
   },
   "term": {
     "lemma": {

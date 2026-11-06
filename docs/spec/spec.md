@@ -544,7 +544,7 @@ Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.
 
 **Vector pack metadata** (ADR 0012). A vector pack defines its embedding space: `embedding_model`, canonical with a backend prefix (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` and `normalized`. `backend` says where queries are embedded:
 - `local`: `model_pack` names the model pack, which is also in `requires`. Its `embedding_model` and `dim` must match.
-- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (the provider's model id) and optionally `api_dimensions` (equal to `dim`, for models that shorten their vectors). No model pack. The vectors are built once in the pipeline with the maintainers' key.
+- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (the provider's model id) and optionally `api_dimensions` (equal to `dim`, for models that shorten their vectors), `query_prefix` and `passage_prefix` (put before queries and passages, e.g. `task: search result | query: ` for `gemini-embedding-2`) and `task_type` (Gemini only: send `RETRIEVAL_QUERY`/`RETRIEVAL_DOCUMENT`, for `gemini-embedding-001`). No model pack. The vectors are built once in the pipeline with the maintainers' key.
 
 A vector pack with invalid metadata is listed as unsupported; the rest of the manifest stays usable.
 
@@ -742,10 +742,10 @@ pub trait Embedder: Send + Sync {
 
 - **Two backends** (ADR 0012), chosen by the active vector pack's metadata (§6.1):
   - **Local (default):** `OnnxEmbedder`, configured from the model pack's metadata (prefixes, pooling, token limit). Works offline and without a key; inference runs on a blocking thread. It loads `model/model.onnx` (int8 weights) and `model/tokenizer.json` from the installed model pack, runs ONNX Runtime (statically linked through the `ort` crate, no separate library to install), feeds `input_ids` and `attention_mask` plus `token_type_ids` or `position_ids` when the model has them, embeds in batches of 16, pools (`mean`, `cls` or `last`) and normalizes. Verse vectors are computed in the pipeline the same way, from the same files, so queries and verses share one space.
-  - **API:** OpenAI, Voyage, Gemini or an OpenAI-compatible server (Ollama, LM Studio). Uses the provider's key from the keychain (§14.2), shared with the AI layer (§8); an OpenAI-compatible server needs the address the user entered (`semantic.base_url`). Claude is not listed because Anthropic offers no embedding model.
+  - **API:** OpenAI, Voyage, Gemini or an OpenAI-compatible server (Ollama, LM Studio). Uses the provider's key from the keychain (§14.2), shared with the AI layer (§8); an OpenAI-compatible server needs the address the user entered (`semantic.base_url`: HTTPS, or plain HTTP only to this computer) and sends a key only if one is saved. The key is read for every request (kept in memory after the first keychain read), so a new key works at once. Requests carry the pack's model, dimension, prefixes, Voyage's `input_type` and Gemini's task type; 96 texts at most per request; vectors are checked against `dim` and normalized here when the space is. A rejected key (401/403), a rate limit (429) and other failures have their own error codes. Claude is not listed because Anthropic offers no embedding model.
 - **Queries and passages** are embedded differently where the model expects it (e5 `query: `/`passage: ` prefixes, Voyage `input_type`, Gemini task types); each backend maps `TextKind` itself.
 - **Active pack:** at most one vector pack is active: the one named by `semantic.vector_pack`, else the first installed one.
-- **Status:** `get_semantic_status` returns why semantic features are or are not available: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `not_built` or `ready` (with the provider if queries leave the computer). The interface turns each into an action (install, add key, enter address).
+- **Status:** `get_semantic_status` returns why semantic features are or are not available: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `base_url_invalid`, `not_built` or `ready` (with the provider if queries leave the computer). The interface turns each into an action (install, add key, enter address); keys and the address are entered under Settings → Providers, which also picks the active pack when several are installed.
 - **Lazy loading:** the embedder is built on first use and kept until either pack's version or the address changes.
 - **Compatibility:** if the embedder's `embedding_model` and `dim` differ from the active vector pack's, semantic features are disabled and the interface explains why.
 - **Privacy:** with an API pack, queries (and in chat the ranked tafsir paragraphs, §10) are sent to the provider through `net.rs` (§14.1). The pack is under "Advanced" and says so before download (`terms_ack`).
@@ -969,12 +969,13 @@ Reference mockup: the "Okuma Ekranı Mockup" canvas (reader and researcher defau
 - All HTTP requests go through a single client in `net.rs`, which has a fixed host allow-list:
   - `quran.kemalozyon.com` (manifest, pricing, update metadata)
   - `github.com`, `objects.githubusercontent.com` (packs, updates)
-  - Provider API hosts (Anthropic, OpenAI, Gemini; Voyage for embeddings)
-  - The `base_url` the user explicitly entered for an OpenAI-compatible provider
+  - Provider API hosts (Anthropic, OpenAI, Gemini; Voyage for embeddings). The embedding hosts are on the list since M7: `api.openai.com`, `api.voyageai.com`, `generativelanguage.googleapis.com`.
+  - The `base_url` the user explicitly entered for an OpenAI-compatible provider: HTTPS, or plain HTTP only to `localhost`, `127.0.0.1` or `[::1]`; no credentials, query or fragment in it
+- Requests that carry a key (POST) follow no redirects, so a key is never sent on to another host.
 - **Connection log:** for each request the host, time, purpose (`pack`, `update`, `chat`, `translate`, `embed`) and status are recorded; no content is logged. The last 500 entries are kept in memory and in `user.db`, viewable under Settings → Privacy.
 
 ### 14.2 API keys
-- Stored in the OS keychain (service: `com.kemalozyon.siyak`, account: `<provider>`). Never returned to the webview; the interface only learns "saved / not saved".
+- Stored in the OS keychain (service: `com.kemalozyon.siyak`, account: `<provider>`). Never returned to the webview; the interface only learns "saved / not saved" (`get_api_keys`, `set_api_key`, `delete_api_key`; M7, for the embedding APIs). A key must be one line of visible ASCII.
 - Guidance on the add-key screen:
   1. "Create a separate key for this app."
   2. "Set a spending limit for this key/project in your provider's dashboard."
@@ -1141,8 +1142,8 @@ Rules are enforced by CI, not just written down. `ci.yml` runs on every PR:
 | M4 | Tafsir + compare + search | Tafsir panel (with paragraphs), compare screen, single search box (All + Text), FTS5 |
 | M5 | Morphology | Morphology pack, clickable words, word card and panel, Root mode, concordance |
 | M6 | Collections | Bookmarks, notes, collections, Markdown/citation/JSON export |
-| M7 | Semantic layer | Model choice, local (ONNX) and API embedders, vector pack, Meaning mode, cross-references |
-| M8 | AI | Provider layer, keychain, network allow-list + log, tafsir summary/translation + cost, RAG chat |
+| M7 | Semantic layer | Model choice, local (ONNX) and API embedders, keychain, vector pack, Meaning mode, cross-references |
+| M8 | AI | Provider layer, chat provider hosts, tafsir summary/translation + cost, RAG chat |
 | M9 | Release + website | Updater, provenance, landing page, user guide (both languages), v0.1.0 |
 
 Ordering rationale: the open-source foundation comes first (M0), because adding it later is expensive and loses early contributors. Value without AI comes first (M2–M6); at the end of M6 the app is a publishable research tool that needs no API key.

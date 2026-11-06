@@ -31,12 +31,14 @@ use tauri::path::BaseDirectory;
 use crate::commands::packs::TauriEvents;
 use crate::db::Databases;
 use crate::db::content::Seed;
-use crate::embed::service::{NoKeyStore, Semantic};
+use crate::embed::api::{ApiFactory, Endpoints};
+use crate::embed::service::{Backends, EmbedderFactory, Semantic};
 use crate::error::{AppError, AppErrorCode, AppResult};
 use crate::net::{Net, UserDbLog};
 use crate::packs::manifest::{ManifestStore, PackSource};
 use crate::packs::service::{Packs, PacksConfig};
 use crate::related::Related;
+use crate::secrets::{KeyStore, Keychain};
 
 /// First line of the generated bindings file.
 const BINDINGS_HEADER: &str =
@@ -158,12 +160,26 @@ fn open_state(app: &tauri::App) -> AppState {
     if let Err(err) = cleaned {
         eprintln!("cleaning up pack files failed: {err}");
     }
-    let packs = open_packs(app, data_dir.clone(), data_dir.join(seed.file_name));
+    let net = UserDbLog::spawn(&data_dir.join(db::user::FILE_NAME))
+        .and_then(|log| Net::new(Arc::new(log)));
+    let packs = net
+        .clone()
+        .and_then(|net| open_packs(app, net, data_dir.clone(), data_dir.join(seed.file_name)));
+    let keys: Arc<dyn KeyStore> = Arc::new(Keychain::default());
     let local = embed::onnx::OnnxFactory::new(packs::install::packs_dir(&data_dir));
+    let mut backends: Vec<Arc<dyn EmbedderFactory>> = vec![Arc::new(local)];
+    match net {
+        Ok(net) => backends.push(Arc::new(ApiFactory::new(
+            net,
+            Arc::clone(&keys),
+            Endpoints::default(),
+        ))),
+        Err(err) => eprintln!("the network client failed; embedding APIs are off: {err}"),
+    }
     AppState {
         databases: Ok(databases),
         packs,
-        semantic: Semantic::new(Arc::new(NoKeyStore), Arc::new(local)),
+        semantic: Semantic::new(keys, Arc::new(Backends(backends))),
         related: Related::default(),
     }
 }
@@ -172,9 +188,12 @@ fn open_state(app: &tauri::App) -> AppState {
 /// (e.g. `../siyak-data/dist`) instead of the published manifest.
 const PACK_SOURCE_VAR: &str = "SIYAK_PACK_SOURCE";
 
-fn open_packs(app: &tauri::App, data_dir: PathBuf, content_path: PathBuf) -> AppResult<Packs> {
-    let log = UserDbLog::spawn(&data_dir.join(db::user::FILE_NAME))?;
-    let net = Net::new(Arc::new(log))?;
+fn open_packs(
+    app: &tauri::App,
+    net: Net,
+    data_dir: PathBuf,
+    content_path: PathBuf,
+) -> AppResult<Packs> {
     let source = match std::env::var_os(PACK_SOURCE_VAR) {
         Some(dir) if cfg!(debug_assertions) && !dir.is_empty() => PackSource::Local(dir.into()),
         _ => PackSource::Remote,

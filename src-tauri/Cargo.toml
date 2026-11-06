@@ -31,6 +31,8 @@ specta-typescript = "=0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 # The only HTTP client (net.rs); rustls, no cookies, redirects followed by hand.
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2", "system-proxy"] }
+# API keys in the OS keychain (secrets.rs, spec §14.2).
+keyring = "4.2.0"
 # rt-multi-thread (Tauri's runtime) for block_in_place while a model loads.
 tokio = { version = "1.54.0", features = ["macros", "rt", "rt-multi-thread", "sync", "time", "fs", "io-util"] }
 tokio-util = "0.7.20"
