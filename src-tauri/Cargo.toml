@@ -44,6 +44,11 @@ tauri-plugin-opener = "2.7.2"
 # Rust side only as well: the file dialogs of exports (spec §11.2).
 tauri-plugin-dialog = "2.8.4"
 unicode-normalization = "0.1.26"
+# The local embedder (embed/onnx.rs). ort's 2.0 line is still a release candidate;
+# pinned exactly. ONNX Runtime 1.31 is downloaded at build time and linked statically.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "download-binaries", "tls-rustls", "api-31"] }
+# Pure-Rust regex instead of the default Oniguruma C library; no training code.
+tokenizers = { version = "0.22.2", default-features = false, features = ["fancy-regex"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

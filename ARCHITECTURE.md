@@ -225,8 +225,13 @@ OpenAI-compatible server, with the user's key).
   vector pack install creates (`db::content::ensure_vector_table`), not a migration.
 - Vector packs (`vectors`) and model packs (`model`, an archive whose files go to
   `packs/<id>/model/`) install like other packs; `packs/install.rs` checks every vector first.
-- `embed/onnx.rs` and `embed/api.rs` will hold the two backends; until then the status is
-  `not_built`.
+- `embed/onnx.rs` is the local backend: `OnnxFactory` (given the packs directory in `lib.rs`)
+  loads `packs/<model pack>/model/{model.onnx,tokenizer.json}` into an `OnnxEmbedder`
+  (ONNX Runtime through `ort`, statically linked; `tokenizers`). Inference runs on a blocking
+  thread. The pipeline (`siyak-data`, `pipeline/build_embeddings.py`) embeds verses with the same
+  tokenization, inputs and pooling; the ignored test `matches_the_pipeline` compares the two on
+  reference vectors (`SIYAK_TEST_MODEL_DIR`).
+- `embed/api.rs` will hold the API backend; until then API packs report `not_built`.
 
 Modules for later milestones (`related`, `llm`, `secrets`) already exist as documented, empty
 files; their `//!` comments say what they will hold and in which milestone.

@@ -39,6 +39,22 @@ user's own computer.
   needs `unsafe` code, which the workspace forbids, and its `vec0` tables would make `content.db`
   unreadable by tools without the extension (pipeline, xtask, backups). For 6,236 verses a full
   scan takes milliseconds.
+- **The default local model is BGE-M3** (`model.bge-m3` + `vectors.bge-m3`, decided 2026-11-06).
+  Four multilingual models were measured on the evaluation set (`siyak-data`
+  `data/eval/semantic.toml`, 144 items) with Arabic, Turkish and English verse text. Scores are
+  hit@10 / recall@10 / MRR@10, measured on the built int8 packs as the app runs them:
+
+  | Model                 | Download | Turkish            | English            | Arabic             | Cross-references   | All                |
+  | --------------------- | -------- | ------------------ | ------------------ | ------------------ | ------------------ | ------------------ |
+  | BGE-M3                | 418 MB   | 0.90 / 0.56 / 0.79 | 0.83 / 0.48 / 0.63 | 0.80 / 0.52 / 0.65 | 0.67 / 0.43 / 0.53 | 0.81 / 0.51 / 0.67 |
+  | multilingual-e5-small | 87 MB    | 0.76 / 0.41 / 0.58 | 0.63 / 0.29 / 0.40 | 0.45 / 0.15 / 0.18 | 0.56 / 0.32 / 0.44 | 0.64 / 0.33 / 0.45 |
+
+  With PyTorch, before export, multilingual-e5-base scored 0.71 / 0.39 / 0.55 overall and
+  Qwen3-Embedding-0.6B 0.74 / 0.46 / 0.58 (strong in Arabic, weak in Turkish); neither was
+  packaged. BGE-M3 loses nothing in int8 (float32: 0.81 / 0.51 / 0.69). The app's int8 output
+  differs slightly from the pipeline's (cosine about 0.975, because ONNX Runtime picks different
+  int8 kernels), but rankings on the evaluation set do not change; in float32 the two agree to
+  more than 0.995.
 
 ## Alternatives considered
 
@@ -50,6 +66,11 @@ user's own computer.
   one Quran.
 - **Combine several spaces at once (ensemble).** Better recall is possible, but it multiplies
   packs, cost and complexity. Not in v1.
+- **A smaller default model (multilingual-e5-small).** A fifth of the download, but much weaker,
+  above all for Arabic queries and the first result of Turkish ones. It stays in `siyak-data` as
+  a small pack for development and tests.
+- **Offer both, BGE-M3 recommended and e5-small as a light option.** Two model and vector pairs to
+  build and maintain for each release; can be added later without code changes.
 
 ## Consequences
 
@@ -58,5 +79,8 @@ user's own computer.
 - In chat (§10), tafsir paragraphs ranked for a question are sent to the embedding provider too.
 - Each API pack's provider terms must allow publishing the vectors; this is checked per pack.
 - A better model later is a new pack pair (or one API pack); the app needs no code change.
-- The model choice and the evaluation set (spec §18) decide the default local pack; API packs
-  are measured against the same set.
+- The default local packs are large: about 420 MB to download, about 610 MB installed, and the
+  loaded model takes several hundred MB of memory. Building `vectors.bge-m3` takes about 40
+  minutes on an Apple M-series CPU; the release workflow must allow for it before the packs are
+  published and added to the recommended bundle.
+- API packs are measured against the same evaluation set.

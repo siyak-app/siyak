@@ -91,6 +91,8 @@ full data; on the development data the app refuses them and says so.
 To try packs without publishing them, build them in `siyak-data` and point a debug build at its
 output: `SIYAK_PACK_SOURCE=../siyak-data/dist pnpm tauri dev`. The app then reads `manifest.json`
 from that directory and copies each pack from it by file name, with the same checks as a download.
+Packs that are not published yet, such as the embedding packs, are listed only by
+`siyak-data manifest --unpublished`.
 
 ## Scripts
 

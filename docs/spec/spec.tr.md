@@ -59,7 +59,7 @@ Windows, macOS, Linux.
 | Veritabanı | SQLite (`rusqlite`, bundled) |
 | Vektör arama | Bellekte tutulan vektörler üzerinde Rust'ta brute-force KNN (ADR 0012) |
 | Embedding çalıştırma | Rust tarafında ONNX Runtime (`ort`) + `tokenizers` |
-| Embedding modeli | **Açık soru.** Sistem modelden bağımsız tasarlanır (§7.4) |
+| Embedding modeli | Lokal varsayılan: BGE-M3, int8 (ADR 0012). Sistem modelden bağımsız kalır (§7.4) |
 | Tefsir erişimi | Ayet referansıyla anahtarlı lookup; tefsir embed edilmez |
 | Tefsir kaynakları | v1: yalnızca modern dönem öncesi klasik tefsirler, Quranpedia veri dökümlerinden; Kurtubî QUL'dan (§6.6). Çağdaş eserler v1'e alınmaz |
 | Morfoloji kaynağı | Quranic Arabic Corpus (QAC) v0.4, kullanım şartlarına harfiyen uyularak; etiketler değiştirilmez (§5.3.1). MASAQ ileride serbest lisanslı alternatif olarak değerlendirilir |
@@ -541,7 +541,7 @@ Her iki DB için `PRAGMA user_version` tabanlı, sıralı SQL migration'lar. `us
 | `tafsir` | `.sqlite.zst` | `tafsir` + `tafsir_paragraphs` |
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; QAC için ayrıca orijinal dosya ve `NOTICE` (§5.3.1) |
 | `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` vektör uzayını ve backend'i belirtir (aşağıda) |
-| `model` | `.tar.zst` | `model.sqlite` (yalnızca `pack_info`), `model/model.onnx`, `model/tokenizer.json`; modelin ayarları `meta`'dadır. Yalnızca `local` backend'li vektör paketleri için |
+| `model` | `.tar.zst` | `model.sqlite` (yalnızca `pack_info`), `model/model.onnx`, `model/tokenizer.json`, `model/LICENSE` (modelin lisansı, Hakkında → Kaynaklar'da gösterilir); modelin ayarları `meta`'dadır. Yalnızca `local` backend'li vektör paketleri için |
 
 **Vektör paketi meta verisi** (ADR 0012). Vektör paketi kendi vektör uzayını tanımlar: backend önekiyle kanonik `embedding_model` (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` ve `normalized`. `backend` sorguların nerede embed edileceğini söyler:
 - `local`: `model_pack` model paketini belirtir; bu paket `requires` içinde de yer alır. `embedding_model` ve `dim` değerleri eşleşmelidir.
@@ -594,7 +594,7 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
       "id": "vectors.<model>",
       "type": "vectors",
       "requires": ["model.<model>"],
-      "meta": { "embedding_model": "local/<model>", "dim": 384, "source_text": "<bkz. §18>", "normalized": true,
+      "meta": { "embedding_model": "local/<model>", "dim": 384, "source_text": "Arabic (Tanzil Simple Clean), Turkish (Diyanet Vakfı), English (Pickthall)", "normalized": true,
                 "backend": "local", "model_pack": "model.<model>" }
     },
     {
@@ -607,7 +607,7 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
       "id": "vectors.openai-3-small",
       "type": "vectors",
       "terms_ack": true,
-      "meta": { "embedding_model": "openai/text-embedding-3-small", "dim": 512, "source_text": "<bkz. §18>", "normalized": true,
+      "meta": { "embedding_model": "openai/text-embedding-3-small", "dim": 512, "source_text": "Arabic (Tanzil Simple Clean), Turkish (Diyanet Vakfı), English (Pickthall)", "normalized": true,
                 "backend": "api", "provider": "openai", "api_model": "text-embedding-3-small", "api_dimensions": 512 }
     }
   ],
@@ -742,7 +742,7 @@ pub trait Embedder: Send + Sync {
 ```
 
 - **İki backend** (ADR 0012); hangisinin kullanılacağını aktif vektör paketinin meta verisi belirler (§6.1):
-  - **Lokal (varsayılan):** `OnnxEmbedder`, model paketinin meta verisine göre yapılandırılır (önekler, pooling, token sınırı). İnternetsiz ve anahtarsız çalışır; çıkarım ayrı bir thread'de yapılır.
+  - **Lokal (varsayılan):** `OnnxEmbedder`, model paketinin meta verisine göre yapılandırılır (önekler, pooling, token sınırı). İnternetsiz ve anahtarsız çalışır; çıkarım ayrı bir thread'de yapılır. Kurulu model paketinden `model/model.onnx` (int8 ağırlıklar) ve `model/tokenizer.json` dosyalarını yükler; ONNX Runtime'ı `ort` crate'i üzerinden statik bağlı çalıştırır (ayrıca kurulacak kütüphane yok). Girdi olarak `input_ids` ile `attention_mask`'i, model istiyorsa `token_type_ids` ya da `position_ids`'i verir; 16'lık gruplar halinde embed eder, pooling uygular (`mean`, `cls` ya da `last`) ve normalize eder. Ayet vektörleri pipeline'da aynı dosyalardan aynı yolla hesaplanır; böylece sorgular ve ayetler aynı uzaydadır.
   - **API:** OpenAI, Voyage, Gemini ya da OpenAI-uyumlu bir sunucu (Ollama, LM Studio). Sağlayıcının keychain'deki anahtarını kullanır (§14.2); bu anahtar AI katmanıyla ortaktır (§8). OpenAI-uyumlu sunucu için kullanıcının girdiği adres gerekir (`semantic.base_url`). Anthropic'in embedding modeli olmadığı için Claude listede yoktur.
 - **Sorgu ve pasaj** farklı embed edilir (e5 `query: `/`passage: ` önekleri, Voyage `input_type`, Gemini görev türleri); her backend `TextKind`'ı kendisi eşler.
 - **Aktif paket:** Aynı anda en fazla bir vektör paketi aktiftir: `semantic.vector_pack` ayarında adı geçen, yoksa ilk kurulu paket.
@@ -752,6 +752,8 @@ pub trait Embedder: Send + Sync {
 - **Gizlilik:** API paketiyle sorgular (sohbette ayrıca sıralanan tefsir paragrafları, §10) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler "Gelişmiş" altındadır ve indirmeden önce bunu söyler (`terms_ack`).
 - **Sorgu:** Sorgu vektörünün aktif paketin her ayet vektörüyle kosinüs benzerliği, bellekte (§5.4); en iyi `k` sonuç, istenirse bazı ayetler hariç (çapraz referansın başladığı ayet gibi).
 - Embedding'ler **ayet bazında** hesaplanır. Tefsir hiçbir zaman embed edilmez; sohbete ait olduğu ayetler üzerinden gider (§10).
+- **Ayet metni:** Her ayet Arapça metni (Tanzil Simple Clean), Türkçe meali (Diyanet Vakfı) ve İngilizce meali (Pickthall) alt alta yazılarak tek bir vektör olarak embed edilir. Değerlendirme setinde bu birleşim her modelde en iyi sonucu verdi: yalnızca Arapça, Türkçe ve İngilizce sorgularda en zayıf kaldı; dil başına ayrı vektörler (ortalaması ya da üçünün en iyisi) birleşik metnin tek vektöründen kötüydü. Metin her vektör paketinde kayıtlıdır (`source_text`).
+- **Değerlendirme seti:** `siyak-data/data/eval/semantic.toml`, bakımcılar tarafından hazırlandı: Türkçe, İngilizce ve Arapça sorgular ile çapraz referanslar (bir ayet ve başka yerlerdeki ilgili ayetler); her birinde iyi bir sonuç listesinde bulunması gereken ayetler yer alır ve Diyanet Vakfı mealiyle kontrol edildi. `siyak-data eval-embeddings`, hit@10, recall@10 ve MRR@10 değerlerini dile göre raporlar; modeller için de, derlenmiş paketler için de (uygulamanın çalıştırdığı biçimiyle). Yeni bir model ya da API paketi aynı setle ölçülür.
 
 ### 7.5 Kelime paneli
 Okuma ekranında bir kelimeye tıklanınca açılır:
@@ -1148,9 +1150,9 @@ Sıralama mantığı: Açık kaynak altyapısı en başta kurulur (M0), çünkü
 
 | # | Soru | Etkisi |
 |---|---|---|
-| 1 | Embedding modeli: varsayılan lokal model ve hangi API modellerine paket çıkarılacağı (ADR 0012) | Paket boyutu, arama ve çapraz referans kalitesi |
-| 2 | Embed edilecek metin: harekesiz Arapça, meal ya da ikisinin birleşimi. Türkçe sorgular için Arapça-yalnız embedding zayıf kalabilir; değerlendirme setiyle denenmeli | Vektör paketi tasarımı |
-| 3 | Anlamsal arama ve çapraz referans için değerlendirme seti (sorgu/ayet → beklenen ayetler): kim hazırlayacak, kaç örnek? | M7 kabul kriteri |
+| 1 | Embedding modeli: ~~varsayılan lokal model~~ **yanıtlandı (M7):** BGE-M3 (ADR 0012). Hâlâ açık: hangi API modellerine paket çıkarılacağı | Paket boyutu, arama ve çapraz referans kalitesi |
+| 2 | ~~Embed edilecek metin~~ **Yanıtlandı (M7):** Arapça, Türkçe ve İngilizce birlikte, ayet başına tek vektör (§7.4) | Vektör paketi tasarımı |
+| 3 | ~~Değerlendirme seti~~ **Yanıtlandı (M7):** bakımcılar hazırladı, 144 öğe: 58 Türkçe, 30 İngilizce ve 20 Arapça sorgu, 36 çapraz referans (§7.4) | M7 kabul kriteri |
 | 4 | **MASAQ değerlendirmesi** (§5.3.1): lemma bilgisi var mı, Tanzil ile hizalama, QAC ile örneklem karşılaştırması; son sürümün lisans ifadesinin netleştirilmesi | İkinci morfoloji paketi, i'rab katmanı |
 | 5 | **Kurtubî izni:** Tarteel'den QUL #23'ün kökeni ve yeniden dağıtım izni (§6.6). Talep gönderildi mi, yanıt geldi mi? | `ar.qurtubi` paketinin yayını |
 | 6 | **Türkçe meal kaynağı:** `core.db` için Elmalılı Hamdi Yazır'ın orijinal (sadeleştirilmemiş) mealinin ve tefsiri *Hak Dini Kur'an Dili*'nin temiz, dijital ve lisansı net bir kaynağı | Gömülü Türkçe meal (§6.2), Türkçe tefsir katmanı |

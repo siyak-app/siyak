@@ -31,7 +31,7 @@ use tauri::path::BaseDirectory;
 use crate::commands::packs::TauriEvents;
 use crate::db::Databases;
 use crate::db::content::Seed;
-use crate::embed::service::Semantic;
+use crate::embed::service::{NoKeyStore, Semantic};
 use crate::error::{AppError, AppErrorCode, AppResult};
 use crate::net::{Net, UserDbLog};
 use crate::packs::manifest::{ManifestStore, PackSource};
@@ -151,10 +151,11 @@ fn open_state(app: &tauri::App) -> AppState {
         eprintln!("cleaning up pack files failed: {err}");
     }
     let packs = open_packs(app, data_dir.clone(), data_dir.join(seed.file_name));
+    let local = embed::onnx::OnnxFactory::new(packs::install::packs_dir(&data_dir));
     AppState {
         databases: Ok(databases),
         packs,
-        semantic: Semantic::unbuilt(),
+        semantic: Semantic::new(Arc::new(NoKeyStore), Arc::new(local)),
     }
 }
 

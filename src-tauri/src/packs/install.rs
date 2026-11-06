@@ -94,7 +94,12 @@ pub fn archive_layout(kind: PackKind) -> Option<(&'static str, &'static [&'stati
         )),
         PackKind::Model => Some((
             "model.sqlite",
-            &["model.sqlite", "model/model.onnx", "model/tokenizer.json"],
+            &[
+                "model.sqlite",
+                "model/LICENSE",
+                "model/model.onnx",
+                "model/tokenizer.json",
+            ],
         )),
         PackKind::Translation | PackKind::Tafsir | PackKind::Vectors => None,
     }
@@ -104,7 +109,8 @@ pub fn archive_layout(kind: PackKind) -> Option<(&'static str, &'static [&'stati
 pub fn notice_member(kind: PackKind) -> Option<&'static str> {
     match kind {
         PackKind::Morphology => Some("qac/NOTICE"),
-        PackKind::Translation | PackKind::Tafsir | PackKind::Vectors | PackKind::Model => None,
+        PackKind::Model => Some("model/LICENSE"),
+        PackKind::Translation | PackKind::Tafsir | PackKind::Vectors => None,
     }
 }
 
@@ -2086,6 +2092,7 @@ mod tests {
             &archive,
             &[
                 Member::file("model.sqlite", &fs::read(&db).unwrap()),
+                Member::file("model/LICENSE", b"MIT"),
                 Member::file("model/model.onnx", b"onnx"),
                 Member::file("model/tokenizer.json", b"{}"),
             ],

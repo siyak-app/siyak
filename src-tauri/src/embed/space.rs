@@ -227,6 +227,9 @@ pub enum Pooling {
     Mean,
     /// The vector of the first (`[CLS]`) token.
     Cls,
+    /// The vector of the last token that is not padding (decoder models
+    /// such as Qwen3-Embedding).
+    Last,
 }
 
 /// The metadata of a `model` pack, which only local vector packs use.
@@ -256,6 +259,7 @@ impl ModelPackSpec {
         let pooling = match optional_text(meta, "pooling")?.as_deref() {
             None | Some("mean") => Pooling::Mean,
             Some("cls") => Pooling::Cls,
+            Some("last") => Pooling::Last,
             Some(other) => return Err(format!("unknown pooling {other:?}")),
         };
         Ok(Self {
@@ -479,6 +483,11 @@ mod tests {
         assert_eq!(spec.query_prefix, "");
         assert_eq!(spec.pooling, Pooling::Mean);
         assert_eq!(spec.max_tokens, 512);
+
+        for (name, pooling) in [("cls", Pooling::Cls), ("last", Pooling::Last)] {
+            m.insert("pooling".into(), name.into());
+            assert_eq!(ModelPackSpec::from_meta(&m).unwrap().pooling, pooling);
+        }
     }
 
     #[test]

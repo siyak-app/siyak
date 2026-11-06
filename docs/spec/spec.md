@@ -58,7 +58,7 @@ Windows, macOS, Linux.
 | Database | SQLite (`rusqlite`, bundled) |
 | Vector search | Brute-force KNN in Rust over vectors kept in memory (ADR 0012) |
 | Embedding runtime | ONNX Runtime (`ort`) + `tokenizers` on the Rust side |
-| Embedding model | **Open question.** The system is designed to be model-agnostic (§7.4) |
+| Embedding model | Local default: BGE-M3, int8 (ADR 0012). The system stays model-agnostic (§7.4) |
 | Tafsir access | Keyed lookup by verse reference; tafsir is never embedded |
 | Tafsir sources | v1: only pre-modern classical tafsirs, from the Quranpedia data dumps; al-Qurtubi from QUL (§6.6). Contemporary works are not included in v1 |
 | Morphology source | Quranic Arabic Corpus (QAC) v0.4, following its terms of use to the letter; tags are never modified (§5.3.1). MASAQ will later be evaluated as a permissively licensed alternative |
@@ -540,7 +540,7 @@ Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.
 | `tafsir` | `.sqlite.zst` | `tafsir` + `tafsir_paragraphs` |
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; for QAC also the original file and `NOTICE` (§5.3.1) |
 | `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` names the embedding space and backend (below) |
-| `model` | `.tar.zst` | `model.sqlite` (only `pack_info`), `model/model.onnx`, `model/tokenizer.json`; the model's settings are in `meta`. Only for vector packs with the `local` backend |
+| `model` | `.tar.zst` | `model.sqlite` (only `pack_info`), `model/model.onnx`, `model/tokenizer.json`, `model/LICENSE` (the model's license, shown on About → Sources); the model's settings are in `meta`. Only for vector packs with the `local` backend |
 
 **Vector pack metadata** (ADR 0012). A vector pack defines its embedding space: `embedding_model`, canonical with a backend prefix (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` and `normalized`. `backend` says where queries are embedded:
 - `local`: `model_pack` names the model pack, which is also in `requires`. Its `embedding_model` and `dim` must match.
@@ -593,7 +593,7 @@ The primary address is independent of the GitHub organization and repository nam
       "id": "vectors.<model>",
       "type": "vectors",
       "requires": ["model.<model>"],
-      "meta": { "embedding_model": "local/<model>", "dim": 384, "source_text": "<see §18>", "normalized": true,
+      "meta": { "embedding_model": "local/<model>", "dim": 384, "source_text": "Arabic (Tanzil Simple Clean), Turkish (Diyanet Vakfı), English (Pickthall)", "normalized": true,
                 "backend": "local", "model_pack": "model.<model>" }
     },
     {
@@ -606,7 +606,7 @@ The primary address is independent of the GitHub organization and repository nam
       "id": "vectors.openai-3-small",
       "type": "vectors",
       "terms_ack": true,
-      "meta": { "embedding_model": "openai/text-embedding-3-small", "dim": 512, "source_text": "<see §18>", "normalized": true,
+      "meta": { "embedding_model": "openai/text-embedding-3-small", "dim": 512, "source_text": "Arabic (Tanzil Simple Clean), Turkish (Diyanet Vakfı), English (Pickthall)", "normalized": true,
                 "backend": "api", "provider": "openai", "api_model": "text-embedding-3-small", "api_dimensions": 512 }
     }
   ],
@@ -741,7 +741,7 @@ pub trait Embedder: Send + Sync {
 ```
 
 - **Two backends** (ADR 0012), chosen by the active vector pack's metadata (§6.1):
-  - **Local (default):** `OnnxEmbedder`, configured from the model pack's metadata (prefixes, pooling, token limit). Works offline and without a key; inference runs on a blocking thread.
+  - **Local (default):** `OnnxEmbedder`, configured from the model pack's metadata (prefixes, pooling, token limit). Works offline and without a key; inference runs on a blocking thread. It loads `model/model.onnx` (int8 weights) and `model/tokenizer.json` from the installed model pack, runs ONNX Runtime (statically linked through the `ort` crate, no separate library to install), feeds `input_ids` and `attention_mask` plus `token_type_ids` or `position_ids` when the model has them, embeds in batches of 16, pools (`mean`, `cls` or `last`) and normalizes. Verse vectors are computed in the pipeline the same way, from the same files, so queries and verses share one space.
   - **API:** OpenAI, Voyage, Gemini or an OpenAI-compatible server (Ollama, LM Studio). Uses the provider's key from the keychain (§14.2), shared with the AI layer (§8); an OpenAI-compatible server needs the address the user entered (`semantic.base_url`). Claude is not listed because Anthropic offers no embedding model.
 - **Queries and passages** are embedded differently where the model expects it (e5 `query: `/`passage: ` prefixes, Voyage `input_type`, Gemini task types); each backend maps `TextKind` itself.
 - **Active pack:** at most one vector pack is active: the one named by `semantic.vector_pack`, else the first installed one.
@@ -751,6 +751,8 @@ pub trait Embedder: Send + Sync {
 - **Privacy:** with an API pack, queries (and in chat the ranked tafsir paragraphs, §10) are sent to the provider through `net.rs` (§14.1). The pack is under "Advanced" and says so before download (`terms_ack`).
 - **Query:** cosine similarity of the query vector with every verse vector of the active pack, in memory (§5.4); the `k` best, optionally leaving out verses (the verse a cross-reference starts from).
 - Embeddings are computed **per verse**. Tafsir is never embedded; it reaches the chat through the verses it belongs to (§10).
+- **Verse text:** each verse is embedded as its Arabic text (Tanzil Simple Clean), Turkish translation (Diyanet Vakfı) and English translation (Pickthall), one per line, as one vector. Whatever the model, this scored best on the evaluation set: Arabic alone was weakest for Turkish and English queries, and separate vectors per language (averaged or the best of three) were worse than one vector of the combined text. The text is recorded in each vector pack (`source_text`).
+- **Evaluation set:** `siyak-data/data/eval/semantic.toml`, drafted by the maintainers: Turkish, English and Arabic queries and cross-references (a verse and related verses elsewhere), each with the verses a good result list should contain, checked against the Diyanet Vakfı translation. `siyak-data eval-embeddings` reports hit@10, recall@10 and MRR@10 per language, for models and for built packs exactly as the app runs them. A new model or API pack is measured against the same set.
 
 ### 7.5 Word panel
 Opens when a word is clicked in the reader:
@@ -1147,9 +1149,9 @@ Ordering rationale: the open-source foundation comes first (M0), because adding 
 
 | # | Question | Impact |
 |---|---|---|
-| 1 | Embedding model: the default local model, and which API models get a pack (ADR 0012) | Pack size, search and cross-reference quality |
-| 2 | Text to embed: Arabic without diacritics, a translation, or both combined. Arabic-only embeddings may be weak for Turkish queries; to be tested against an evaluation set | Vector pack design |
-| 3 | Evaluation set for semantic search and cross-references (query/verse → expected verses): who prepares it, how many examples? | M7 acceptance criteria |
+| 1 | Embedding model: ~~the default local model~~ **answered (M7):** BGE-M3 (ADR 0012). Still open: which API models get a pack | Pack size, search and cross-reference quality |
+| 2 | ~~Text to embed~~ **Answered (M7):** Arabic, Turkish and English combined, one vector per verse (§7.4) | Vector pack design |
+| 3 | ~~Evaluation set~~ **Answered (M7):** drafted by the maintainers, 144 items: 58 Turkish, 30 English and 20 Arabic queries, 36 cross-references (§7.4) | M7 acceptance criteria |
 | 4 | **MASAQ evaluation** (§5.3.1): does it have lemmas, Tanzil alignment, sample comparison with QAC; clarify the license wording of the latest version | Second morphology pack, *i'rab* layer |
 | 5 | **al-Qurtubi permission:** origin and redistribution permission for QUL #23 from Tarteel (§6.6). Request sent? Reply received? | Publication of the `ar.qurtubi` pack |
 | 6 | **Turkish translation source:** a clean, digital, clearly licensed source of Elmalılı Hamdi Yazır's original (non-simplified) translation for `core.db`, and of his tafsir *Hak Dini Kur'an Dili* | Bundled Turkish translation (§6.2), Turkish tafsir layer |

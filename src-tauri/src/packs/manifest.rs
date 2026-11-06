@@ -1034,7 +1034,15 @@ pub(crate) mod tests {
             return;
         };
         let manifest = parse(&bytes).unwrap();
-        assert_eq!(manifest.packs.len(), 18);
+        // The number of packs depends on what was built; every type is one the app installs.
+        assert!(!manifest.packs.is_empty());
+        let unsupported: Vec<&str> = manifest
+            .packs
+            .iter()
+            .filter(|p| p.pack_kind().is_none())
+            .map(|p| p.id.as_str())
+            .collect();
+        assert!(unsupported.is_empty(), "{unsupported:?}");
         assert!(manifest.bundle("recommended").is_some());
     }
 

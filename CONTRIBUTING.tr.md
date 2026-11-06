@@ -92,7 +92,8 @@ yalnızca tam veriye kurulur; geliştirme verisinde uygulama bunları reddeder v
 Paketleri yayımlamadan denemek için onları `siyak-data` içinde derleyin ve bir debug derlemeyi
 çıktısına yönlendirin: `SIYAK_PACK_SOURCE=../siyak-data/dist pnpm tauri dev`. Uygulama bu durumda
 `manifest.json` dosyasını o dizinden okur ve her paketi dosya adıyla oradan, indirmeyle aynı
-denetimlerden geçirerek kopyalar.
+denetimlerden geçirerek kopyalar. Embedding paketleri gibi henüz yayımlanmamış paketleri yalnızca
+`siyak-data manifest --unpublished` listeler.
 
 ## Komutlar
 
