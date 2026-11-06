@@ -12,7 +12,10 @@ use std::path::Path;
 
 use rusqlite::{Connection, Transaction, params};
 use serde::Deserialize;
-use siyak_lib::db::{content::MIGRATIONS, migrate};
+use siyak_lib::db::content::{MIGRATIONS, ensure_vector_table};
+use siyak_lib::db::migrate;
+use siyak_lib::embed::EmbeddingSpace;
+use siyak_lib::embed::fake::words_vector;
 use siyak_lib::search::normalize;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -22,7 +25,7 @@ type VerseKey = (u16, u16);
 
 /// `content_meta.core_version` of the dev seed (spec §6.2). Raise it whenever
 /// the generated rows change, so existing dev `content.db` files are refreshed.
-const CORE_VERSION: u32 = 4;
+const CORE_VERSION: u32 = 5;
 
 /// Version of the Tanzil text in the fixtures, as in their copyright block.
 const TANZIL_VERSION: &str = "1.1";
@@ -95,6 +98,7 @@ pub fn build(root: &Path) -> Result<()> {
     }
     insert_notices(&tx, &uthmani, &clean)?;
     let words = insert_morphology(&tx, &fixtures, &verse_ids)?;
+    insert_dev_vectors(&tx, &packs)?;
     tx.execute(
         "INSERT INTO content_meta (key, value) VALUES ('core_version', ?1), ('tanzil_version', ?2)",
         params![CORE_VERSION.to_string(), TANZIL_VERSION],
@@ -444,6 +448,65 @@ fn insert_morphology(
         )?;
     }
     Ok(word_id)
+}
+
+/// Id of the development vector pack.
+const DEV_VECTORS: &str = "vectors.dev";
+
+/// Dimension of the development vectors: few word collisions, a small file.
+const DEV_DIM: u32 = 256;
+
+/// Adds `vectors.dev`, a vector pack of the `dev` backend (spec §16.3): each
+/// verse's Simple Clean text and translations, one per line, embedded with the
+/// app's hashed-words embedder. Debug builds embed queries the same way, so
+/// semantic search, related verses and chat work without a download; results
+/// follow shared words, not meaning.
+fn insert_dev_vectors(tx: &Transaction, packs: &[PackFixture]) -> Result<()> {
+    let space = EmbeddingSpace {
+        model: "dev/words".into(),
+        dim: DEV_DIM,
+        normalized: true,
+    };
+    let meta = serde_json::json!({
+        "title": { "tr": "Geliştirme vektörleri", "en": "Development vectors" },
+        "embedding_model": space.model,
+        "dim": space.dim,
+        "normalized": space.normalized,
+        "backend": "dev",
+        "source_text": "Arabic (Tanzil Simple Clean) and the seed's translations, hashed words",
+    });
+    tx.execute(
+        "INSERT INTO packs (id, type, title, version, license, meta_json, installed_at, bundled)
+         VALUES (?1, 'vectors', 'Development vectors', '1.0.0', 'Same as the texts',
+                 ?2, '2026-10-21T00:00:00Z', 0)",
+        params![DEV_VECTORS, meta.to_string()],
+    )?;
+    ensure_vector_table(tx)?;
+    let pack_ids: Vec<&str> = packs.iter().map(|p| p.id.as_str()).collect();
+    let mut texts = tx.prepare(
+        "SELECT v.id, v.text_clean, group_concat(t.text, char(10))
+         FROM verses v LEFT JOIN translations t ON t.verse_id = v.id
+         WHERE t.pack_id IS NULL OR t.pack_id IN (SELECT value FROM json_each(?1))
+         GROUP BY v.id ORDER BY v.id",
+    )?;
+    let rows: Vec<(u32, String, Option<String>)> = texts
+        .query_map([serde_json::to_string(&pack_ids)?], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut insert = tx.prepare("INSERT INTO verse_vectors VALUES (?1, ?2, ?3)")?;
+    for (verse_id, arabic, translations) in rows {
+        let text = match translations {
+            Some(translations) => format!("{arabic}\n{translations}"),
+            None => arabic,
+        };
+        let bytes: Vec<u8> = words_vector(&space, &text)
+            .iter()
+            .flat_map(|x| x.to_le_bytes())
+            .collect();
+        insert.execute(params![DEV_VECTORS, verse_id, bytes])?;
+    }
+    Ok(())
 }
 
 /// The id of `value`, inserting it with the next id on its first occurrence.

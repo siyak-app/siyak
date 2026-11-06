@@ -29,10 +29,15 @@ user's own computer.
 - `embed::service::Semantic` picks the active vector pack (setting `semantic.vector_pack`, else the
   first installed one), returns a `SemanticStatus` that tells the interface what is missing
   (pack, model pack, key, address), and builds the embedder lazily, once per pack version.
-- **Local is the default.** The recommended bundle contains a local pack. API packs are listed
-  under "Advanced" and show, before download, that searches are sent to the provider.
+- **Local is the default.** The recommended bundle contains the local pack. API packs
+  (`vectors.gemini-embedding-2`, `vectors.voyage-4-large`) are listed with the other semantic
+  search packs, never in a bundle, and are installed only after the user accepts terms that say
+  searches are sent to the provider (`terms_ack`).
 - Vectors for API packs are built once in the `siyak-data` pipeline with the maintainers' key and
-  published like any pack, so the user pays only for their own queries.
+  published like any pack, so the user pays only for their own queries. A release does not embed
+  again: every published vector pack is built from verse vectors pinned once by a maintainer
+  (`export-vectors`, the `vector-inputs` pre-release); a local pack's are checked against the
+  model pack the release builds (cosine ≥ 0.999 on 32 verses).
 - **Nearest neighbours are found in Rust, in memory.** Verse vectors are a plain `verse_vectors`
   table in `content.db` (created by the first vector pack install); the active pack's vectors are
   loaded once and scanned per query. The spec first named `sqlite-vec`, but loading it from Rust
@@ -78,9 +83,14 @@ user's own computer.
   shown when either is missing. Each request goes through `net.rs` (allow-list and connection log).
 - In chat (§10), tafsir paragraphs ranked for a question are sent to the embedding provider too.
 - Each API pack's provider terms must allow publishing the vectors; this is checked per pack.
+  Read on 2026-11-06 (not legal advice): neither the Gemini API Additional Terms nor Voyage's
+  terms forbid publishing embeddings. Google claims no ownership of generated content but forbids
+  extracting or replicating the Services and, for API use, expects professional users of 18+;
+  in the EEA, Switzerland and the UK only paid services may back apps offered to users. Voyage's
+  terms say nothing about outputs; inputs on an account without a payment method may be used
+  for training (the inputs are public Quran texts and translations).
 - A better model later is a new pack pair (or one API pack); the app needs no code change.
 - The default local packs are large: about 420 MB to download, about 610 MB installed, and the
   loaded model takes several hundred MB of memory. Building `vectors.bge-m3` takes about 40
-  minutes on an Apple M-series CPU; the release workflow must allow for it before the packs are
-  published and added to the recommended bundle.
+  minutes on an Apple M-series CPU, which is why releases use pinned vectors.
 - API packs are measured against the same evaluation set.

@@ -990,7 +990,7 @@ pack: string } |
 { state: "not_built"; 
 /**  The vector pack. */
 pack: string; 
-/**  `local` or `api`. */
+/**  `local`, `api` or `dev`. */
 backend: string } | 
 /**  Semantic features work. */
 { state: "ready"; 

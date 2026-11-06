@@ -110,6 +110,9 @@ impl ApiProvider {
 /// Prefix of the canonical model names of local (ONNX) spaces.
 pub const LOCAL_PREFIX: &str = "local/";
 
+/// Prefix of the canonical model names of `dev` spaces.
+pub const DEV_PREFIX: &str = "dev/";
+
 /// Where queries are embedded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Backend {
@@ -138,14 +141,19 @@ pub enum Backend {
         /// take prefixes instead.
         task_type: bool,
     },
+    /// Meaningless hashed vectors for the development database
+    /// ([`super::fake`]); only debug builds started with
+    /// `SIYAK_DEV_DATA=dev` run it.
+    Dev,
 }
 
 impl Backend {
-    /// `local` or `api`, as in the metadata.
+    /// `local`, `api` or `dev`, as in the metadata.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Local { .. } => "local",
             Self::Api { .. } => "api",
+            Self::Dev => "dev",
         }
     }
 }
@@ -207,6 +215,14 @@ impl VectorPackSpec {
                     passage_prefix: optional_text(meta, "passage_prefix")?.unwrap_or_default(),
                     task_type,
                 }
+            }
+            "dev" => {
+                if !space.model.starts_with(DEV_PREFIX) {
+                    return Err(format!(
+                        "a dev embedding_model must start with {DEV_PREFIX}"
+                    ));
+                }
+                Backend::Dev
             }
             other => return Err(format!("unknown backend {other:?}")),
         };

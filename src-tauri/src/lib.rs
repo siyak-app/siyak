@@ -168,6 +168,11 @@ fn open_state(app: &tauri::App) -> AppState {
     let keys: Arc<dyn KeyStore> = Arc::new(Keychain::default());
     let local = embed::onnx::OnnxFactory::new(packs::install::packs_dir(&data_dir));
     let mut backends: Vec<Arc<dyn EmbedderFactory>> = vec![Arc::new(local)];
+    // The development database's vector pack (spec §16.3); `seed` returns the
+    // `dev` marker only in debug builds.
+    if seed.marker == Some("dev") {
+        backends.push(Arc::new(embed::fake::DevFactory));
+    }
     match net {
         Ok(net) => backends.push(Arc::new(ApiFactory::new(
             net,

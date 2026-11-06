@@ -6,16 +6,17 @@ data, `src-tauri/resources/core.db` (see [Real data](#real-data-coredb) below).
 
 ## Contents
 
-| Table                                       | Rows                                                                                     |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `surahs`                                    | all 114 surahs; `bismillah` (Tanzil's basmala) only for surahs whose text is in the seed |
-| `verses`                                    | surahs 1, 2, 9, 112, 113 and 114 only (437 verses), Uthmani and Simple Clean text        |
-| `packs`                                     | `en.pickthall` (translation, bundled), `morphology.qac` (morphology, not bundled)        |
-| `translations`, `translations_fts`          | Pickthall for the 437 verses                                                             |
-| `notices`                                   | the Tanzil copyright blocks of both texts, as in `core.db`, and the QAC notice           |
-| `words`, `word_segments`, `roots`, `lemmas` | the `morphology.qac` rows for the 437 verses (8,701 words)                               |
-| `content_meta`                              | `core_version` (`CORE_VERSION` in `xtask/src/dev_db.rs`) and `tanzil_version`            |
-| `verses_fts`                                | the normalized Simple Clean text of the 437 verses, written by the app's Rust normalizer |
+| Table                                       | Rows                                                                                                                    |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `surahs`                                    | all 114 surahs; `bismillah` (Tanzil's basmala) only for surahs whose text is in the seed                                |
+| `verses`                                    | surahs 1, 2, 9, 112, 113 and 114 only (437 verses), Uthmani and Simple Clean text                                       |
+| `packs`                                     | `en.pickthall` (translation, bundled), `morphology.qac` (morphology, not bundled), `vectors.dev` (vectors, not bundled) |
+| `translations`, `translations_fts`          | Pickthall for the 437 verses                                                                                            |
+| `notices`                                   | the Tanzil copyright blocks of both texts, as in `core.db`, and the QAC notice                                          |
+| `words`, `word_segments`, `roots`, `lemmas` | the `morphology.qac` rows for the 437 verses (8,701 words)                                                              |
+| `verse_vectors`                             | `vectors.dev`: one hashed-words vector (256 values) per verse, see below                                                |
+| `content_meta`                              | `core_version` (`CORE_VERSION` in `xtask/src/dev_db.rs`) and `tanzil_version`                                           |
+| `verses_fts`                                | the normalized Simple Clean text of the 437 verses, written by the app's Rust normalizer                                |
 
 The schema comes from the app's own migrations (`src-tauri/migrations/content/`), so it always
 matches what the app expects. There is deliberately **no Turkish translation** yet: the Turkish
@@ -54,6 +55,21 @@ first verse of each surah. The XML format keeps it in a separate `bismillah` att
 
 `morphology.qac` is not bundled in the seed's `packs` row, so a contributor can remove it on the
 Packs screen to work on what the app shows without morphology.
+
+## Development vectors
+
+`vectors.dev` lets semantic features (Meaning search, the Related tab's "similar in meaning" and,
+from M8, chat) run on the development data without downloading the 420 MB BGE-M3 packs. Its
+backend is `dev`: each verse's Simple Clean text and Pickthall translation are embedded by hashing
+every word to one of 256 components (`words_vector` in `src-tauri/src/embed/fake.rs`), and debug
+builds started with `SIYAK_DEV_DATA=dev` embed queries the same way. A query is therefore closest
+to the verses that **share its words**: `patience` finds verses with "patience", while Turkish
+queries find nothing useful (the seed has no Turkish translation). The results say nothing about
+the quality of the real models.
+
+Release builds and debug builds on `core.db` cannot run the `dev` backend. For real results, run
+a debug build on the full data (without `SIYAK_DEV_DATA`) and install the published packs, or
+build them in `siyak-data` and point the app at them (`SIYAK_PACK_SOURCE=../siyak-data/dist`).
 
 ## Required attribution
 

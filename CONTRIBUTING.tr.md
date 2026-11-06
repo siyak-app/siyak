@@ -82,8 +82,10 @@ Debug ve release derlemeler, [`siyak-data`](https://github.com/siyak-app/siyak-d
 dosyasında kayıtlıdır: şu an siyak-data commit'i `72bc795`, sha256 `76ed118ad4be…`,
 `core_version` 1. Bakımcılar onu `cargo xtask sync-core` ile günceller.
 
-Debug derlemeyi, morfolojiyi hazır içeren küçük geliştirme veri setiyle (`dev-data/`) çalıştırmak
-için `SIYAK_DEV_DATA=dev pnpm tauri dev` kullanın. Her veri setinin kendi içerik veritabanı vardır
+Debug derlemeyi, morfolojiyi ve anlamsal özellikler için bir vektör paketini (`vectors.dev`: anlamı
+değil ortak kelimeleri eşler; bkz. [`dev-data/README.md`](dev-data/README.md#development-vectors))
+hazır içeren küçük geliştirme veri setiyle (`dev-data/`) çalıştırmak için
+`SIYAK_DEV_DATA=dev pnpm tauri dev` kullanın. Her veri setinin kendi içerik veritabanı vardır
 (geliştirme verisi için `content.db`, tam veri için `content.full.db`); böylece hiçbir şeyi
 sıfırlamadan ikisi arasında geçiş yapabilirsiniz. `user.db` ortaktır. Debug derlemeler hangi veri
 setinin yüklü olduğunu üst çubukta gösterir. Yayımlanan paketler Kuran'ın tamamını kapsadığı için

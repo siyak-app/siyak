@@ -544,7 +544,7 @@ Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.
 
 **Vector pack metadata** (ADR 0012). A vector pack defines its embedding space: `embedding_model`, canonical with a backend prefix (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` and `normalized`. `backend` says where queries are embedded:
 - `local`: `model_pack` names the model pack, which is also in `requires`. Its `embedding_model` and `dim` must match.
-- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (the provider's model id) and optionally `api_dimensions` (equal to `dim`, for models that shorten their vectors), `query_prefix` and `passage_prefix` (put before queries and passages, e.g. `task: search result | query: ` for `gemini-embedding-2`) and `task_type` (Gemini only: send `RETRIEVAL_QUERY`/`RETRIEVAL_DOCUMENT`, for `gemini-embedding-001`). No model pack. The vectors are built once in the pipeline with the maintainers' key.
+- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (the provider's model id) and optionally `api_dimensions` (equal to `dim`, for models that shorten their vectors), `query_prefix` and `passage_prefix` (put before queries and passages, e.g. `task: search result | query: ` for `gemini-embedding-2`) and `task_type` (Gemini only: send `RETRIEVAL_QUERY`/`RETRIEVAL_DOCUMENT`, for `gemini-embedding-001`). No model pack. The vectors are built once in the pipeline with the maintainers' key. Published API packs: `vectors.gemini-embedding-2` and `vectors.voyage-4-large` (1024 values each).
 
 A vector pack with invalid metadata is listed as unsupported; the rest of the manifest stays usable.
 
@@ -621,7 +621,7 @@ The primary address is independent of the GitHub organization and repository nam
 }
 ```
 
-**Bundles:** sets installed with one click instead of making users pick packs one by one. A casual user sees a "Recommended packs" card on first launch and installs it with one click, with the total size shown. They never meet concepts like "vector pack" or "model pack"; picking individual packs stays under "Advanced" on the Packs screen. Pack and bundle titles may be given as `{ "tr", "en" }` objects.
+**Bundles:** sets installed with one click instead of making users pick packs one by one. A casual user sees a "Recommended packs" card on first launch and installs it with one click, with the total size shown. They never meet concepts like "vector pack" or "model pack"; the Packs screen lists every pack by kind for those who pick them one by one. API vector packs are never in a bundle, since they need the user's own key. Pack and bundle titles may be given as `{ "tr", "en" }` objects.
 
 ### 6.4 Installation flow
 1. Fetch the manifest: on launch and on the Packs screen, cached for 1 hour. Without network, the last successful manifest is used.
@@ -748,7 +748,7 @@ pub trait Embedder: Send + Sync {
 - **Status:** `get_semantic_status` returns why semantic features are or are not available: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `base_url_invalid`, `not_built` or `ready` (with the provider if queries leave the computer). The interface turns each into an action (install, add key, enter address); keys and the address are entered under Settings → Providers, which also picks the active pack when several are installed.
 - **Lazy loading:** the embedder is built on first use and kept until either pack's version or the address changes.
 - **Compatibility:** if the embedder's `embedding_model` and `dim` differ from the active vector pack's, semantic features are disabled and the interface explains why.
-- **Privacy:** with an API pack, queries (and in chat the ranked tafsir paragraphs, §10) are sent to the provider through `net.rs` (§14.1). The pack is under "Advanced" and says so before download (`terms_ack`).
+- **Privacy:** with an API pack, queries (and in chat the ranked tafsir paragraphs, §10) are sent to the provider through `net.rs` (§14.1). The pack is listed with the other semantic search packs, says so in its terms and is installed only after the user accepts them (`terms_ack`, §6.5).
 - **Query:** cosine similarity of the query vector with every verse vector of the active pack, in memory (§5.4); the `k` best, optionally leaving out verses (the verse a cross-reference starts from).
 - Embeddings are computed **per verse**. Tafsir is never embedded; it reaches the chat through the verses it belongs to (§10).
 - **Verse text:** each verse is embedded as its Arabic text (Tanzil Simple Clean), Turkish translation (Diyanet Vakfı) and English translation (Pickthall), one per line, as one vector. Whatever the model, this scored best on the evaluation set: Arabic alone was weakest for Turkish and English queries, and separate vectors per language (averaged or the best of three) were worse than one vector of the combined text. The text is recorded in each vector pack (`source_text`).
@@ -1064,7 +1064,7 @@ Part of the landing page (§16.2).
 
 **The 15-minute goal:** a new contributor should be able to run the app within 15 minutes of cloning the repository.
 - One command: `pnpm install && pnpm tauri dev`.
-- `dev-data/dev-content.db`: sample data with a few surahs and translations; it grows with the milestones (partial morphology in M5, a small vector set in M7). Used in dev builds with `SIYAK_DEV_DATA=dev`; by default they use the committed `core.db`, so published packs install. Either way, contributors never need to run the Python pipeline. Size target < 5 MB.
+- `dev-data/dev-content.db`: sample data with a few surahs and translations; it grows with the milestones (partial morphology in M5; in M7 `vectors.dev`, hashed-words vectors that a debug-only `dev` backend embeds queries for, so semantic features run without a download). Used in dev builds with `SIYAK_DEV_DATA=dev`; by default they use the committed `core.db`, so published packs install. Either way, contributors never need to run the Python pipeline. Size target < 5 MB.
 - `.devcontainer/`: Rust, Node, pnpm and the Linux webview dependencies ready to go.
 - Platform prerequisites in `CONTRIBUTING.md` (Windows: WebView2/MSVC; macOS: Xcode CLT; Linux: WebKitGTK packages).
 
@@ -1154,7 +1154,7 @@ Ordering rationale: the open-source foundation comes first (M0), because adding 
 
 | # | Question | Impact |
 |---|---|---|
-| 1 | Embedding model: ~~the default local model~~ **answered (M7):** BGE-M3 (ADR 0012). Still open: which API models get a pack | Pack size, search and cross-reference quality |
+| 1 | ~~Embedding model~~ **Answered (M7):** BGE-M3 locally; API packs for Gemini `gemini-embedding-2` and Voyage `voyage-4-large` (ADR 0012) | Pack size, search and cross-reference quality |
 | 2 | ~~Text to embed~~ **Answered (M7):** Arabic, Turkish and English combined, one vector per verse (§7.4) | Vector pack design |
 | 3 | ~~Evaluation set~~ **Answered (M7):** drafted by the maintainers, 144 items: 58 Turkish, 30 English and 20 Arabic queries, 36 cross-references (§7.4) | M7 acceptance criteria |
 | 4 | **MASAQ evaluation** (§5.3.1): does it have lemmas, Tanzil alignment, sample comparison with QAC; clarify the license wording of the latest version | Second morphology pack, *i'rab* layer |

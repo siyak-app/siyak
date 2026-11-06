@@ -78,7 +78,7 @@ pub enum SemanticStatus {
     NotBuilt {
         /// The vector pack.
         pack: String,
-        /// `local` or `api`.
+        /// `local`, `api` or `dev`.
         backend: String,
     },
     /// Semantic features work.
@@ -202,7 +202,7 @@ impl Semantic {
         Ok(match self.resolve(packs, settings)? {
             Ok(pack) => SemanticStatus::Ready {
                 provider: match pack.spec.backend {
-                    Backend::Local { .. } => None,
+                    Backend::Local { .. } | Backend::Dev => None,
                     Backend::Api { provider, .. } => Some(provider),
                 },
                 pack: pack.id,
@@ -339,6 +339,7 @@ impl Semantic {
                     }));
                 }
             }
+            Backend::Dev => {}
         }
         if !self.factory.supports(&spec.backend) {
             return Ok(Err(SemanticStatus::NotBuilt {

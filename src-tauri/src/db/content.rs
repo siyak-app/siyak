@@ -260,6 +260,22 @@ fn replace_core_tables(conn: &mut Connection) -> AppResult<()> {
            SELECT key, value FROM core.content_meta WHERE true
            ON CONFLICT (key) DO UPDATE SET value = excluded.value;",
     )?;
+    // Only the development seed carries a vector pack (`vectors.dev`); its
+    // vectors come with its `packs` row.
+    let core_vectors: bool = tx.query_row(
+        "SELECT EXISTS (SELECT 1 FROM core.sqlite_master
+                        WHERE type = 'table' AND name = 'verse_vectors')",
+        [],
+        |r| r.get(0),
+    )?;
+    if core_vectors {
+        ensure_vector_table(&tx)?;
+        tx.execute_batch(
+            "DELETE FROM main.verse_vectors WHERE pack_id IN (SELECT id FROM core.packs);
+             INSERT INTO main.verse_vectors (pack_id, verse_id, embedding)
+               SELECT pack_id, verse_id, embedding FROM core.verse_vectors;",
+        )?;
+    }
     tx.commit()?;
     Ok(())
 }
@@ -1137,16 +1153,68 @@ mod tests {
         assert!(roots.is_empty());
     }
 
+    /// An installed vector pack keeps its vectors through a refresh by a
+    /// `core.db`; the development seed's `vectors.dev` is replaced with its own.
+    #[test]
+    fn refresh_keeps_installed_vectors_and_replaces_the_seeds() {
+        let dir = tempfile::tempdir().unwrap();
+        let (old, new, bak) = (
+            dir.path().join("old.db"),
+            dir.path().join("new.db"),
+            dir.path().join("content.bak"),
+        );
+        let add_vectors = |conn: &Connection, pack: &str, bytes: &[u8]| {
+            ensure_vector_table(conn).unwrap();
+            conn.execute(
+                "INSERT INTO packs (id, type, title, version, license, installed_at, bundled)
+                 VALUES (?1, 'vectors', ?1, '1.0.0', 'PD', 'x', 0)",
+                [pack],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO verse_vectors VALUES (?1, 1, ?2)",
+                rusqlite::params![pack, bytes],
+            )
+            .unwrap();
+        };
+        write_core(&old, 1, "old");
+        let mut conn = Connection::open(&old).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        add_vectors(&conn, "vectors.user", &[1]);
+        add_vectors(&conn, "vectors.dev", &[2]);
+
+        write_core(&new, 2, "new");
+        add_vectors(&Connection::open(&new).unwrap(), "vectors.dev", &[3]);
+        assert!(refresh_core(&mut conn, &new, &bak).unwrap());
+        let rows: Vec<String> = query(
+            &conn,
+            "SELECT pack_id || ':' || hex(embedding) FROM verse_vectors ORDER BY pack_id",
+        );
+        assert_eq!(rows, ["vectors.dev:03", "vectors.user:01"]);
+
+        // A core without vectors leaves every vector pack as it was.
+        let newer = dir.path().join("newer.db");
+        write_core(&newer, 3, "newer");
+        assert!(refresh_core(&mut conn, &newer, &bak).unwrap());
+        let rows: Vec<String> = query(
+            &conn,
+            "SELECT pack_id || ':' || hex(embedding) FROM verse_vectors ORDER BY pack_id",
+        );
+        assert_eq!(rows, ["vectors.dev:03", "vectors.user:01"]);
+    }
+
     fn dev_db() -> Connection {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../dev-data/dev-content.db");
         Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap()
     }
 
-    /// The dev seed has the schema the migrations create.
+    /// The dev seed has the schema the migrations create, with the vector
+    /// table of its vector pack.
     #[test]
     fn dev_db_matches_the_migrations() {
         let mut fresh = Connection::open_in_memory().unwrap();
         migrate(&mut fresh, MIGRATIONS).unwrap();
+        ensure_vector_table(&fresh).unwrap();
         let dev = dev_db();
         assert_eq!(schema_shape(&dev).unwrap(), schema_shape(&fresh).unwrap());
         assert_eq!(

@@ -213,7 +213,7 @@ These hold in every change; a pull request that weakens one needs an ADR.
 | CI                                 | `.github/workflows/ci.yml`                                                                                                   |
 | the website                        | `website/src/content/docs/{en,tr}/`                                                                                          |
 
-## Semantic layer (M7, in progress)
+## Semantic layer (M7)
 
 Semantic search, cross-references and chat retrieval share one embedder (spec §7.4, ADR 0012).
 A vector pack defines the embedding space (`embedding_model`, `dim`) and the backend that embeds
@@ -248,6 +248,10 @@ OpenAI-compatible server, with the user's key).
   index) and the Related tab: `related_by_meaning` compares verse vectors only (no model needed),
   `related_by_roots` uses `related.rs`. The first model load blocks a runtime thread
   (`block_in_place`) for a few seconds.
+- `embed/fake.rs` holds the `dev` backend: `DevFactory`, registered in `lib.rs` only for debug
+  builds on the development data, hashes each word to one component (`words_vector`). `cargo
+xtask build-dev-db` fills `vectors.dev` in `dev-content.db` the same way, so semantic features
+  run there without a download. Tests use its `FakeEmbedder`.
 - `related.rs` scores shared roots: each verse's roots, plus rootless proper nouns, weighted by
   IDF; terms in more than 10% of verses are dropped; verses rank by the cosine of their weighted
   term sets. The index is built once per morphology pack install (`Related`, in `AppState`), and

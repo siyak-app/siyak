@@ -545,7 +545,7 @@ Her iki DB için `PRAGMA user_version` tabanlı, sıralı SQL migration'lar. `us
 
 **Vektör paketi meta verisi** (ADR 0012). Vektör paketi kendi vektör uzayını tanımlar: backend önekiyle kanonik `embedding_model` (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` ve `normalized`. `backend` sorguların nerede embed edileceğini söyler:
 - `local`: `model_pack` model paketini belirtir; bu paket `requires` içinde de yer alır. `embedding_model` ve `dim` değerleri eşleşmelidir.
-- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (sağlayıcının model kimliği) ve isteğe bağlı `api_dimensions` (vektörlerini kısaltabilen modeller için, `dim`'e eşit), `query_prefix` ile `passage_prefix` (sorgu ve pasajların önüne eklenir; örneğin `gemini-embedding-2` için `task: search result | query: `) ve `task_type` (yalnızca Gemini: `gemini-embedding-001` için `RETRIEVAL_QUERY`/`RETRIEVAL_DOCUMENT` gönderilir). Model paketi yoktur. Vektörler pipeline'da bir kez, bakımcıların anahtarıyla üretilir.
+- `api`: `provider` (`openai`, `voyage`, `gemini`, `openai_compatible`), `api_model` (sağlayıcının model kimliği) ve isteğe bağlı `api_dimensions` (vektörlerini kısaltabilen modeller için, `dim`'e eşit), `query_prefix` ile `passage_prefix` (sorgu ve pasajların önüne eklenir; örneğin `gemini-embedding-2` için `task: search result | query: `) ve `task_type` (yalnızca Gemini: `gemini-embedding-001` için `RETRIEVAL_QUERY`/`RETRIEVAL_DOCUMENT` gönderilir). Model paketi yoktur. Vektörler pipeline'da bir kez, bakımcıların anahtarıyla üretilir. Yayımlanan API paketleri: `vectors.gemini-embedding-2` ve `vectors.voyage-4-large` (her biri 1024 değer).
 
 Meta verisi geçersiz bir vektör paketi "desteklenmiyor" olarak listelenir; manifestin geri kalanı kullanılmaya devam eder.
 
@@ -622,7 +622,7 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
 }
 ```
 
-**Bundles:** Kullanıcıya teker teker paket seçtirmek yerine tek tuşla kurulan setler. Sade kullanıcı ilk açılışta "Önerilen paketler" kartını görür ve toplam boyutla birlikte tek tuşla kurar. "Vektör paketi", "model paketi" gibi kavramlarla karşılaşmaz; tek tek paket seçimi Paketler ekranında "Gelişmiş" altında kalır. Paket ve bundle başlıkları `{ "tr", "en" }` nesnesi olarak verilebilir.
+**Bundles:** Kullanıcıya teker teker paket seçtirmek yerine tek tuşla kurulan setler. Sade kullanıcı ilk açılışta "Önerilen paketler" kartını görür ve toplam boyutla birlikte tek tuşla kurar. "Vektör paketi", "model paketi" gibi kavramlarla karşılaşmaz; paketleri tek tek seçmek isteyenler için Paketler ekranı her paketi türüne göre listeler. API vektör paketleri hiçbir bundle'a girmez, çünkü kullanıcının kendi anahtarını ister. Paket ve bundle başlıkları `{ "tr", "en" }` nesnesi olarak verilebilir.
 
 ### 6.4 Kurulum akışı
 1. Manifest'i çek: açılışta ve paket ekranında, 1 saat cache'li. Ağ yoksa son başarılı manifest kullanılır.
@@ -749,7 +749,7 @@ pub trait Embedder: Send + Sync {
 - **Durum:** `get_semantic_status`, anlamsal özelliklerin neden kullanılabildiğini ya da kullanılamadığını döner: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `base_url_invalid`, `not_built` veya `ready` (sorgular bilgisayardan çıkıyorsa sağlayıcıyla birlikte). Arayüz her birini bir eyleme çevirir (kur, anahtar ekle, adres gir); anahtarlar ve adres Ayarlar → Sağlayıcılar'dan girilir, birden çok paket kuruluysa etkin paket de orada seçilir.
 - **Lazy-load:** Embedder ilk kullanımda oluşturulur; paketlerden birinin sürümü ya da adres değişene kadar tutulur.
 - **Uyumluluk:** Embedder'ın `embedding_model` ve `dim` değerleri aktif vektör paketininkilerle eşleşmezse anlamsal özellikler devre dışı kalır ve arayüz nedenini gösterir.
-- **Gizlilik:** API paketiyle sorgular (sohbette ayrıca sıralanan tefsir paragrafları, §10) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler "Gelişmiş" altındadır ve indirmeden önce bunu söyler (`terms_ack`).
+- **Gizlilik:** API paketiyle sorgular (sohbette ayrıca sıralanan tefsir paragrafları, §10) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler diğer anlamsal arama paketleriyle birlikte listelenir, bunu koşullarında söyler ve ancak kullanıcı koşulları kabul ettikten sonra kurulur (`terms_ack`, §6.5).
 - **Sorgu:** Sorgu vektörünün aktif paketin her ayet vektörüyle kosinüs benzerliği, bellekte (§5.4); en iyi `k` sonuç, istenirse bazı ayetler hariç (çapraz referansın başladığı ayet gibi).
 - Embedding'ler **ayet bazında** hesaplanır. Tefsir hiçbir zaman embed edilmez; sohbete ait olduğu ayetler üzerinden gider (§10).
 - **Ayet metni:** Her ayet Arapça metni (Tanzil Simple Clean), Türkçe meali (Diyanet Vakfı) ve İngilizce meali (Pickthall) alt alta yazılarak tek bir vektör olarak embed edilir. Değerlendirme setinde bu birleşim her modelde en iyi sonucu verdi: yalnızca Arapça, Türkçe ve İngilizce sorgularda en zayıf kaldı; dil başına ayrı vektörler (ortalaması ya da üçünün en iyisi) birleşik metnin tek vektöründen kötüydü. Metin her vektör paketinde kayıtlıdır (`source_text`).
@@ -1065,7 +1065,7 @@ Landing page'in bir parçasıdır (§16.2).
 
 **İlk 15 dakika hedefi:** Yeni bir contributor repo'yu klonladıktan sonra 15 dakika içinde uygulamayı çalıştırabilmelidir.
 - Tek komut: `pnpm install && pnpm tauri dev`.
-- `dev-data/dev-content.db`: Birkaç sure ve meal içeren örnek veri; milestone'larla büyür (M5'te kısmi morfoloji, M7'de küçük bir vektör seti). Dev build'de `SIYAK_DEV_DATA=dev` ile kullanılır; varsayılan olarak depodaki `core.db` kullanılır, böylece yayımlanan paketler kurulabilir. Her iki durumda da contributor'ın Python pipeline'ını çalıştırması gerekmez. Boyut hedefi < 5 MB.
+- `dev-data/dev-content.db`: Birkaç sure ve meal içeren örnek veri; milestone'larla büyür (M5'te kısmi morfoloji; M7'de `vectors.dev`: yalnızca debug build'deki `dev` backend'inin sorguları embed ettiği, kelime hash'lerinden oluşan vektörler; böylece anlamsal özellikler indirme olmadan çalışır). Dev build'de `SIYAK_DEV_DATA=dev` ile kullanılır; varsayılan olarak depodaki `core.db` kullanılır, böylece yayımlanan paketler kurulabilir. Her iki durumda da contributor'ın Python pipeline'ını çalıştırması gerekmez. Boyut hedefi < 5 MB.
 - `.devcontainer/`: Rust, Node, pnpm ve Linux webview bağımlılıkları hazır.
 - `CONTRIBUTING.md`'de platforma özel önkoşullar (Windows: WebView2/MSVC; macOS: Xcode CLT; Linux: WebKitGTK paketleri).
 
@@ -1155,7 +1155,7 @@ Sıralama mantığı: Açık kaynak altyapısı en başta kurulur (M0), çünkü
 
 | # | Soru | Etkisi |
 |---|---|---|
-| 1 | Embedding modeli: ~~varsayılan lokal model~~ **yanıtlandı (M7):** BGE-M3 (ADR 0012). Hâlâ açık: hangi API modellerine paket çıkarılacağı | Paket boyutu, arama ve çapraz referans kalitesi |
+| 1 | ~~Embedding modeli~~ **Yanıtlandı (M7):** lokal olarak BGE-M3; API paketleri Gemini `gemini-embedding-2` ve Voyage `voyage-4-large` (ADR 0012) | Paket boyutu, arama ve çapraz referans kalitesi |
 | 2 | ~~Embed edilecek metin~~ **Yanıtlandı (M7):** Arapça, Türkçe ve İngilizce birlikte, ayet başına tek vektör (§7.4) | Vektör paketi tasarımı |
 | 3 | ~~Değerlendirme seti~~ **Yanıtlandı (M7):** bakımcılar hazırladı, 144 öğe: 58 Türkçe, 30 İngilizce ve 20 Arapça sorgu, 36 çapraz referans (§7.4) | M7 kabul kriteri |
 | 4 | **MASAQ değerlendirmesi** (§5.3.1): lemma bilgisi var mı, Tanzil ile hizalama, QAC ile örneklem karşılaştırması; son sürümün lisans ifadesinin netleştirilmesi | İkinci morfoloji paketi, i'rab katmanı |

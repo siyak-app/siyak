@@ -82,7 +82,9 @@ Debug and release builds use `src-tauri/resources/core.db`, the complete data bu
 `cargo xtask sync-core`.
 
 To run a debug build on the small development dataset (`dev-data/`), which already includes
-morphology, start it with `SIYAK_DEV_DATA=dev pnpm tauri dev`. Each dataset gets its own content
+morphology and a vector pack for semantic features (`vectors.dev`: it matches shared words, not
+meaning; see [`dev-data/README.md`](dev-data/README.md#development-vectors)), start it with
+`SIYAK_DEV_DATA=dev pnpm tauri dev`. Each dataset gets its own content
 database (`content.db` for the development data, `content.full.db` for the full data), so you can
 switch back and forth without resetting anything; `user.db` is shared. Debug builds show which
 dataset is loaded in the header. Published packs cover the whole Quran, so they install only on the
