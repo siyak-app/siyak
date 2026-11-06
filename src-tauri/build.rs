@@ -34,8 +34,32 @@ fn write_citation_styles() {
     }
 }
 
+/// Links clang's runtime library on macOS. ONNX Runtime's CoreML code (in the
+/// static library `ort` downloads) calls `__isPlatformVersionAtLeast`, which
+/// lives there; rustc links with `-nodefaultlibs`, so clang does not add it.
+/// Debug builds never pull that code in, but release builds (LTO) fail to link
+/// without it.
+fn link_clang_runtime() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+    let output = std::process::Command::new("clang")
+        .arg("--print-resource-dir")
+        .output();
+    let dir = match output {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_owned(),
+        _ => panic!("`clang --print-resource-dir` failed; install the Xcode command line tools"),
+    };
+    let lib = std::path::Path::new(&dir).join("lib/darwin/libclang_rt.osx.a");
+    if !lib.exists() {
+        panic!("{} is missing", lib.display());
+    }
+    println!("cargo:rustc-link-arg={}", lib.display());
+}
+
 fn main() {
     write_citation_styles();
+    link_clang_runtime();
     // Listing the commands makes Tauri deny any command not granted by a
     // capability, instead of allowing every registered command by default.
     let manifest = tauri_build::AppManifest::new().commands(COMMAND_NAMES);
