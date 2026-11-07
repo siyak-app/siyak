@@ -37,7 +37,7 @@ Uygulamanın backend'i yoktur; her şey kullanıcının bilgisayarında çalış
 | Koleksiyonlar ve notlar | Yer imi, ayete bağlı notlar, ayetleri araştırma konularına göre gruplayan koleksiyonlar |
 | Dışa aktarma | Koleksiyon/not → Markdown; ayet ve meal/tefsir için akademik atıf metni; JSON yedekleme |
 | AI sohbet (BYOK) | RAG sohbet: Anthropic, OpenAI, Google Gemini, OpenAI-uyumlu endpoint (Ollama, LM Studio, OpenRouter vb.) |
-| Tilavet | Ses paketlerinden ayet ayet tilavet (14 kari, Quran.com): ayet çalma, sure sonuna kadar devam, tekrar, okunan ayeti takip (ADR 0014) |
+| Tilavet | Ses paketlerinden ayet ayet tilavet (14 kari, Quran.com ve EveryAyah): ayet çalma, sure sonuna kadar devam, tekrar, okunan ayeti takip (ADR 0014) |
 | Paket yöneticisi | Meal/tefsir/morfoloji/vektör/model/ses paketlerini indirme, güncelleme, kaldırma |
 | Arayüz dili | Türkçe + İngilizce |
 

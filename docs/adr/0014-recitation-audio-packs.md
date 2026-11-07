@@ -20,10 +20,13 @@ second.
 ## Decision
 
 - **Source.** Recitations are taken directly from Quran.com: the 12 verse recitations of its API
-  v4 (one mp3 per verse) and the chapter recitations that have no verse files (Yasser
-  ad-Dussary, Khalifah al-Tunaiji), cut into verses at Quran.com's verse timings. The
-  recording where children repeat after the reciter and a duplicate streaming copy of al-Afasy
-  are left out. That is 14 reciters.
+  v4 (one mp3 per verse). Quran.com has two more reciters only as surah files with verse
+  timings (Yasser ad-Dussary, Khalifah al-Tunaiji), but the timings do not fit the files (some
+  surah files are shorter than their timings, some timings are out of order), so cutting them
+  would put verse boundaries in the wrong place. Their packs take the same recitations as
+  verse files from EveryAyah, whose recordings Quran.com also serves. The recording where
+  children repeat after the reciter and a duplicate streaming copy of al-Afasy are left out.
+  That is 14 reciters.
 - **Packs.** Each reciter is one `audio.<reciter>` pack: an archive pack of `audio.sqlite`
   (`pack_info` only), `audio/LICENSE` and exactly 6,236 files `audio/SSSAAA.mp3`, re-encoded to
   mono MP3 at 64 kbit/s (pack-format §4.10). A reciter is 0.5–1.2 GB, below GitHub's 2 GiB
@@ -31,7 +34,7 @@ second.
   uploaded to an `audio-*` release and pinned in `source.toml`; data releases list the pinned
   assets without rebuilding them.
 - **Rights.** The maintainer decided to publish the packs with attribution ("Recitation: … ·
-  Source: Quran.com"), for personal and non-commercial listening, and to remove a pack from the
+  Source: Quran.com" or "… EveryAyah"), for personal and non-commercial listening, and to remove a pack from the
   manifest when a rights holder asks. This is a deliberate exception to principle 4, recorded
   here; `license_terms` say so before download, and `audio/LICENSE` is on About → Sources.
 - **Playback.** The core registers the `siyak-audio:` URI scheme (`src-tauri/src/audio.rs`). It
@@ -50,9 +53,9 @@ second.
 - The packs carry recordings whose redistribution was not cleared. If a reciter, a producer or
   Quran.Foundation objects, the pack leaves the manifest in the next data release; installed
   copies stay on users' computers.
-- Re-encoding loses some quality compared with the 128–192 kbit/s originals; speech at 64 kbit/s
-  mono stays clear. The original files and timings are pinned by sha256 (`files.tsv`,
-  `timings.tsv`), so a pack can be rebuilt at another bitrate.
+- Re-encoding loses some quality compared with the 64–192 kbit/s originals; speech at 64 kbit/s
+  mono stays clear. The original files are pinned by sha256 (`files.tsv`), so a pack can be
+  rebuilt at another bitrate.
 - Linux needs GStreamer's MP3 decoder (`gst-plugins-good`) for WebKitGTK to play the files.
 - Rebuilding the `packs` table needed a migration that runs with foreign keys off; the migration
   runner gained `foreign_keys_off` and checks the foreign keys before committing.

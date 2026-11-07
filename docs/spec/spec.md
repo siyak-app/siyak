@@ -36,7 +36,7 @@ The application has no backend; everything runs on the user's computer. All data
 | Collections and notes | Bookmarks, verse-linked notes, collections that group verses by research topic |
 | Export | Collection/notes → Markdown; academic citation text for verses and translations/tafsirs; JSON backup |
 | AI chat (BYOK) | RAG chat: Anthropic, OpenAI, Google Gemini, OpenAI-compatible endpoints (Ollama, LM Studio, OpenRouter, etc.) |
-| Recitation | Verse-by-verse recitation from audio packs (14 reciters, Quran.com): play a verse, continue to the end of the surah, repeat, follow the recited verse (ADR 0014) |
+| Recitation | Verse-by-verse recitation from audio packs (14 reciters, Quran.com and EveryAyah): play a verse, continue to the end of the surah, repeat, follow the recited verse (ADR 0014) |
 | Pack manager | Download, update and remove translation/tafsir/morphology/vector/model/audio packs |
 | UI languages | Turkish + English |
 
