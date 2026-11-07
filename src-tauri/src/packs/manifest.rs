@@ -219,6 +219,8 @@ pub struct Manifest {
     pub packs: Vec<PackEntry>,
     /// Bundles with at least one member present in `packs`.
     pub bundles: Vec<Bundle>,
+    /// Where `pricing.json` is published (spec §9.4), if the manifest says.
+    pub pricing_url: Option<String>,
 }
 
 impl Manifest {
@@ -240,6 +242,8 @@ struct RawManifest {
     packs: Vec<PackEntry>,
     #[serde(default)]
     bundles: Vec<Bundle>,
+    #[serde(default)]
+    pricing_url: Option<String>,
 }
 
 fn invalid(message: impl Into<String>) -> AppError {
@@ -302,6 +306,7 @@ pub fn parse(bytes: &[u8]) -> AppResult<Manifest> {
     Ok(Manifest {
         packs: raw.packs,
         bundles,
+        pricing_url: raw.pricing_url.filter(|url| url.starts_with("https://")),
     })
 }
 
@@ -828,6 +833,7 @@ pub fn catalog(input: &CatalogInput<'_>) -> Catalog {
     let empty = Manifest {
         packs: Vec::new(),
         bundles: Vec::new(),
+        pricing_url: None,
     };
     let manifest = input.snapshot.manifest.as_deref().unwrap_or(&empty);
     for entry in &manifest.packs {

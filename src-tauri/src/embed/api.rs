@@ -200,7 +200,7 @@ impl ApiEmbedder {
 
     /// The authentication header, if a key is needed or saved.
     fn auth(&self) -> AppResult<Option<(&'static str, String)>> {
-        let key = self.keys.key(self.provider)?;
+        let key = self.keys.key(self.provider.into())?;
         match (key, self.provider) {
             (None, provider) if provider.needs_key() => Err(AppError::new(
                 AppErrorCode::SemanticUnavailable,
@@ -629,7 +629,7 @@ mod tests {
 
         factory
             .keys
-            .set_key(ApiProvider::OpenAi, "bad-key")
+            .set_key(ApiProvider::OpenAi.into(), "bad-key")
             .unwrap();
         let err = embedder
             .embed(vec!["q".into()], TextKind::Query)

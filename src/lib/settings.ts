@@ -86,9 +86,33 @@ export interface Settings {
   "reader.last_position": VersePosition | null;
   /** Id of the active vector pack; `null` for the first installed (spec §7.4). */
   "semantic.vector_pack": string | null;
-  /** Address of the OpenAI-compatible embedding server, e.g. `http://localhost:11434/v1`. */
+  /**
+   * Address of the OpenAI-compatible server, e.g. `http://localhost:11434/v1`;
+   * shared by semantic search and AI (spec §7.4, §8).
+   */
   "semantic.base_url": string | null;
+  /** Provider of chat and tafsir summaries; `null` until chosen (spec §8). */
+  "ai.provider": AiProvider | null;
+  /** Model answering chat messages. */
+  "ai.chat_model": string | null;
+  /** Model summarizing and translating tafsir; `null` for the chat model. */
+  "ai.translation_model": string | null;
+  /** `arabic_sources` overrides by `provider/model` (spec §8). */
+  "ai.arabic_sources": Record<string, boolean>;
+  /** Monthly spending limit in USD; past it, AI actions ask first (spec §9.4). */
+  "ai.monthly_limit_usd": number | null;
+  /** Tafsir packs whose commentary goes into chat, at most 3 (spec §10). */
+  "chat.tafsirs": string[];
 }
+
+/** Most chat tafsirs (spec §10). */
+export const MAX_CHAT_TAFSIRS = 3;
+
+/** Providers that offer chat models: every key provider except Voyage. */
+export const AI_PROVIDERS = ["anthropic", "openai", "gemini", "openai_compatible"] as const;
+
+/** A provider of chat and tafsir summaries. */
+export type AiProvider = (typeof AI_PROVIDERS)[number];
 
 /** A setting key. */
 export type SettingKey = keyof Settings;
@@ -192,6 +216,33 @@ export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
   "semantic.base_url": {
     default: null,
     validate: nullable((value): value is string => typeof value === "string"),
+  },
+  "ai.provider": { default: null, validate: nullable(isOneOf(AI_PROVIDERS)) },
+  "ai.chat_model": {
+    default: null,
+    validate: nullable((value): value is string => typeof value === "string" && value !== ""),
+  },
+  "ai.translation_model": {
+    default: null,
+    validate: nullable((value): value is string => typeof value === "string" && value !== ""),
+  },
+  "ai.monthly_limit_usd": {
+    default: null,
+    validate: nullable(
+      (value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0,
+    ),
+  },
+  "chat.tafsirs": {
+    default: ["ar.jalalayn", "ar.ibn-kathir"],
+    validate: (value): value is string[] =>
+      Array.isArray(value) &&
+      value.length <= MAX_CHAT_TAFSIRS &&
+      value.every((id) => typeof id === "string"),
+  },
+  "ai.arabic_sources": {
+    default: {},
+    validate: (value): value is Record<string, boolean> =>
+      isObject(value) && !Array.isArray(value) && Object.values(value).every(isBoolean),
   },
 };
 

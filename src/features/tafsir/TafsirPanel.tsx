@@ -18,7 +18,7 @@ import { useSurahs, useTafsir, useTafsirIntroduction, useTafsirs } from "@/lib/q
 import type { VersePosition } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
-import { TafsirParagraphs } from "./TafsirParagraphs";
+import { MachineTafsir } from "./MachineTafsir";
 import { verseIdOf, verseRange } from "./tafsirRefs";
 
 /**
@@ -189,7 +189,7 @@ function Passage({
         className="min-h-0 flex-1 overflow-y-auto rounded-md p-1 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         {note && <p className="pb-2 text-xs text-muted-foreground">{note}</p>}
-        <TafsirParagraphs tafsir={tafsir} passage={passage} />
+        <MachineTafsir tafsir={tafsir} passage={passage} />
       </section>
     </>
   );

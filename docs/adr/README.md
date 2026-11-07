@@ -18,3 +18,4 @@ architectural change, open a pull request that adds `NNNN-short-title.md` based 
 | [0010](0010-rust-xtask.md)                        | Automate repository tasks with a Rust xtask                                   |
 | [0011](0011-core-refresh-strategy.md)             | Refresh the core data in place, in one transaction                            |
 | [0012](0012-local-and-api-embedders.md)           | Embed queries locally by default, or with an embedding API                    |
+| [0013](0013-providers-over-http-and-sse.md)       | Talk to AI providers over plain HTTP and server-sent events                   |

@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 
 import { BookmarksView } from "@/features/bookmarks/BookmarksView";
+import { ChatView } from "@/features/chat/ChatView";
 import { CollectionView } from "@/features/collections/CollectionView";
 import { CollectionsView } from "@/features/collections/CollectionsView";
 import { CompareView } from "@/features/compare/CompareView";
@@ -171,6 +172,34 @@ export const collectionRoute = createRoute({
   },
 });
 
+/** `/chat`: a new chat (spec §13.3). */
+const chatRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/chat",
+  component: function NewChatRoute() {
+    return <ChatView sessionId={null} />;
+  },
+});
+
+/** `/chat/:id`: one chat session. */
+export const chatSessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/chat/$id",
+  params: {
+    parse: ({ id }) => {
+      const parsed = parseIdParam(id);
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack Router signals 404 by throwing
+      if (parsed === null) throw notFound();
+      return { id: parsed };
+    },
+    stringify: ({ id }) => ({ id: String(id) }),
+  },
+  component: function ChatSessionRoute() {
+    const { id } = chatSessionRoute.useParams();
+    return <ChatView sessionId={id} />;
+  },
+});
+
 /**
  * Hash history: the app is served from local files inside the webview, where
  * there is no server to answer deep paths on reload.
@@ -187,6 +216,8 @@ export const router = createRouter({
     notesRoute,
     collectionsRoute,
     collectionRoute,
+    chatRoute,
+    chatSessionRoute,
   ]),
   history: createHashHistory(),
   defaultNotFoundComponent: SurahNotFound,

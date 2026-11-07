@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { packTitle } from "@/features/packs/packFormat";
 import { PROVIDER_NAMES } from "@/features/related/providerNames";
-import type { ApiProvider } from "@/lib/bindings";
+import type { ProviderId } from "@/lib/bindings";
 import {
   useApiKeys,
   useCatalog,
@@ -19,11 +19,17 @@ import { useUiStore } from "@/stores/ui";
 
 import { RadioField } from "./fields";
 
-const PROVIDERS: readonly ApiProvider[] = ["openai", "voyage", "gemini", "openai_compatible"];
+const PROVIDERS: readonly ProviderId[] = [
+  "anthropic",
+  "openai",
+  "voyage",
+  "gemini",
+  "openai_compatible",
+];
 
 /**
  * Settings → Providers: API keys in the OS keychain, the address of an
- * OpenAI-compatible server and the active semantic search pack (spec §7.4,
+ * OpenAI-compatible server and the active semantic search pack (spec §7.4, §8,
  * §14.2). Keys never come back from the core; the screen only shows whether
  * each one is saved.
  */
@@ -55,7 +61,7 @@ export function ProviderSettings() {
   );
 }
 
-function KeyField({ provider, saved }: { provider: ApiProvider; saved: boolean | undefined }) {
+function KeyField({ provider, saved }: { provider: ProviderId; saved: boolean | undefined }) {
   const { t } = useTranslation();
   const inputId = useId();
   const [value, setValue] = useState("");

@@ -42,6 +42,12 @@ const JALALAYN: TafsirInfo = {
 };
 
 vi.mock("@/lib/queries", () => ({
+  useAiStatus: () => ({ data: { state: "no_provider" } }),
+  useTafsirTranslations: () => ({ data: [], isError: false }),
+  useTafsirEstimate: () => ({ data: undefined }),
+  useTafsirTranslated: () => () => Promise.resolve(),
+  translateTafsir: () => Promise.reject(new Error("not in this test")),
+  cancelGeneration: () => Promise.resolve(null),
   useSurahs: () => ({
     data: [
       { number: 1, ayah_count: 7 },

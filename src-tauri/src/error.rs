@@ -90,6 +90,13 @@ pub enum AppErrorCode {
     ProviderRateLimited,
     /// The provider answered with another error or an unexpected response.
     ProviderFailed,
+    /// The provider sent nothing back in time (a thinking model under load).
+    ProviderTimeout,
+    /// The model is overloaded (HTTP 503), even after one retry.
+    ProviderOverloaded,
+    /// AI features need a provider, a key (or server address) and a model
+    /// (spec §8); `get_ai_status` says what is missing.
+    AiUnavailable,
 }
 
 /// Error returned by every command: `{ code, message }` on the frontend.

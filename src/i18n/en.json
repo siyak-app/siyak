@@ -22,7 +22,8 @@
     "library": "Your library",
     "bookmarks": "Bookmarks",
     "notes": "Notes",
-    "collections": "Collections"
+    "collections": "Collections",
+    "chat": "Chat"
   },
   "reader": {
     "meccan": "Meccan",
@@ -70,7 +71,6 @@
       "notes": "Notes",
       "chat": "Chat"
     },
-    "coming_soon": "Coming in a later version.",
     "selected_verse": "Selected verse:"
   },
   "command_palette": {
@@ -162,8 +162,8 @@
     "import_report": "Added: {{bookmarks}} bookmarks, {{notes}} notes, {{collections}} collections, {{items}} collection items, {{translations}} tafsir translations.",
     "import_skipped_one": "{{count}} entry was left out: its verse or pack is not available here.",
     "import_skipped_other": "{{count}} entries were left out: their verses or packs are not available here.",
-    "providers_title": "Embedding providers",
-    "providers_hint": "API semantic search packs embed your searches with a provider and your key. Keys are kept in the system keychain and never shown again.",
+    "providers_title": "API providers",
+    "providers_hint": "API semantic search packs and the AI features (chat, tafsir summaries) use a provider with your key. Keys are kept in the system keychain and never shown again.",
     "key_advice_separate": "Create a separate key for this app.",
     "key_advice_limit": "Set a spending limit for this key or project in your provider's dashboard.",
     "key_advice_only_provider": "Your key is only sent from this computer to the provider you chose. If in doubt, revoke it in your provider's dashboard.",
@@ -179,7 +179,8 @@
     "server_hint": "For example Ollama or LM Studio. Plain HTTP is allowed only to this computer; other servers need HTTPS.",
     "server_save": "Save",
     "active_pack": "Semantic search pack",
-    "active_pack_hint": "Searching by meaning and similar verses use this pack."
+    "active_pack_hint": "Searching by meaning and similar verses use this pack.",
+    "tab_ai": "AI"
   },
   "compare": {
     "loading": "Loading…",
@@ -473,7 +474,10 @@
     "keychain_failed": "The system keychain could not save or read the API key.",
     "provider_key_rejected": "The provider rejected the API key. Check it in Settings → Providers.",
     "provider_rate_limited": "The provider is limiting requests or the key's quota is used up. Try again later.",
-    "provider_failed": "The provider answered with an error. Try again later."
+    "provider_failed": "The provider answered with an error. Try again later.",
+    "provider_timeout": "The model did not answer in time. It may be busy; try again in a moment or choose a faster model.",
+    "provider_overloaded": "The model is overloaded right now. Try again in a moment or choose another model in Settings.",
+    "ai_unavailable": "AI features are not set up. Choose a provider and a model in Settings → AI."
   },
   "term": {
     "lemma": {
@@ -517,7 +521,7 @@
     "researcher_description": "More on screen: two translations, the side panel open and technical terms shown.",
     "note": "You can change all of this later in Settings → Display & behaviour.",
     "packs_title": "Add more content?",
-    "packs_description": "The Quran text and built-in translations are ready. These packs add word analysis and a tafsir.",
+    "packs_description": "The Quran text and built-in translations are ready. These packs add word analysis, a tafsir and semantic search.",
     "packs_unavailable": "The pack list could not be loaded. You can add packs later from the Packs screen.",
     "packs_note": "Downloads continue in the background; you can manage packs any time from the Packs screen.",
     "packs_later": "Not now",
@@ -598,5 +602,99 @@
     "occurrences": "Occurrences",
     "source": "Source",
     "quran_text": "Quran text"
+  },
+  "ai_settings": {
+    "title": "AI features",
+    "hint": "Chat and tafsir summaries are optional. They use the provider you choose here, with your key or your own server. Reading, search and notes never need them.",
+    "provider": "Provider",
+    "provider_none": "None (AI off)",
+    "open_providers": "Add it on the Providers tab",
+    "ready": "Ready.",
+    "chat_model": "Chat model",
+    "translation_model": "Tafsir summary and translation model",
+    "translation_model_hint": "A cheaper model is usually enough for summaries.",
+    "same_as_chat": "Same as the chat model",
+    "choose_model": "Choose a model",
+    "models_loading": "Loading models…",
+    "models_failed": "The model list could not be loaded. You can type the model name instead.",
+    "arabic_sources": "The chat model can read classical Arabic",
+    "arabic_sources_hint": "When on, Arabic tafsirs are given to the chat model as sources. Turn it off for small local models.",
+    "chat_tafsirs": "Tafsirs used in chat",
+    "chat_tafsirs_hint": "Up to {{count}}. Every installed tafsir stays available in the reader; only these go into chat answers."
+  },
+  "ai": {
+    "key_missing": "AI features use {{provider}}: add your {{provider}} API key.",
+    "base_url_missing": "AI features need the address of your server.",
+    "cost_unknown": "unknown"
+  },
+  "spending": {
+    "title": "Spending",
+    "period": "Period",
+    "month": "This month",
+    "total": "All time",
+    "none": "Nothing spent yet.",
+    "known_total": "Known cost: {{cost}}",
+    "unpriced_one": "({{count}} request with an unknown price, e.g. a local model)",
+    "unpriced_other": "({{count}} requests with an unknown price, e.g. a local model)",
+    "feature": "Feature",
+    "model": "Model",
+    "requests": "Requests",
+    "tokens": "Tokens",
+    "cost": "Cost",
+    "feature_chat": "Chat",
+    "feature_translate": "Tafsir",
+    "limit": "Monthly limit (USD)",
+    "limit_placeholder": "No limit",
+    "limit_hint": "Past this amount, Siyak asks before each AI request. It never blocks; also set a limit in your provider's dashboard."
+  },
+  "tafsir_ai": {
+    "summarize": "Summarize",
+    "translate": "Translate",
+    "translate_more": "Translate more",
+    "cost_unknown": "cost unknown",
+    "writing": "Writing…",
+    "stop": "Stop",
+    "setup": "Summaries and translations need an AI provider and model.",
+    "open_settings": "Set up AI",
+    "over_limit": "This passes your monthly spending limit. Continue?",
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "machine_summary": "Machine summary",
+    "machine_translation": "Machine translation",
+    "label": "{{kind}} · {{source}} · {{date}}",
+    "cache_failed": "Saved summaries and translations could not be loaded."
+  },
+  "chat": {
+    "title": "Chat",
+    "sessions": "Chat sessions",
+    "new": "New chat",
+    "untitled": "Untitled chat",
+    "rename": "Rename “{{title}}”",
+    "rename_label": "Chat title",
+    "delete": "Delete “{{title}}”",
+    "open_full": "Open in the Chat screen",
+    "empty": "Ask a question about the Quran. Answers rely on the verses and tafsirs found for it, with a citation for every claim.",
+    "thinking": "Finding verses and writing…",
+    "message_label": "Your question",
+    "placeholder": "Ask about a verse, a word or a theme…",
+    "send": "Send",
+    "stop": "Stop",
+    "cost": "Estimated cost: ≈ {{cost}}",
+    "cost_unknown": "Estimated cost: unknown",
+    "over_limit": "This passes your monthly spending limit. Send anyway?",
+    "disclaimer": "Answers are generated by AI and may contain errors; they are not a religious ruling.",
+    "cited": "Cited:",
+    "sources_one": "Sources used ({{count}})",
+    "sources_other": "Sources used ({{count}})",
+    "sources_verses": "Verses",
+    "sources_tafsirs": "Tafsir",
+    "sources_partial": "(shortened)",
+    "sources_query": "Searched for: {{query}}",
+    "tafsir_missing": "The chat tafsir {{pack}} is not installed, so it was not used.",
+    "arabic_skipped": "The selected model cannot read Arabic tafsirs; only translations were used.",
+    "add_to_collection": "Add to collection",
+    "ai_answer": "AI answer",
+    "ai_required": "Chat needs an AI provider and model.",
+    "open_settings": "Open settings"
   }
 }

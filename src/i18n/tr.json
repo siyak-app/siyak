@@ -22,7 +22,8 @@
     "library": "Kitaplığınız",
     "bookmarks": "Yer imleri",
     "notes": "Notlar",
-    "collections": "Koleksiyonlar"
+    "collections": "Koleksiyonlar",
+    "chat": "Sohbet"
   },
   "reader": {
     "meccan": "Mekkî",
@@ -70,7 +71,6 @@
       "notes": "Notlar",
       "chat": "Sohbet"
     },
-    "coming_soon": "Sonraki bir sürümde gelecek.",
     "selected_verse": "Seçili ayet:"
   },
   "command_palette": {
@@ -162,8 +162,8 @@
     "import_report": "Eklenen: {{bookmarks}} yer imi, {{notes}} not, {{collections}} koleksiyon, {{items}} koleksiyon ögesi, {{translations}} tefsir çevirisi.",
     "import_skipped_one": "{{count}} kayıt alınmadı: ayeti veya paketi burada yok.",
     "import_skipped_other": "{{count}} kayıt alınmadı: ayetleri veya paketleri burada yok.",
-    "providers_title": "Embedding sağlayıcıları",
-    "providers_hint": "API'li anlamsal arama paketleri aramalarınızı bir sağlayıcıda, sizin anahtarınızla işler. Anahtarlar sistem anahtar zincirinde saklanır ve bir daha gösterilmez.",
+    "providers_title": "API sağlayıcıları",
+    "providers_hint": "API anlamsal arama paketleri ve yapay zekâ özellikleri (sohbet, tefsir özetleri) anahtarınızla bir sağlayıcı kullanır. Anahtarlar sistem anahtar zincirinde saklanır ve bir daha gösterilmez.",
     "key_advice_separate": "Bu uygulama için ayrı bir anahtar oluşturun.",
     "key_advice_limit": "Sağlayıcı panelinden bu anahtara/projeye harcama limiti koyun.",
     "key_advice_only_provider": "Anahtarınız yalnızca bu bilgisayardan seçtiğiniz sağlayıcıya gönderilir. Şüphelenirseniz sağlayıcı panelinden iptal edin.",
@@ -179,7 +179,8 @@
     "server_hint": "Örneğin Ollama veya LM Studio. Düz HTTP yalnızca bu bilgisayara izinli; diğer sunucular HTTPS gerektirir.",
     "server_save": "Kaydet",
     "active_pack": "Anlamsal arama paketi",
-    "active_pack_hint": "Anlamına göre arama ve benzer ayetler bu paketi kullanır."
+    "active_pack_hint": "Anlamına göre arama ve benzer ayetler bu paketi kullanır.",
+    "tab_ai": "Yapay zekâ"
   },
   "compare": {
     "loading": "Yükleniyor…",
@@ -473,7 +474,10 @@
     "keychain_failed": "Sistem anahtar zinciri API anahtarını kaydedemedi veya okuyamadı.",
     "provider_key_rejected": "Sağlayıcı API anahtarını reddetti. Ayarlar → Sağlayıcılar'dan kontrol edin.",
     "provider_rate_limited": "Sağlayıcı istekleri sınırlıyor veya anahtarın kotası doldu. Daha sonra tekrar deneyin.",
-    "provider_failed": "Sağlayıcı bir hatayla yanıt verdi. Daha sonra tekrar deneyin."
+    "provider_failed": "Sağlayıcı bir hatayla yanıt verdi. Daha sonra tekrar deneyin.",
+    "provider_timeout": "Model zamanında yanıt vermedi. Yoğun olabilir; biraz sonra yeniden deneyin ya da daha hızlı bir model seçin.",
+    "provider_overloaded": "Model şu anda aşırı yoğun. Biraz sonra yeniden deneyin ya da Ayarlar'dan başka bir model seçin.",
+    "ai_unavailable": "Yapay zekâ özellikleri ayarlanmadı. Ayarlar → Yapay zekâ bölümünden bir sağlayıcı ve model seçin."
   },
   "term": {
     "lemma": {
@@ -517,7 +521,7 @@
     "researcher_description": "Ekranda daha fazlası: iki meal, açık yan panel ve görünür teknik terimler.",
     "note": "Bunların hepsini daha sonra Ayarlar → Görünüm ve davranış bölümünden değiştirebilirsiniz.",
     "packs_title": "Daha fazla içerik eklensin mi?",
-    "packs_description": "Kur'an metni ve uygulamayla gelen mealler hazır. Bu paketler kelime analizi ve bir tefsir ekler.",
+    "packs_description": "Kur'an metni ve uygulamayla gelen mealler hazır. Bu paketler kelime analizi, bir tefsir ve anlamsal arama ekler.",
     "packs_unavailable": "Paket listesi yüklenemedi. Paketleri daha sonra Paketler ekranından ekleyebilirsiniz.",
     "packs_note": "İndirmeler arka planda sürer; paketleri istediğiniz zaman Paketler ekranından yönetebilirsiniz.",
     "packs_later": "Şimdi değil",
@@ -598,5 +602,99 @@
     "occurrences": "Geçtiği yer sayısı",
     "source": "Kaynak",
     "quran_text": "Kur'an metni"
+  },
+  "ai_settings": {
+    "title": "Yapay zekâ özellikleri",
+    "hint": "Sohbet ve tefsir özetleri isteğe bağlıdır. Burada seçtiğiniz sağlayıcıyı, anahtarınızla ya da kendi sunucunuzla kullanırlar. Okuma, arama ve notlar bunlara hiç ihtiyaç duymaz.",
+    "provider": "Sağlayıcı",
+    "provider_none": "Yok (yapay zekâ kapalı)",
+    "open_providers": "Sağlayıcılar sekmesinden ekleyin",
+    "ready": "Hazır.",
+    "chat_model": "Sohbet modeli",
+    "translation_model": "Tefsir özeti ve çevirisi modeli",
+    "translation_model_hint": "Özetler için genellikle daha ucuz bir model yeterlidir.",
+    "same_as_chat": "Sohbet modeliyle aynı",
+    "choose_model": "Bir model seçin",
+    "models_loading": "Modeller yükleniyor…",
+    "models_failed": "Model listesi yüklenemedi. Model adını elle yazabilirsiniz.",
+    "arabic_sources": "Sohbet modeli klasik Arapça okuyabilir",
+    "arabic_sources_hint": "Açıkken Arapça tefsirler sohbet modeline kaynak olarak verilir. Küçük yerel modeller için kapatın.",
+    "chat_tafsirs": "Sohbette kullanılan tefsirler",
+    "chat_tafsirs_hint": "En fazla {{count}}. Kurulu her tefsir okuyucuda kullanılabilir; sohbet yanıtlarına yalnızca bunlar girer."
+  },
+  "ai": {
+    "key_missing": "Yapay zekâ özellikleri {{provider}} kullanır: {{provider}} API anahtarınızı ekleyin.",
+    "base_url_missing": "Yapay zekâ özellikleri sunucunuzun adresine ihtiyaç duyar.",
+    "cost_unknown": "bilinmiyor"
+  },
+  "spending": {
+    "title": "Harcama",
+    "period": "Dönem",
+    "month": "Bu ay",
+    "total": "Tüm zamanlar",
+    "none": "Henüz harcama yok.",
+    "known_total": "Bilinen maliyet: {{cost}}",
+    "unpriced_one": "(fiyatı bilinmeyen {{count}} istek, örneğin yerel bir model)",
+    "unpriced_other": "(fiyatı bilinmeyen {{count}} istek, örneğin yerel bir model)",
+    "feature": "Özellik",
+    "model": "Model",
+    "requests": "İstek",
+    "tokens": "Token",
+    "cost": "Maliyet",
+    "feature_chat": "Sohbet",
+    "feature_translate": "Tefsir",
+    "limit": "Aylık sınır (USD)",
+    "limit_placeholder": "Sınır yok",
+    "limit_hint": "Bu tutar aşılınca Siyak her yapay zekâ isteğinden önce sorar. Hiçbir şeyi engellemez; sağlayıcınızın panelinde de bir sınır belirleyin."
+  },
+  "tafsir_ai": {
+    "summarize": "Özetle",
+    "translate": "Çevir",
+    "translate_more": "Devamını çevir",
+    "cost_unknown": "maliyet bilinmiyor",
+    "writing": "Yazılıyor…",
+    "stop": "Durdur",
+    "setup": "Özet ve çeviri için bir yapay zekâ sağlayıcısı ve modeli gerekir.",
+    "open_settings": "Yapay zekâyı ayarla",
+    "over_limit": "Bu, aylık harcama sınırınızı aşıyor. Devam edilsin mi?",
+    "continue": "Devam et",
+    "cancel": "Vazgeç",
+    "machine_summary": "Makine özeti",
+    "machine_translation": "Makine çevirisi",
+    "label": "{{kind}} · {{source}} · {{date}}",
+    "cache_failed": "Kayıtlı özet ve çeviriler yüklenemedi."
+  },
+  "chat": {
+    "title": "Sohbet",
+    "sessions": "Sohbetler",
+    "new": "Yeni sohbet",
+    "untitled": "Adsız sohbet",
+    "rename": "“{{title}}” sohbetini yeniden adlandır",
+    "rename_label": "Sohbet başlığı",
+    "delete": "“{{title}}” sohbetini sil",
+    "open_full": "Sohbet ekranında aç",
+    "empty": "Kur'an hakkında bir soru sorun. Yanıtlar, soru için bulunan ayetlere ve tefsirlere dayanır; her iddia için kaynak gösterilir.",
+    "thinking": "Ayetler bulunuyor ve yanıt yazılıyor…",
+    "message_label": "Sorunuz",
+    "placeholder": "Bir ayet, kelime ya da konu hakkında sorun…",
+    "send": "Gönder",
+    "stop": "Durdur",
+    "cost": "Tahmini maliyet: ≈ {{cost}}",
+    "cost_unknown": "Tahmini maliyet: bilinmiyor",
+    "over_limit": "Bu, aylık harcama sınırınızı aşıyor. Yine de gönderilsin mi?",
+    "disclaimer": "Yanıtlar yapay zekâ tarafından üretilir ve hata içerebilir; dinî bir hüküm (fetva) değildir.",
+    "cited": "Kaynak ayetler:",
+    "sources_one": "Kullanılan kaynaklar ({{count}})",
+    "sources_other": "Kullanılan kaynaklar ({{count}})",
+    "sources_verses": "Ayetler",
+    "sources_tafsirs": "Tefsir",
+    "sources_partial": "(kısaltılmış)",
+    "sources_query": "Aranan: {{query}}",
+    "tafsir_missing": "Sohbet tefsiri {{pack}} kurulu olmadığı için kullanılmadı.",
+    "arabic_skipped": "Seçilen model Arapça tefsirleri okuyamıyor; yalnızca mealler kullanıldı.",
+    "add_to_collection": "Koleksiyona ekle",
+    "ai_answer": "Yapay zekâ yanıtı",
+    "ai_required": "Sohbet için bir yapay zekâ sağlayıcısı ve modeli gerekir.",
+    "open_settings": "Ayarları aç"
   }
 }

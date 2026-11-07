@@ -136,6 +136,16 @@ impl Packs {
         self.inner.store.load(&self.inner.net, force).await
     }
 
+    /// The network client; the pricing file is fetched with it.
+    pub fn net(&self) -> &Net {
+        &self.inner.net
+    }
+
+    /// Where the manifest and packs come from.
+    pub fn source(&self) -> &crate::packs::manifest::PackSource {
+        self.inner.store.source()
+    }
+
     /// The Packs screen for `snapshot`, with the current jobs.
     pub fn catalog(
         &self,

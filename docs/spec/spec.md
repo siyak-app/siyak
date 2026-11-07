@@ -1,6 +1,6 @@
 # Siyak — Quran Research Tool · Technical Specification (v1)
 
-> Status: Draft · Last updated: 2026-10-21
+> Status: Draft · Last updated: 2026-11-07
 > This document defines the core architecture of the application. Items marked as decisions are locked; open questions are listed in §18.
 > This English version is the source of truth. A Turkish translation is kept alongside it as `spec.tr.md` (§16.1).
 
@@ -748,7 +748,7 @@ pub trait Embedder: Send + Sync {
 - **Status:** `get_semantic_status` returns why semantic features are or are not available: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `base_url_invalid`, `not_built` or `ready` (with the provider if queries leave the computer). The interface turns each into an action (install, add key, enter address); keys and the address are entered under Settings → Providers, which also picks the active pack when several are installed.
 - **Lazy loading:** the embedder is built on first use and kept until either pack's version or the address changes.
 - **Compatibility:** if the embedder's `embedding_model` and `dim` differ from the active vector pack's, semantic features are disabled and the interface explains why.
-- **Privacy:** with an API pack, queries (and in chat the ranked tafsir paragraphs, §10) are sent to the provider through `net.rs` (§14.1). The pack is listed with the other semantic search packs, says so in its terms and is installed only after the user accepts them (`terms_ack`, §6.5).
+- **Privacy:** with an API pack, queries (in chat, the search sentence) are sent to the provider through `net.rs` (§14.1). The pack is listed with the other semantic search packs, says so in its terms and is installed only after the user accepts them (`terms_ack`, §6.5).
 - **Query:** cosine similarity of the query vector with every verse vector of the active pack, in memory (§5.4); the `k` best, optionally leaving out verses (the verse a cross-reference starts from).
 - Embeddings are computed **per verse**. Tafsir is never embedded; it reaches the chat through the verses it belongs to (§10).
 - **Verse text:** each verse is embedded as its Arabic text (Tanzil Simple Clean), Turkish translation (Diyanet Vakfı) and English translation (Pickthall), one per line, as one vector. Whatever the model, this scored best on the evaluation set: Arabic alone was weakest for Turkish and English queries, and separate vectors per language (averaged or the best of three) were worse than one vector of the combined text. The text is recorded in each vector pack (`source_text`).
@@ -789,14 +789,16 @@ pub trait LlmProvider: Send + Sync {
 | Anthropic | Messages API, streaming |
 | OpenAI | streaming |
 | Google Gemini | streaming |
-| OpenAI-compatible | The user enters a `base_url`. Fully offline with Ollama/LM Studio; many models with one key through aggregators such as OpenRouter. The key is optional. |
+| OpenAI-compatible | The user enters a `base_url`, shared with semantic search (`semantic.base_url`). Fully offline with Ollama/LM Studio; many models with one key through aggregators such as OpenRouter. The key is optional. |
 
 **Model roles** (chosen separately in settings):
 - `chat_model`: for chat.
-- `translation_model`: for tafsir summaries/translations. By default the cheapest model of the selected provider is suggested.
+- `translation_model`: for tafsir summaries/translations. Unset, the chat model is used; the setting suggests a cheaper model.
+
+Providers are spoken to over plain HTTP and server-sent events through `net.rs`, without provider SDKs (ADR 0013); `get_ai_status` says what is missing (`no_provider`, `key_missing`, `base_url_missing`, `base_url_invalid`, `no_model`) or `ready`. A streamed answer can be stopped (`cancel_generation`).
 
 **Model capability flags** (user-adjustable, with defaults for known models):
-- `arabic_sources`: can the model reliably read classical Arabic sources? Off by default for local/small models.
+- `arabic_sources`: can the model reliably read classical Arabic sources? Stored per `provider/model` in `ai.arabic_sources`; on by default for the hosted providers, off for an OpenAI-compatible server, which usually runs a small local model.
 
 ---
 
@@ -808,7 +810,7 @@ pub trait LlmProvider: Send + Sync {
 
 ### 9.2 Flow
 1. Check the cache (`tafsir_translations`). If present, show it for free.
-2. Otherwise show the **estimated cost** next to the button: input tokens are estimated locally with a tokenizer approximation, output with a per-mode estimate, multiplied by `pricing.json`. E.g. "Summarize (≈ 0.3 ¢)".
+2. Otherwise show the **estimated cost** next to the button: input tokens are estimated locally from the character count (Arabic script counts about one token per two characters, other text one per 3.5), output with a per-mode estimate, multiplied by `pricing.json`. E.g. "Summarize (≈ 0.3 ¢)". `pricing.json` comes from the manifest's `pricing_url` and is cached for a day; a model missing from it costs "unknown". A dated snapshot (`model-20261101`) takes its model's price.
 3. If the user confirms, the request goes to `translation_model` and the result is streamed.
 4. The result is cached, and the actual token counts are written to `llm_usage`.
 
@@ -839,21 +841,21 @@ Users submitting a translation as a contribution to `siyak-data`, and reviewed t
 
 ## 10. AI chat (RAG)
 
-1. Embed the user's message and fetch the top-k (default 8) verses from the active vector pack.
+1. The chat model rewrites the user's message, with the last few messages of the session, into one descriptive search sentence (e.g. "İslam'da miras" → "Kur'an'da miras hükümleri: anne, baba, çocuklar ve eşlerin mirastan payları"); a short or follow-up question finds the right verses only when it names its topic the way a translation would. Embed that sentence (the message itself if the model returns nothing) and fetch the top-k (default 8) verses from the active vector pack. The sentence is shown under "Sources used" and its tokens count toward the message's cost.
 2. For each verse add the Arabic text and the selected translation(s).
 3. **Automatically** add the tafsirs of the retrieved verses, within a context budget:
    - **Chat tafsirs** are selected separately (`settings.chat.tafsirs`, at most 3). All installed tafsirs are available in the reader; only this selection goes to the chat. Default: al-Jalalayn (concise) + Ibn Kathir (mid-sized). If a selected tafsir's pack is not installed, it is skipped and the interface says so.
    - **Budget by verse rank:** the total tafsir budget (default ~6,000 tokens, adjusted to the model's context window) is spread over the 3 most relevant verses; the remaining verses get only the Arabic text and translation.
-   - **Paragraph selection for long passages:** if a passage exceeds the per-verse budget, its `tafsir_paragraphs` are ranked against the question on the fly with the active embedder (§7.4; with an API pack the paragraphs are sent to its provider), and the most relevant paragraphs are added, in their original order, until the budget is full. No persistent tafsir vectors are stored; only the few dozen paragraphs of that passage are embedded at query time. Skipped paragraphs are marked "[…]" in the context.
+   - **Long passages:** the passage of a retrieved verse is already the relevant tafsir, so it is not ranked or embedded. If it exceeds its share of the budget, its `tafsir_paragraphs` are added from the start, in order, until the budget is full; a first paragraph longer than the whole share is cut at a word break. The rest is marked "[…]" in the context.
    - **Language:** tafsirs in the UI language can always be added. Arabic tafsirs are added only if `chat_model.arabic_sources = true`; the model then quotes the original wording when it cites them. If the flag is off, the interface warns: "The selected model cannot read Arabic tafsirs; only translations were used."
-   - **Cost:** if the context exceeds a user-defined threshold, the estimated cost is shown next to the send button (§9.4).
+   - **Cost:** the estimated cost of a message (history, message and a typical retrieved context) is shown under the message box while typing (`estimate_chat`); past the monthly limit, sending asks first (§9.4).
 4. System prompt:
    - Rely only on the provided context and give a `[surah:ayah]` citation for every claim; name the tafsir when quoting one.
    - Say so explicitly when the context is insufficient.
    - Do not issue legal rulings (*fatwā*); refer such questions to qualified scholars.
 5. `[surah:ayah]` references in the answer are parsed, stored in `cited_verses` and shown as clickable links. All sources that went into the RAG context are stored in `sources_json` and can be opened as "sources used".
 6. Chat does not work without a vector pack; the interface suggests downloading one.
-7. A chat answer, or part of it, can be added to a collection as a note (labelled "AI answer").
+7. A chat answer can be added to a collection as a note on the first verse it cites, its first line labelling it "AI answer" with provider, model and date. An answer that cites no verse has nothing to attach the note to and cannot be added.
 
 Persistent notice: "Answers are generated by AI and may contain errors; they are not a religious ruling."
 
@@ -894,7 +896,7 @@ All commands return `Result<T, AppError>` (`{ code, message }`). Types are expor
 | Area | Commands |
 |---|---|
 | Content | `list_surahs`, `get_verses(surah, translation_ids[])` (with the words of each verse when a morphology pack is installed), `get_verse_words(verse_id)`, `get_compare(from, to, translation_ids[], tafsir_ids[])` |
-| Tafsir | `list_tafsirs`, `get_tafsir(verse_id, pack_id)`, `get_tafsir_introduction(pack_id)`, `estimate_tafsir_translation(tafsir_id, paragraph_idx?, mode)`, `translate_tafsir(…, channel)` |
+| Tafsir | `list_tafsirs`, `get_tafsir(verse_id, pack_id)`, `get_tafsir_introduction(pack_id)`, `list_tafsir_translations(pack_id, tafsir_id, target_lang)`, `estimate_tafsir_translation(pack_id, tafsir_id, paragraph_idx?, mode, target_lang)`, `translate_tafsir(request_id, …, channel)` |
 | Morphology | `get_morphology_pack`, `get_word(word_id)`, `concordance(root_id \| lemma_id, translation_id?, limit, offset)`, `search_roots(query)` |
 | Search | `classify_query(query)`, `search_text(query, scope, pack_ids[], filters, limit)`, `search_semantic(query, limit)`, `semantic_status()` |
 | Cross-refs | `related_verses(verse_id)` → `{ semantic[], shared_roots[] }` |
@@ -902,7 +904,8 @@ All commands return `Result<T, AppError>` (`{ code, message }`). Types are expor
 | User | `toggle_bookmark`, `list_bookmarks`, `upsert_note`, `delete_note`, `list_notes(range?)` |
 | Collections | `list_collections`, `get_collection`, `upsert_collection`, `delete_collection`, `add_collection_item`, `update_collection_item`, `move_collection_item`, `remove_collection_item` |
 | Export | `export_collection_markdown(id, translation_ids[], labels, style)`, `list_citation_styles()`, `format_citation(ref, style)`, `export_user_data()`, `import_user_data(mode)` |
-| AI | `set_api_key`, `delete_api_key`, `has_api_key`, `list_models(provider)`, `chat_send(…, channel)`, `list_chat_sessions`, `get_chat_session`, `delete_chat_session`, `get_usage_summary(period)` |
+| AI | `get_api_keys`, `set_api_key`, `delete_api_key`, `get_ai_status`, `list_models(provider)`, `cancel_generation(request_id)`, `get_usage_summary(period)` |
+| Chat | `chat_send(request_id, session_id?, message, language, channel)`, `estimate_chat(session_id?, message)`, `list_chat_sessions`, `get_chat_session`, `rename_chat_session`, `delete_chat_session` |
 | System | `get_settings`, `set_setting`, `get_network_log(limit)` |
 
 Events: `pack://progress`, `pack://done`, `pack://error`. Streaming (chat, translation) uses `ipc::Channel`.
@@ -969,13 +972,13 @@ Reference mockup: the "Okuma Ekranı Mockup" canvas (reader and researcher defau
 - All HTTP requests go through a single client in `net.rs`, which has a fixed host allow-list:
   - `quran.kemalozyon.com` (manifest, pricing, update metadata)
   - `github.com`, `objects.githubusercontent.com` (packs, updates)
-  - Provider API hosts (Anthropic, OpenAI, Gemini; Voyage for embeddings). The embedding hosts are on the list since M7: `api.openai.com`, `api.voyageai.com`, `generativelanguage.googleapis.com`.
+  - Provider API hosts (Anthropic, OpenAI, Gemini; Voyage for embeddings): `api.openai.com`, `api.voyageai.com`, `generativelanguage.googleapis.com` since M7, `api.anthropic.com` since M8.
   - The `base_url` the user explicitly entered for an OpenAI-compatible provider: HTTPS, or plain HTTP only to `localhost`, `127.0.0.1` or `[::1]`; no credentials, query or fragment in it
 - Requests that carry a key (POST) follow no redirects, so a key is never sent on to another host.
 - **Connection log:** for each request the host, time, purpose (`pack`, `update`, `chat`, `translate`, `embed`) and status are recorded; no content is logged. The last 500 entries are kept in memory and in `user.db`, viewable under Settings → Privacy.
 
 ### 14.2 API keys
-- Stored in the OS keychain (service: `com.kemalozyon.siyak`, account: `<provider>`). Never returned to the webview; the interface only learns "saved / not saved" (`get_api_keys`, `set_api_key`, `delete_api_key`; M7, for the embedding APIs). A key must be one line of visible ASCII.
+- Stored in the OS keychain (service: `com.kemalozyon.siyak`, account: `<provider>`). Never returned to the webview; the interface only learns "saved / not saved" (`get_api_keys`, `set_api_key`, `delete_api_key`; one key per provider, shared by the embedding APIs and the AI layer). A key must be one line of visible ASCII.
 - Guidance on the add-key screen:
   1. "Create a separate key for this app."
   2. "Set a spending limit for this key/project in your provider's dashboard."

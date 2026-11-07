@@ -400,7 +400,7 @@ pub struct TafsirInfo {
 }
 
 /// A verse by its surah and number.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct VerseRef {
     /// Surah number.
     pub surah: u16,

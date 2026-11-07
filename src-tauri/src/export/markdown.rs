@@ -327,7 +327,7 @@ fn quote(text: &str) -> String {
 
 /// The small HTML subset of tafsir text (spec §5.2) as Markdown: bold, italic
 /// and line breaks are kept, any other tag goes and its text stays.
-fn html_to_markdown(html: &str) -> String {
+pub(crate) fn html_to_markdown(html: &str) -> String {
     let mut out = String::new();
     let mut rest = html;
     while let Some(start) = rest.find('<') {

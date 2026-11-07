@@ -749,7 +749,7 @@ pub trait Embedder: Send + Sync {
 - **Durum:** `get_semantic_status`, anlamsal özelliklerin neden kullanılabildiğini ya da kullanılamadığını döner: `no_vector_pack`, `invalid`, `model_pack_missing`, `mismatch`, `key_missing`, `base_url_missing`, `base_url_invalid`, `not_built` veya `ready` (sorgular bilgisayardan çıkıyorsa sağlayıcıyla birlikte). Arayüz her birini bir eyleme çevirir (kur, anahtar ekle, adres gir); anahtarlar ve adres Ayarlar → Sağlayıcılar'dan girilir, birden çok paket kuruluysa etkin paket de orada seçilir.
 - **Lazy-load:** Embedder ilk kullanımda oluşturulur; paketlerden birinin sürümü ya da adres değişene kadar tutulur.
 - **Uyumluluk:** Embedder'ın `embedding_model` ve `dim` değerleri aktif vektör paketininkilerle eşleşmezse anlamsal özellikler devre dışı kalır ve arayüz nedenini gösterir.
-- **Gizlilik:** API paketiyle sorgular (sohbette ayrıca sıralanan tefsir paragrafları, §10) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler diğer anlamsal arama paketleriyle birlikte listelenir, bunu koşullarında söyler ve ancak kullanıcı koşulları kabul ettikten sonra kurulur (`terms_ack`, §6.5).
+- **Gizlilik:** API paketiyle sorgular (sohbette arama cümlesi) `net.rs` üzerinden sağlayıcıya gönderilir (§14.1). Bu paketler diğer anlamsal arama paketleriyle birlikte listelenir, bunu koşullarında söyler ve ancak kullanıcı koşulları kabul ettikten sonra kurulur (`terms_ack`, §6.5).
 - **Sorgu:** Sorgu vektörünün aktif paketin her ayet vektörüyle kosinüs benzerliği, bellekte (§5.4); en iyi `k` sonuç, istenirse bazı ayetler hariç (çapraz referansın başladığı ayet gibi).
 - Embedding'ler **ayet bazında** hesaplanır. Tefsir hiçbir zaman embed edilmez; sohbete ait olduğu ayetler üzerinden gider (§10).
 - **Ayet metni:** Her ayet Arapça metni (Tanzil Simple Clean), Türkçe meali (Diyanet Vakfı) ve İngilizce meali (Pickthall) alt alta yazılarak tek bir vektör olarak embed edilir. Değerlendirme setinde bu birleşim her modelde en iyi sonucu verdi: yalnızca Arapça, Türkçe ve İngilizce sorgularda en zayıf kaldı; dil başına ayrı vektörler (ortalaması ya da üçünün en iyisi) birleşik metnin tek vektöründen kötüydü. Metin her vektör paketinde kayıtlıdır (`source_text`).
@@ -790,14 +790,16 @@ pub trait LlmProvider: Send + Sync {
 | Anthropic | Messages API, streaming |
 | OpenAI | streaming |
 | Google Gemini | streaming |
-| OpenAI-uyumlu | Kullanıcı `base_url` girer. Ollama/LM Studio ile tamamen offline; OpenRouter gibi aggregator'larla tek anahtarla çok model. Anahtar opsiyonel. |
+| OpenAI-uyumlu | Kullanıcı `base_url` girer; anlamsal aramayla ortaktır (`semantic.base_url`). Ollama/LM Studio ile tamamen offline; OpenRouter gibi aggregator'larla tek anahtarla çok model. Anahtar opsiyonel. |
 
 **Model rolleri** (ayarlarda ayrı seçilir):
 - `chat_model`: sohbet için.
-- `translation_model`: tefsir özet/çeviri için. Varsayılan olarak seçilen sağlayıcının en ucuz modeli önerilir.
+- `translation_model`: tefsir özet/çeviri için. Seçilmezse sohbet modeli kullanılır; ayar daha ucuz bir model önerir.
+
+Sağlayıcılarla sağlayıcı SDK'ları olmadan, `net.rs` üzerinden düz HTTP ve server-sent events ile konuşulur (ADR 0013); `get_ai_status` neyin eksik olduğunu (`no_provider`, `key_missing`, `base_url_missing`, `base_url_invalid`, `no_model`) ya da `ready` döndürür. Akan bir yanıt durdurulabilir (`cancel_generation`).
 
 **Model yetenek bayrakları** (kullanıcı ayarlayabilir, bilinen modeller için varsayılanları vardır):
-- `arabic_sources`: Model klasik Arapça kaynakları güvenilir şekilde okuyabilir mi? Lokal/küçük modellerde varsayılan olarak kapalıdır.
+- `arabic_sources`: Model klasik Arapça kaynakları güvenilir şekilde okuyabilir mi? `ai.arabic_sources` içinde `provider/model` başına saklanır; barındırılan sağlayıcılarda varsayılan olarak açık, genellikle küçük bir lokal model çalıştıran OpenAI-uyumlu sunucuda kapalıdır.
 
 ---
 
@@ -809,7 +811,7 @@ pub trait LlmProvider: Send + Sync {
 
 ### 9.2 Akış
 1. Cache'e bak (`tafsir_translations`). Varsa ücretsiz göster.
-2. Yoksa butonun yanında **tahmini maliyeti** göster: girdi tokenları lokalde tokenizer yaklaşımıyla tahmin edilir, çıktı için moda göre bir tahmin kullanılır, sonuç `pricing.json` ile çarpılır. Örn. "Özetle (≈ 0,3 ¢)".
+2. Yoksa butonun yanında **tahmini maliyeti** göster: girdi tokenları lokalde karakter sayısından tahmin edilir (Arap harfleri yaklaşık iki karakterde bir, diğer metin 3,5 karakterde bir token), çıktı için moda göre bir tahmin kullanılır, sonuç `pricing.json` ile çarpılır. Örn. "Özetle (≈ 0,3 ¢)". `pricing.json` manifest'teki `pricing_url`'den gelir ve bir gün önbellekte tutulur; listede olmayan bir modelin maliyeti "bilinmiyor" olur. Tarihli bir sürüm (`model-20261101`) kendi modelinin fiyatını alır.
 3. Kullanıcı onaylarsa `translation_model` ile istek atılır ve sonuç stream edilir.
 4. Sonuç cache'lenir, gerçek token sayıları `llm_usage`'a yazılır.
 
@@ -840,21 +842,21 @@ Kullanıcının bir çeviriyi `siyak-data`'ya katkı olarak göndermesi ve incel
 
 ## 10. AI sohbet (RAG)
 
-1. Kullanıcı mesajını embed et ve aktif vektör paketinden top-k (varsayılan 8) ayeti getir.
+1. Sohbet modeli kullanıcının mesajını, oturumun son birkaç mesajıyla birlikte tek bir açıklayıcı arama cümlesine çevirir (ör. "İslam'da miras" → "Kur'an'da miras hükümleri: anne, baba, çocuklar ve eşlerin mirastan payları"); kısa veya önceki mesaja bağlı bir soru, doğru ayetleri ancak konusunu bir mealin anlatacağı gibi adlandırınca bulur. Bu cümleyi embed et (model bir şey döndürmezse mesajın kendisini) ve aktif vektör paketinden top-k (varsayılan 8) ayeti getir. Cümle "Kullanılan kaynaklar" altında gösterilir; token'ları mesajın maliyetine sayılır.
 2. Her ayet için Arapça metni ve seçili meal(ler)i ekle.
 3. Bulunan ayetlerin tefsirlerini **otomatik olarak** ekle, bağlam bütçesiyle sınırlı:
    - **Sohbet tefsirleri** ayrı seçilir (`settings.chat.tafsirs`, en fazla 3). Okuma ekranında kurulu tüm tefsirler kullanılabilir; sohbete yalnızca bu seçim gider. Varsayılan: Celâleyn (kısa) + İbn Kesîr (orta hacimli). Seçili tefsirin paketi kurulu değilse atlanır ve arayüz bunu belirtir.
    - **Ayet sırasına göre bütçe:** Toplam tefsir bütçesi (varsayılan ~6.000 token, modelin bağlam penceresine göre ayarlanır) en alakalı ilk 3 ayete dağıtılır; kalan ayetlere yalnızca Arapça metin ve meal gider.
-   - **Uzun pasajlarda paragraf seçimi:** Bir pasaj ayet başına bütçeyi aşarsa, `tafsir_paragraphs` o anda aktif embedder'la soruya göre sıralanır (§7.4; API paketinde paragraflar sağlayıcıya gönderilir) ve en alakalı paragraflar, orijinal sıralarıyla, bütçe dolana kadar eklenir. Tefsir için kalıcı vektör saklanmaz; yalnızca o pasajın birkaç düzine paragrafı anlık embed edilir. Atlanan paragraflar bağlamda "[…]" ile işaretlenir.
+   - **Uzun pasajlar:** Bulunan ayetin pasajı zaten ilgili tefsirdir; bu yüzden sıralanmaz, embed edilmez. Pasaj bütçedeki payını aşarsa `tafsir_paragraphs` baştan, sırayla, bütçe dolana kadar eklenir; tek başına payın tamamından uzun bir ilk paragraf kelime sınırında kesilir. Kalanı bağlamda "[…]" ile işaretlenir.
    - **Dil:** Arayüz dilindeki tefsirler her zaman eklenebilir. Arapça tefsirler yalnızca `chat_model.arabic_sources = true` ise eklenir; model aktarım yaparken orijinal ifadeyi de verir. Bayrak kapalıysa arayüz "Seçili model Arapça tefsirleri okuyamıyor; yalnızca meal kullanıldı" uyarısı gösterir.
-   - **Maliyet:** Bağlam, kullanıcının belirlediği eşiği aşarsa gönder butonunun yanında tahmini maliyet gösterilir (§9.4).
+   - **Maliyet:** Bir mesajın tahmini maliyeti (geçmiş, mesaj ve tipik bir getirilmiş bağlam) yazarken mesaj kutusunun altında gösterilir (`estimate_chat`); aylık sınır aşılacaksa göndermeden önce sorulur (§9.4).
 4. Sistem promptu:
    - Yalnızca verilen bağlama dayan, her iddia için `[sure:ayet]` atfı ver; tefsirden aktarımda tefsir adını belirt.
    - Bağlam yetersizse açıkça söyle.
    - Fıkhi hüküm/fetva verme; bu tür sorularda ilim ehline yönlendir.
 5. Yanıttaki `[sure:ayet]` referansları parse edilir, `cited_verses` alanına yazılır ve tıklanabilir link olarak gösterilir. RAG'a giren tüm kaynaklar `sources_json`'a kaydedilir ve "kullanılan kaynaklar" olarak açılabilir.
 6. Vektör paketi kurulu değilse sohbet çalışmaz; arayüz paket indirmeyi önerir.
-7. Sohbet cevabı veya bir kısmı koleksiyona not olarak eklenebilir ("AI cevabı" etiketiyle).
+7. Sohbet cevabı, andığı ilk ayete bağlı bir not olarak koleksiyona eklenebilir; notun ilk satırı onu sağlayıcı, model ve tarihle "Yapay zekâ yanıtı" olarak etiketler. Hiç ayet anmayan bir cevabın bağlanacağı bir ayet olmadığından eklenemez.
 
 Kalıcı uyarı: "Yanıtlar yapay zekâ tarafından üretilir, hata içerebilir; dini hüküm yerine geçmez."
 
@@ -895,7 +897,7 @@ Tüm komutlar `Result<T, AppError>` döner (`{ code, message }`). Tipler `specta
 | Alan | Komutlar |
 |---|---|
 | İçerik | `list_surahs`, `get_verses(surah, translation_ids[])` (morfoloji paketi kuruluysa her ayetin kelimeleriyle), `get_verse_words(verse_id)`, `get_compare(from, to, translation_ids[], tafsir_ids[])` |
-| Tefsir | `list_tafsirs`, `get_tafsir(verse_id, pack_id)`, `get_tafsir_introduction(pack_id)`, `estimate_tafsir_translation(tafsir_id, paragraph_idx?, mode)`, `translate_tafsir(…, channel)` |
+| Tefsir | `list_tafsirs`, `get_tafsir(verse_id, pack_id)`, `get_tafsir_introduction(pack_id)`, `list_tafsir_translations(pack_id, tafsir_id, target_lang)`, `estimate_tafsir_translation(pack_id, tafsir_id, paragraph_idx?, mode, target_lang)`, `translate_tafsir(request_id, …, channel)` |
 | Morfoloji | `get_morphology_pack`, `get_word(word_id)`, `concordance(root_id \| lemma_id, translation_id?, limit, offset)`, `search_roots(query)` |
 | Arama | `classify_query(query)`, `search_text(query, scope, pack_ids[], filters, limit)`, `search_semantic(query, limit)`, `semantic_status()` |
 | Çapraz ref. | `related_verses(verse_id)` → `{ semantic[], shared_roots[] }` |
@@ -903,7 +905,8 @@ Tüm komutlar `Result<T, AppError>` döner (`{ code, message }`). Tipler `specta
 | Kullanıcı | `toggle_bookmark`, `list_bookmarks`, `upsert_note`, `delete_note`, `list_notes(range?)` |
 | Koleksiyon | `list_collections`, `get_collection`, `upsert_collection`, `delete_collection`, `add_collection_item`, `update_collection_item`, `move_collection_item`, `remove_collection_item` |
 | Dışa aktarma | `export_collection_markdown(id, translation_ids[], labels, style)`, `list_citation_styles()`, `format_citation(ref, style)`, `export_user_data()`, `import_user_data(mode)` |
-| AI | `set_api_key`, `delete_api_key`, `has_api_key`, `list_models(provider)`, `chat_send(…, channel)`, `list_chat_sessions`, `get_chat_session`, `delete_chat_session`, `get_usage_summary(period)` |
+| AI | `get_api_keys`, `set_api_key`, `delete_api_key`, `get_ai_status`, `list_models(provider)`, `cancel_generation(request_id)`, `get_usage_summary(period)` |
+| Sohbet | `chat_send(request_id, session_id?, message, language, channel)`, `estimate_chat(session_id?, message)`, `list_chat_sessions`, `get_chat_session`, `rename_chat_session`, `delete_chat_session` |
 | Sistem | `get_settings`, `set_setting`, `get_network_log(limit)` |
 
 Event'ler: `pack://progress`, `pack://done`, `pack://error`. Streaming (sohbet, çeviri) için `ipc::Channel` kullanılır.
@@ -970,13 +973,13 @@ Referans mockup: "Okuma Ekranı Mockup" canvas'ı (sade ve araştırma varsayıl
 - Tüm HTTP istekleri `net.rs` içindeki tek bir client'tan geçer. Bu client'ın sabit bir host izin listesi vardır:
   - `quran.kemalozyon.com` (manifest, fiyatlar, güncelleme meta verisi)
   - `github.com`, `objects.githubusercontent.com` (paketler, güncellemeler)
-  - Sağlayıcı API host'ları (Anthropic, OpenAI, Gemini; embedding için Voyage). Embedding host'ları M7'den beri listede: `api.openai.com`, `api.voyageai.com`, `generativelanguage.googleapis.com`.
+  - Sağlayıcı API host'ları (Anthropic, OpenAI, Gemini; embedding için Voyage): M7'den beri `api.openai.com`, `api.voyageai.com`, `generativelanguage.googleapis.com`, M8'den beri `api.anthropic.com`.
   - Kullanıcının OpenAI-uyumlu sağlayıcı için açıkça girdiği `base_url`: HTTPS ya da yalnızca `localhost`, `127.0.0.1` veya `[::1]`'e düz HTTP; içinde kimlik bilgisi, sorgu veya parça bulunamaz
 - Anahtar taşıyan istekler (POST) yönlendirme izlemez; böylece anahtar asla başka bir host'a iletilmez.
 - **Bağlantı günlüğü:** Her istek için host, zaman, amaç (`pack`, `update`, `chat`, `translate`, `embed`) ve durum kaydı tutulur; içerik kaydedilmez. Son 500 kayıt bellekte ve `user.db`'de tutulur. Ayarlar → Gizlilik'ten görüntülenir.
 
 ### 14.2 API anahtarları
-- OS keychain'de saklanır (servis: `com.kemalozyon.siyak`, hesap: `<provider>`). Webview'e asla dönmez; arayüz yalnızca "kayıtlı / kayıtlı değil" bilgisini görür (`get_api_keys`, `set_api_key`, `delete_api_key`; embedding API'leri için M7'de geldi). Anahtar tek satır, görünür ASCII karakterlerden oluşmalıdır.
+- OS keychain'de saklanır (servis: `com.kemalozyon.siyak`, hesap: `<provider>`). Webview'e asla dönmez; arayüz yalnızca "kayıtlı / kayıtlı değil" bilgisini görür (`get_api_keys`, `set_api_key`, `delete_api_key`; sağlayıcı başına bir anahtar, embedding API'leri ve yapay zekâ katmanı ortak kullanır). Anahtar tek satır, görünür ASCII karakterlerden oluşmalıdır.
 - Anahtar ekleme ekranındaki rehber:
   1. "Bu uygulama için ayrı bir anahtar oluşturun."
   2. "Sağlayıcı panelinden bu anahtara/projeye harcama limiti koyun."

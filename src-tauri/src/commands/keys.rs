@@ -6,14 +6,14 @@ use specta::Type;
 use tauri::State;
 
 use crate::AppState;
-use crate::embed::ApiProvider;
 use crate::error::AppResult;
+use crate::secrets::ProviderId;
 
 /// Whether a provider's key is saved.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
 pub struct ApiKeyStatus {
     /// The provider.
-    pub provider: ApiProvider,
+    pub provider: ProviderId,
     /// Whether its key is in the keychain.
     pub saved: bool,
 }
@@ -22,8 +22,8 @@ pub struct ApiKeyStatus {
 #[tauri::command]
 #[specta::specta]
 pub async fn get_api_keys(state: State<'_, AppState>) -> AppResult<Vec<ApiKeyStatus>> {
-    let keys = state.semantic().keys();
-    ApiProvider::ALL
+    let keys = state.keys();
+    ProviderId::ALL
         .into_iter()
         .map(|provider| {
             Ok(ApiKeyStatus {
@@ -39,15 +39,15 @@ pub async fn get_api_keys(state: State<'_, AppState>) -> AppResult<Vec<ApiKeySta
 #[specta::specta]
 pub async fn set_api_key(
     state: State<'_, AppState>,
-    provider: ApiProvider,
+    provider: ProviderId,
     key: String,
 ) -> AppResult<()> {
-    state.semantic().keys().set_key(provider, &key)
+    state.keys().set_key(provider, &key)
 }
 
 /// Removes a provider's key from the keychain.
 #[tauri::command]
 #[specta::specta]
-pub async fn delete_api_key(state: State<'_, AppState>, provider: ApiProvider) -> AppResult<()> {
-    state.semantic().keys().delete_key(provider)
+pub async fn delete_api_key(state: State<'_, AppState>, provider: ProviderId) -> AppResult<()> {
+    state.keys().delete_key(provider)
 }

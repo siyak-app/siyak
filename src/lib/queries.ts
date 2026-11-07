@@ -7,16 +7,20 @@
  * @packageDocumentation
  */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Channel } from "@tauri-apps/api/core";
 
 import { serializeSetting, type SettingKey, type Settings } from "./settings";
 
 import {
   commands,
+  type AiStatus,
   type ApiKeyStatus,
-  type ApiProvider,
   type AppError,
   type AppErrorCode,
   type BookmarkedVerse,
+  type ChatReply,
+  type ChatSession,
+  type ChatSessionSummary,
   type Catalog,
   type CitationRef,
   type CitationStyle,
@@ -26,15 +30,18 @@ import {
   type Compare,
   type Concordance,
   type ConcordanceTarget,
+  type CostEstimate,
   type CoreStatus,
   type ImportMode,
   type ImportReport,
   type ItemRef,
   type MarkdownLabels,
+  type ModelInfo,
   type MorphologyPack,
   type NetworkLogEntry,
   type Note,
   type NoteInput,
+  type ProviderId,
   type QueryClass,
   type RelatedVerse,
   type RootSearch,
@@ -44,8 +51,13 @@ import {
   type SemanticStatus,
   type Surah,
   type TafsirInfo,
+  type TafsirTranslation,
   type TafsirPassage,
   type TranslationInfo,
+  type TranslationMode,
+  type TranslateResult,
+  type UsagePeriod,
+  type UsageSummary,
   type VacuumSizes,
   type VerseIdRange,
   type VerseWithTranslations,
@@ -213,6 +225,24 @@ export const queryKeys = {
     ["related-by-roots", verseId, translationId] as const,
   /** Key of {@link useApiKeys}. */
   apiKeys: ["api-keys"] as const,
+  /** Key of {@link useAiStatus}. */
+  aiStatus: ["ai-status"] as const,
+  /** Key of {@link useTafsirTranslations}. */
+  tafsirTranslations: (packId: string, tafsirId: number, lang: string) =>
+    ["tafsir-translations", packId, tafsirId, lang] as const,
+  /** Key of {@link useTafsirEstimate}. */
+  tafsirEstimate: (variables: TafsirJobVariables) => ["tafsir-estimate", variables] as const,
+  /** Key of {@link useChatSessions}. */
+  chatSessions: ["chat-sessions"] as const,
+  /** Key of {@link useChatSession}. */
+  chatSession: (id: number | null) => ["chat-session", id] as const,
+  /** Key of {@link useChatEstimate}. */
+  chatEstimate: (sessionId: number | null, message: string) =>
+    ["chat-estimate", sessionId, message] as const,
+  /** Key of {@link useUsageSummary}. */
+  usageSummary: (period: UsagePeriod) => ["usage-summary", period] as const,
+  /** Key of {@link useModels}. */
+  models: (provider: ProviderId | null) => ["models", provider] as const,
   /** Key of {@link useCatalog}. */
   catalog: ["catalog"] as const,
   /** Key of {@link useNetworkLog}. */
@@ -520,7 +550,7 @@ export function useApiKeys() {
 
 /** Variables of {@link useSetApiKey}. */
 export interface SetApiKeyVariables {
-  provider: ApiProvider;
+  provider: ProviderId;
   key: string;
 }
 
@@ -533,6 +563,7 @@ export function useSetApiKey() {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys }),
         invalidateSemantic(queryClient),
+        invalidateAi(queryClient),
       ]),
   });
 }
@@ -540,12 +571,13 @@ export function useSetApiKey() {
 /** Removes a provider's API key from the keychain. */
 export function useDeleteApiKey() {
   const queryClient = useQueryClient();
-  return useMutation<null, Error, ApiProvider>({
+  return useMutation<null, Error, ProviderId>({
     mutationFn: (provider) => unwrap(commands.deleteApiKey(provider)),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys }),
         invalidateSemantic(queryClient),
+        invalidateAi(queryClient),
       ]),
   });
 }
@@ -566,8 +598,223 @@ export function useSetSemanticSetting() {
         ...old,
         [key]: serializeSetting(key, value),
       }));
-      await invalidateSemantic(queryClient);
+      await Promise.all([
+        invalidateSemantic(queryClient),
+        key === "semantic.base_url" ? invalidateAi(queryClient) : undefined,
+      ]);
     },
+  });
+}
+
+/** Whether AI features can run, and if not, what is missing (spec §8). */
+export function useAiStatus() {
+  return useQuery<AiStatus>({
+    queryKey: queryKeys.aiStatus,
+    queryFn: () => unwrap(commands.getAiStatus()),
+    staleTime: Infinity,
+  });
+}
+
+/** The chat models a provider offers; waits while `provider` is `null`. */
+export function useModels(provider: ProviderId | null, enabled = true) {
+  return useQuery<ModelInfo[]>({
+    queryKey: queryKeys.models(provider),
+    queryFn: () => unwrap(commands.listModels(provider ?? "anthropic")),
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    enabled: enabled && provider !== null,
+  });
+}
+
+/** What depends on the AI settings, a key or the server address. */
+function invalidateAi(queryClient: ReturnType<typeof useQueryClient>) {
+  return invalidateKeys(queryClient, [queryKeys.aiStatus, ["models"]]);
+}
+
+/** A setting the AI service reads. */
+export type AiSettingKey =
+  | "ai.provider"
+  | "ai.chat_model"
+  | "ai.translation_model"
+  | "ai.arabic_sources"
+  | "ai.monthly_limit_usd"
+  | "chat.tafsirs";
+
+/** Stores a setting the AI service reads and refreshes its status. */
+export function useSetAiSetting() {
+  const queryClient = useQueryClient();
+  return useMutation<null, Error, SetSettingVariables<AiSettingKey>>({
+    mutationFn: ({ key, value }) => unwrap(commands.setSetting(key, serializeSetting(key, value))),
+    onSuccess: async (_data, { key, value }) => {
+      queryClient.setQueryData<Partial<Record<string, string>>>(queryKeys.settings, (old) => ({
+        ...old,
+        [key]: serializeSetting(key, value),
+      }));
+      await invalidateKeys(queryClient, [queryKeys.aiStatus, ["usage-summary"]]);
+    },
+  });
+}
+
+/** A tafsir summary (`paragraphIdx` null) or paragraph translation. */
+export interface TafsirJobVariables {
+  /** Tafsir pack id. */
+  packId: string;
+  /** The passage (`TafsirPassage.id`). */
+  tafsirId: number;
+  /** The paragraph to translate; `null` for a summary. */
+  paragraphIdx: number | null;
+  /** Summary of the passage, or translation of one paragraph. */
+  mode: TranslationMode;
+  /** The interface language to write in: `tr` or `en`. */
+  targetLang: string;
+}
+
+/** The saved summaries and translations of a passage in a language (spec §9). */
+export function useTafsirTranslations(packId: string, tafsirId: number, lang: string) {
+  return useQuery<TafsirTranslation[]>({
+    queryKey: queryKeys.tafsirTranslations(packId, tafsirId, lang),
+    queryFn: () => unwrap(commands.listTafsirTranslations(packId, tafsirId, lang)),
+    staleTime: Infinity,
+  });
+}
+
+/** What a summary or translation is expected to cost; waits while not `enabled`. */
+export function useTafsirEstimate(variables: TafsirJobVariables, enabled: boolean) {
+  const { packId, tafsirId, paragraphIdx, mode, targetLang } = variables;
+  return useQuery<CostEstimate>({
+    queryKey: queryKeys.tafsirEstimate(variables),
+    queryFn: () =>
+      unwrap(commands.estimateTafsirTranslation(packId, tafsirId, paragraphIdx, mode, targetLang)),
+    staleTime: 60 * 1000,
+    retry: false,
+    enabled,
+  });
+}
+
+/**
+ * Summarizes or translates with the tafsir model, streaming the text into
+ * `channel`; `requestId` names it for {@link cancelGeneration}. Used through
+ * `useStream`, which owns the channel.
+ */
+export function translateTafsir(
+  variables: TafsirJobVariables,
+  requestId: string,
+  channel: Channel<string>,
+): Promise<TranslateResult> {
+  const { packId, tafsirId, paragraphIdx, mode, targetLang } = variables;
+  return unwrap(
+    commands.translateTafsir(requestId, packId, tafsirId, paragraphIdx, mode, targetLang, channel),
+  );
+}
+
+/** Stops a streamed answer; nothing happens if it already ended. */
+export function cancelGeneration(requestId: string): Promise<null> {
+  return unwrap(commands.cancelGeneration(requestId));
+}
+
+/** Refreshes what a finished tafsir summary or translation changes. */
+export function useTafsirTranslated() {
+  const queryClient = useQueryClient();
+  return (packId: string, tafsirId: number, lang: string) =>
+    invalidateKeys(queryClient, [
+      queryKeys.tafsirTranslations(packId, tafsirId, lang),
+      ["tafsir-estimate"],
+      ["usage-summary"],
+    ]);
+}
+
+/** Every chat session, the most recently used first (spec §10). */
+export function useChatSessions() {
+  return useQuery<ChatSessionSummary[]>({
+    queryKey: queryKeys.chatSessions,
+    queryFn: () => unwrap(commands.listChatSessions()),
+  });
+}
+
+/** A chat session with its messages; waits while `id` is `null`. */
+export function useChatSession(id: number | null) {
+  return useQuery<ChatSession>({
+    queryKey: queryKeys.chatSession(id),
+    queryFn: () => unwrap(commands.getChatSession(id ?? 0)),
+    enabled: id !== null,
+  });
+}
+
+/** What sending `message` is expected to cost; waits while not `enabled`. */
+export function useChatEstimate(sessionId: number | null, message: string, enabled: boolean) {
+  return useQuery<CostEstimate>({
+    queryKey: queryKeys.chatEstimate(sessionId, message),
+    queryFn: () => unwrap(commands.estimateChat(sessionId, message)),
+    staleTime: 60 * 1000,
+    retry: false,
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Sends a chat message and streams the answer into `channel`; `requestId`
+ * names it for {@link cancelGeneration}. Used through `useStream`.
+ */
+export function sendChat(
+  variables: { sessionId: number | null; message: string; language: string },
+  requestId: string,
+  channel: Channel<string>,
+): Promise<ChatReply> {
+  return unwrap(
+    commands.chatSend(
+      requestId,
+      variables.sessionId,
+      variables.message,
+      variables.language,
+      channel,
+    ),
+  );
+}
+
+/** Refreshes what a chat answer changes. */
+export function useChatAnswered() {
+  const queryClient = useQueryClient();
+  return (sessionId: number | null) =>
+    invalidateKeys(queryClient, [
+      queryKeys.chatSessions,
+      queryKeys.chatSession(sessionId),
+      ["chat-estimate"],
+      ["usage-summary"],
+    ]);
+}
+
+/** Deletes a chat session. */
+export function useDeleteChatSession() {
+  const queryClient = useQueryClient();
+  return useMutation<null, Error, number>({
+    mutationFn: (id) => unwrap(commands.deleteChatSession(id)),
+    onSettled: () => invalidateKeys(queryClient, [queryKeys.chatSessions, ["chat-session"]]),
+  });
+}
+
+/** Variables of {@link useRenameChatSession}. */
+export interface RenameChatVariables {
+  /** Session id. */
+  id: number;
+  /** The new title. */
+  title: string;
+}
+
+/** Renames a chat session. */
+export function useRenameChatSession() {
+  const queryClient = useQueryClient();
+  return useMutation<null, Error, RenameChatVariables>({
+    mutationFn: ({ id, title }) => unwrap(commands.renameChatSession(id, title)),
+    onSettled: () => invalidateKeys(queryClient, [queryKeys.chatSessions, ["chat-session"]]),
+  });
+}
+
+/** Spending on AI in a period, per feature and model (spec §9.4). */
+export function useUsageSummary(period: UsagePeriod) {
+  return useQuery<UsageSummary>({
+    queryKey: queryKeys.usageSummary(period),
+    queryFn: () => unwrap(commands.getUsageSummary(period)),
   });
 }
 
@@ -700,7 +947,7 @@ const USER_DATA_KEYS = [["bookmarks"], ["notes"], ["collections"], ["collection"
 
 function invalidateKeys(
   queryClient: ReturnType<typeof useQueryClient>,
-  keys: readonly (readonly string[])[],
+  keys: readonly (readonly unknown[])[],
 ) {
   return Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 }

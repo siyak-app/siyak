@@ -30,6 +30,12 @@ const SAMPLE: Settings = {
   "reader.last_position": { surah: 2, ayah: 255 },
   "semantic.vector_pack": "vectors.bge-m3",
   "semantic.base_url": "http://localhost:11434/v1",
+  "ai.provider": "anthropic",
+  "ai.chat_model": "claude-sonnet",
+  "ai.translation_model": null,
+  "ai.arabic_sources": { "openai_compatible/qwen3": true },
+  "ai.monthly_limit_usd": 5,
+  "chat.tafsirs": ["ar.jalalayn"],
 };
 
 describe("settings", () => {
@@ -54,6 +60,8 @@ describe("settings", () => {
     expect(parseSetting("experience_profile", '"expert"')).toBeNull();
     expect(parseSetting("search.mode_chips", '"yes"')).toBe(false);
     expect(parseSetting("ui.theme", "{")).toBe("system");
+    expect(parseSetting("ai.provider", '"voyage"')).toBeNull();
+    expect(parseSetting("ai.arabic_sources", '{"a/b":"yes"}')).toEqual({});
   });
 
   it("keeps an empty translation selection (Arabic only)", () => {

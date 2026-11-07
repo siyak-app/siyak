@@ -22,7 +22,7 @@ rules must not be broken. The full design, including features that are not built
 │ commands/semantic ──▶ embed (vector space, local/API),      │
 │                       related (cross-references)            │
 │ commands/keys ──▶ secrets (OS keychain)                     │
-│ later: llm                                                  │
+│ commands/{ai,chat} ──▶ llm (providers, cost, tafsir, chat)  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -259,5 +259,43 @@ xtask build-dev-db` fills `vectors.dev` in `dev-content.db` the same way, so sem
 - The interface: `src/features/related/` (the Related tab, the result list, the card that says
   which pack is missing) and the Meaning mode of `src/features/search/SearchView.tsx`.
 
-Modules for later milestones (`llm`) already exist as documented, empty
-files; their `//!` comments say what they will hold and in which milestone.
+## AI layer (M8)
+
+AI is optional: chat and tafsir summaries need a provider the user chooses, with their key or
+their own server; nothing else does (spec §8–§10). Providers are reached over raw HTTP and
+server-sent events through `net.rs`, with no provider SDK (ADR 0013).
+
+- `secrets.rs` keys the keychain by `ProviderId` (Anthropic plus every embedding provider), shared
+  by `embed` and `llm`; the `KeyStore` lives in `AppState`.
+- `net.rs`: `post_stream` returns a response to read chunk by chunk, `get_api` lists models; both
+  refuse redirects, like `post_json`. Purposes `chat` and `translate` are logged; Anthropic's host
+  is on the allow-list. The OpenAI-compatible server address (`semantic.base_url`) is shared with
+  semantic search.
+- `llm/mod.rs` defines `LlmProvider` (`list_models`, `stream` into a text sink until done or
+  cancelled), `AiConfig` (the `ai.*` settings), `AiStatus` (`get_ai_status`) and `Llm`, the
+  service in `AppState` that builds the chosen provider (`HttpProviders`) and tracks running
+  answers by request id so `cancel_generation` can stop them. `llm/sse.rs` parses the streams.
+- `llm/{anthropic,openai,gemini}.rs` are the providers; `openai.rs` also serves OpenAI-compatible
+  servers. Tests in `llm/http_tests.rs` run each against a local server; `llm/fake.rs` is a
+  provider for the other tests.
+- `llm/cost.rs`: `pricing.json` (from the manifest's `pricing_url`, cached a day in
+  `cache/pricing.json`; a local pack source reads it from its directory), character-based token
+  estimates, `CostEstimate` with the monthly limit (`ai.monthly_limit_usd`, which warns, never
+  blocks), and the `llm_usage` log behind Settings → AI → Spending (`get_usage_summary`). Usage is
+  logged with the provider's token counts, or estimates when an answer is stopped.
+- `llm/translate.rs`: a `Job` reads a tafsir passage (summary) or one paragraph (translation) from
+  `content.db`, streams it through the tafsir model and caches the result in
+  `tafsir_translations` under the pack's version, so a new pack version hides old results.
+  `commands/ai.rs` exposes it (`estimate_tafsir_translation`, `translate_tafsir`,
+  `list_tafsir_translations`); `src/features/tafsir/MachineTafsir.tsx` shows the buttons and the
+  labelled machine text next to the original, in the Tafsir tab and the compare screen.
+- `llm/chat.rs`: retrieval (the chat model rewrites the message into a search sentence; the 8
+  verses nearest to it, with the reader's translations), chat tafsirs
+  (`chat.tafsirs`) on the 3 best verses within a 6,000-token budget (a passage that is too long keeps
+  its opening paragraphs; tafsir is never embedded), the system prompt, `[surah:ayah]` citations and
+  session storage. `commands/chat.rs` runs `chat_send` and `estimate_chat`.
+- Streams reach the webview through a `tauri::ipc::Channel<String>`; `src/features/ai/useStream.ts`
+  owns the channel and the request id. The chat screen (`/chat`, `/chat/:id`) and the context
+  panel's Chat tab share `src/features/chat/ChatConversation.tsx`. Settings → AI
+  (`src/features/settings/AiSettings.tsx`, `SpendingSettings.tsx`) picks the provider, the models,
+  the Arabic-sources flag, the chat tafsirs and the monthly limit.

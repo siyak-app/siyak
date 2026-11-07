@@ -54,6 +54,12 @@ vi.mock("@/lib/queries", () => ({
     return { data: passage, isPending: false, isError: false };
   },
   useTafsirIntroduction: () => ({ data: INTRODUCTION, isPending: false, isError: false }),
+  useAiStatus: () => ({ data: { state: "no_provider" } }),
+  useTafsirTranslations: () => ({ data: [], isError: false }),
+  useTafsirEstimate: () => ({ data: undefined }),
+  useTafsirTranslated: () => () => Promise.resolve(),
+  translateTafsir: () => Promise.reject(new Error("not in this test")),
+  cancelGeneration: () => Promise.resolve(null),
   appErrorCode: () => undefined,
 }));
 

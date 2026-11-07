@@ -80,12 +80,16 @@ export function CheckField({
   onChange,
   hint,
   unavailable = false,
+  disabled = false,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   hint?: ReactNode;
+  /** The feature does not exist yet: shown, but disabled. */
   unavailable?: boolean;
+  /** Cannot be changed right now, e.g. a limit is reached. */
+  disabled?: boolean;
 }) {
   const id = useId();
   const hintId = useId();
@@ -95,7 +99,7 @@ export function CheckField({
         <Checkbox
           id={id}
           checked={checked}
-          disabled={unavailable}
+          disabled={unavailable || disabled}
           aria-describedby={hint ? hintId : undefined}
           onCheckedChange={(value) => {
             onChange(value === true);
@@ -103,7 +107,9 @@ export function CheckField({
         />
         <label
           htmlFor={id}
-          className={unavailable ? "text-sm text-muted-foreground" : "text-sm font-medium"}
+          className={
+            unavailable || disabled ? "text-sm text-muted-foreground" : "text-sm font-medium"
+          }
         >
           {label}
         </label>

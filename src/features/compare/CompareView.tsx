@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { packTitle } from "@/features/packs/packFormat";
 import { surahName } from "@/features/reader/surahName";
-import { TafsirParagraphs } from "@/features/tafsir/TafsirParagraphs";
+import { MachineTafsir } from "@/features/tafsir/MachineTafsir";
 import { verseIdOf, verseRange } from "@/features/tafsir/tafsirRefs";
 import type {
   CompareTafsir,
@@ -329,7 +329,7 @@ function PassageCell({ pack, passage }: { pack: TafsirInfo; passage: TafsirPassa
           {t("tafsir.covers", { range: verseRange(start, end) })}
         </p>
       )}
-      <TafsirParagraphs tafsir={pack} passage={passage} />
+      <MachineTafsir tafsir={pack} passage={passage} />
     </div>
   );
 }

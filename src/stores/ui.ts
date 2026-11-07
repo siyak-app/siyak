@@ -15,6 +15,7 @@ export const SETTINGS_TABS = [
   "display",
   "language",
   "providers",
+  "ai",
   "data",
   "privacy",
 ] as const;
@@ -57,6 +58,8 @@ interface UiState {
   collectionPicker: ItemRef | null;
   /** The next Notes tab to show should focus its editor (the `n` key). Not persisted. */
   noteFocusPending: boolean;
+  /** The chat session of the context panel's Chat tab; `null` for a new one. Not persisted. */
+  chatSession: number | null;
   hydrate: (preferences: UiPreferences) => void;
   setPreference: <K extends PreferenceKey>(key: K, value: UiPreferences[K]) => void;
   setPreferences: (values: Partial<UiPreferences>) => void;
@@ -66,6 +69,7 @@ interface UiState {
   setSettingsTab: (tab: SettingsTab | null) => void;
   openCollectionPicker: (item: ItemRef | null) => void;
   setNoteFocusPending: (pending: boolean) => void;
+  setChatSession: (id: number | null) => void;
 }
 
 /**
@@ -81,6 +85,7 @@ export const useUiStore = create<UiState>()((set) => ({
   settingsTab: null,
   collectionPicker: null,
   noteFocusPending: false,
+  chatSession: null,
   hydrate: (preferences) => {
     set({ hydrated: true, preferences });
   },
@@ -111,5 +116,8 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setNoteFocusPending: (pending) => {
     set({ noteFocusPending: pending });
+  },
+  setChatSession: (id) => {
+    set({ chatSession: id });
   },
 }));

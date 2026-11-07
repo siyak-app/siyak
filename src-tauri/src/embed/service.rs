@@ -188,11 +188,6 @@ impl Semantic {
         Self::new(Arc::new(NoKeyStore), Arc::new(UnbuiltFactory))
     }
 
-    /// Where API keys are kept.
-    pub fn keys(&self) -> &Arc<dyn KeyStore> {
-        &self.keys
-    }
-
     /// Whether semantic features are available, and if not, why.
     pub fn status(
         &self,
@@ -332,7 +327,7 @@ impl Semantic {
                         return Ok(Err(SemanticStatus::BaseUrlInvalid { pack }));
                     }
                 }
-                if provider.needs_key() && !self.keys.has_key(*provider)? {
+                if provider.needs_key() && !self.keys.has_key((*provider).into())? {
                     return Ok(Err(SemanticStatus::KeyMissing {
                         pack,
                         provider: *provider,
@@ -406,6 +401,7 @@ mod tests {
     use crate::db::content::LocalizedTitle;
     use crate::embed::fake::FakeEmbedder;
     use crate::embed::{EmbeddingSpace, Locality, TextKind};
+    use crate::secrets::ProviderId;
 
     fn installed(id: &str, kind: &str, version: &str, meta: serde_json::Value) -> InstalledPack {
         InstalledPack {
@@ -474,15 +470,16 @@ mod tests {
     struct Keys(HashSet<ApiProvider>);
 
     impl KeyStore for Keys {
-        fn key(&self, provider: ApiProvider) -> AppResult<Option<String>> {
-            Ok(self.0.contains(&provider).then(|| "key".to_owned()))
+        fn key(&self, provider: ProviderId) -> AppResult<Option<String>> {
+            let saved = self.0.iter().any(|p| ProviderId::from(*p) == provider);
+            Ok(saved.then(|| "key".to_owned()))
         }
 
-        fn set_key(&self, _provider: ApiProvider, _key: &str) -> AppResult<()> {
+        fn set_key(&self, _provider: ProviderId, _key: &str) -> AppResult<()> {
             unreachable!("status checks never save keys")
         }
 
-        fn delete_key(&self, _provider: ApiProvider) -> AppResult<()> {
+        fn delete_key(&self, _provider: ProviderId) -> AppResult<()> {
             unreachable!("status checks never delete keys")
         }
     }

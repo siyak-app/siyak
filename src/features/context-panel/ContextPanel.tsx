@@ -1,7 +1,7 @@
-import { MessagesSquareIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ChatPanel } from "@/features/chat/ChatPanel";
 import { NotesPanel } from "@/features/notes/NotesPanel";
 import { RelatedPanel } from "@/features/related/RelatedPanel";
 import { TafsirPanel } from "@/features/tafsir/TafsirPanel";
@@ -16,8 +16,7 @@ const isContextTab = (value: string): value is ContextTab =>
   CONTEXT_TABS.some((tab) => tab === value);
 
 /**
- * Right pane: context for the selected verse or word (spec §13.2).
- * TODO(M8): chat.
+ * Right pane: context for the selected verse or word, and the chat (spec §13.2).
  */
 export function ContextPanel() {
   const { t, i18n } = useTranslation();
@@ -65,12 +64,8 @@ export function ContextPanel() {
       <TabsContent value="related" className="flex min-h-0 flex-1 flex-col">
         <RelatedPanel verse={selected} />
       </TabsContent>
-      <TabsContent
-        value="chat"
-        className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-muted-foreground"
-      >
-        <MessagesSquareIcon aria-hidden className="size-8 opacity-60" />
-        <p className="text-sm">{t("context_panel.coming_soon")}</p>
+      <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col">
+        <ChatPanel />
       </TabsContent>
     </Tabs>
   );

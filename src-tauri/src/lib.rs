@@ -34,11 +34,13 @@ use crate::db::content::Seed;
 use crate::embed::api::{ApiFactory, Endpoints};
 use crate::embed::service::{Backends, EmbedderFactory, Semantic};
 use crate::error::{AppError, AppErrorCode, AppResult};
+use crate::llm::cost::PricingStore;
+use crate::llm::{HttpProviders, Llm, ProviderFactory};
 use crate::net::{Net, UserDbLog};
 use crate::packs::manifest::{ManifestStore, PackSource};
 use crate::packs::service::{Packs, PacksConfig};
 use crate::related::Related;
-use crate::secrets::{KeyStore, Keychain};
+use crate::secrets::{KeyStore, Keychain, NoKeyStore};
 
 /// First line of the generated bindings file.
 const BINDINGS_HEADER: &str =
@@ -54,6 +56,9 @@ pub struct AppState {
     packs: AppResult<Packs>,
     semantic: Semantic,
     related: Related,
+    keys: Arc<dyn KeyStore>,
+    llm: Llm,
+    pricing: PricingStore,
 }
 
 impl AppState {
@@ -75,6 +80,32 @@ impl AppState {
     /// Returns the cross-reference service (spec §7.6).
     pub fn related(&self) -> &Related {
         &self.related
+    }
+
+    /// Returns where API keys are kept (spec §14.2).
+    pub fn keys(&self) -> &Arc<dyn KeyStore> {
+        &self.keys
+    }
+
+    /// Returns the AI service (spec §8).
+    pub fn llm(&self) -> &Llm {
+        &self.llm
+    }
+
+    /// The model prices of `pricing.json` (spec §9.4); empty when they
+    /// cannot be loaded, so every cost is unknown.
+    pub async fn pricing(&self) -> Arc<llm::cost::Pricing> {
+        let Ok(packs) = self.packs() else {
+            return Arc::default();
+        };
+        let snapshot = packs.manifest(false).await;
+        let url = snapshot
+            .manifest
+            .as_ref()
+            .and_then(|m| m.pricing_url.clone());
+        self.pricing
+            .load(packs.net(), packs.source(), url.as_deref())
+            .await
     }
 
     /// Locks the `content.db` connection.
@@ -152,6 +183,9 @@ fn open_state(app: &tauri::App) -> AppState {
                 packs: Err(err),
                 semantic: Semantic::unbuilt(),
                 related: Related::default(),
+                keys: Arc::new(NoKeyStore),
+                llm: Llm::new(Arc::new(NoKeyStore), None),
+                pricing: PricingStore::new(Path::new("")),
             };
         }
     };
@@ -173,19 +207,30 @@ fn open_state(app: &tauri::App) -> AppState {
     if seed.marker == Some("dev") {
         backends.push(Arc::new(embed::fake::DevFactory));
     }
+    let mut providers: Option<Arc<dyn ProviderFactory>> = None;
     match net {
-        Ok(net) => backends.push(Arc::new(ApiFactory::new(
-            net,
-            Arc::clone(&keys),
-            Endpoints::default(),
-        ))),
-        Err(err) => eprintln!("the network client failed; embedding APIs are off: {err}"),
+        Ok(net) => {
+            backends.push(Arc::new(ApiFactory::new(
+                net.clone(),
+                Arc::clone(&keys),
+                Endpoints::default(),
+            )));
+            providers = Some(Arc::new(HttpProviders::new(
+                net,
+                Arc::clone(&keys),
+                llm::Endpoints::default(),
+            )));
+        }
+        Err(err) => eprintln!("the network client failed; embedding and AI APIs are off: {err}"),
     }
     AppState {
         databases: Ok(databases),
         packs,
-        semantic: Semantic::new(keys, Arc::new(Backends(backends))),
+        semantic: Semantic::new(Arc::clone(&keys), Arc::new(Backends(backends))),
         related: Related::default(),
+        llm: Llm::new(Arc::clone(&keys), providers),
+        keys,
+        pricing: PricingStore::new(&data_dir),
     }
 }
 

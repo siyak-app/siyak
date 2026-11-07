@@ -6,6 +6,8 @@
 //!
 //! Commands are `async` so Tauri runs them off the main (UI) thread.
 
+pub mod ai;
+pub mod chat;
 pub mod collections;
 pub mod content;
 pub mod export;
@@ -52,6 +54,19 @@ pub fn builder() -> Builder<tauri::Wry> {
             keys::get_api_keys,
             keys::set_api_key,
             keys::delete_api_key,
+            ai::get_ai_status,
+            ai::list_models,
+            ai::cancel_generation,
+            ai::get_usage_summary,
+            ai::list_tafsir_translations,
+            ai::estimate_tafsir_translation,
+            ai::translate_tafsir,
+            chat::chat_send,
+            chat::estimate_chat,
+            chat::list_chat_sessions,
+            chat::get_chat_session,
+            chat::delete_chat_session,
+            chat::rename_chat_session,
             settings::get_settings,
             settings::set_setting,
             settings::set_settings,

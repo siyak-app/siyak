@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { LanguagePreference } from "@/lib/settings";
 import { SETTINGS_TABS, type SettingsTab, useUiStore } from "@/stores/ui";
 
+import { AiSettings } from "./AiSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { BackupSettings } from "./BackupSettings";
 import { DisplaySettings } from "./DisplaySettings";
@@ -28,7 +29,7 @@ const isTab = (value: string): value is SettingsTab =>
 
 /**
  * Settings: appearance, display & behaviour, the interface language, API
- * providers, data and privacy. Other screens open it on a tab through the UI
+ * providers, AI, data and privacy. Other screens open it on a tab through the UI
  * store (`setSettingsTab`).
  */
 export function SettingsDialog() {
@@ -64,6 +65,7 @@ export function SettingsDialog() {
             <TabsTrigger value="display">{t("settings.tab_display")}</TabsTrigger>
             <TabsTrigger value="language">{t("settings.tab_language")}</TabsTrigger>
             <TabsTrigger value="providers">{t("settings.tab_providers")}</TabsTrigger>
+            <TabsTrigger value="ai">{t("settings.tab_ai")}</TabsTrigger>
             <TabsTrigger value="data">{t("settings.tab_data")}</TabsTrigger>
             <TabsTrigger value="privacy">{t("settings.tab_privacy")}</TabsTrigger>
           </TabsList>
@@ -79,6 +81,9 @@ export function SettingsDialog() {
             </TabsContent>
             <TabsContent value="providers">
               <ProviderSettings />
+            </TabsContent>
+            <TabsContent value="ai">
+              <AiSettings />
             </TabsContent>
             <TabsContent value="data">
               <BackupSettings />

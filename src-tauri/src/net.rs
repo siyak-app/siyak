@@ -6,9 +6,10 @@
 //! host, time, purpose, status and body size of a request are logged, never
 //! its path, query or content.
 //!
-//! Embedding APIs are reached with [`Net::post_json`]: their hosts are on the
+//! Embedding and AI provider APIs are reached with [`Net::post_json`],
+//! [`Net::post_stream`] and [`Net::get_api`]: their hosts are on the
 //! allow-list, and the address of an OpenAI-compatible server is allowed only
-//! because the user entered it ([`user_server_url`]). POST requests follow no
+//! because the user entered it ([`user_server_url`]). API requests follow no
 //! redirects, so a key is never sent on to another host.
 
 use std::sync::Arc;
@@ -29,10 +30,12 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "github.com",
     "release-assets.githubusercontent.com",
     "objects.githubusercontent.com",
-    // Embedding APIs (spec §7.4); the AI layer adds its own hosts (spec §8).
+    // Embedding APIs (spec §7.4), also AI providers (spec §8).
     "api.openai.com",
     "api.voyageai.com",
     "generativelanguage.googleapis.com",
+    // AI provider only (spec §8): Anthropic has no embedding model.
+    "api.anthropic.com",
 ];
 
 /// Hosts an OpenAI-compatible server may use plain HTTP on: this computer.
@@ -40,6 +43,15 @@ const LOOPBACK_HOSTS: &[&str] = &["localhost", "127.0.0.1", "[::1]"];
 
 /// Most redirects followed for one request.
 const MAX_REDIRECTS: usize = 5;
+
+/// Longest wait for data on a request: for the response to start and between
+/// two chunks of its body.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The same for a streamed model answer. A thinking model sends nothing, not
+/// even the response headers, until it has finished thinking, which takes
+/// minutes for a long context or a busy model; the user can stop it sooner.
+const STREAM_READ_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Why a request is made; recorded in the connection log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +62,10 @@ pub enum Purpose {
     Pack,
     /// Embedding a query or passages with an API (spec §7.4).
     Embedding,
+    /// A chat answer, or listing a provider's models (spec §8, §10).
+    Chat,
+    /// A tafsir summary or translation (spec §9).
+    Translate,
 }
 
 impl Purpose {
@@ -59,6 +75,8 @@ impl Purpose {
             Self::Manifest => "manifest",
             Self::Pack => "pack",
             Self::Embedding => "embed",
+            Self::Chat => "chat",
+            Self::Translate => "translate",
         }
     }
 }
@@ -189,6 +207,8 @@ fn same_server(url: &Url, server: &Url) -> bool {
 #[derive(Clone)]
 pub struct Net {
     client: reqwest::Client,
+    /// The client for streamed model answers, with [`STREAM_READ_TIMEOUT`].
+    stream_client: reqwest::Client,
     allow: AllowList,
     log: Arc<dyn NetLogSink>,
 }
@@ -201,14 +221,12 @@ impl Net {
 
     /// Creates a client with a custom allow-list (tests use a local server).
     pub fn with_allow_list(allow: AllowList, log: Arc<dyn NetLogSink>) -> AppResult<Self> {
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(concat!("Siyak/", env!("CARGO_PKG_VERSION")))
-            .connect_timeout(Duration::from_secs(15))
-            .read_timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|err| AppError::new(AppErrorCode::NetworkFailed, err.to_string()))?;
-        Ok(Self { client, allow, log })
+        Ok(Self {
+            client: build_client(READ_TIMEOUT)?,
+            stream_client: build_client(STREAM_READ_TIMEOUT)?,
+            allow,
+            log,
+        })
     }
 
     /// Sends a GET request, following redirects within the allow-list. With
@@ -276,19 +294,73 @@ impl Net {
         body: &serde_json::Value,
         limit: usize,
     ) -> AppResult<(StatusCode, Vec<u8>)> {
+        let mut response = self
+            .post_stream(url, user_server, purpose, headers, body)
+            .await?;
+        let status = response.status();
+        let body = response.bytes_limited(limit).await?;
+        Ok((status, body))
+    }
+
+    /// Sends a JSON POST request like [`Net::post_json`] but returns the
+    /// response unread, so a streamed body (server-sent events) can be read
+    /// chunk by chunk.
+    pub async fn post_stream(
+        &self,
+        url: &Url,
+        user_server: Option<&Url>,
+        purpose: Purpose,
+        headers: &[(&str, &str)],
+        body: &serde_json::Value,
+    ) -> AppResult<Response> {
+        let body = serde_json::to_vec(body)
+            .map_err(|err| AppError::new(AppErrorCode::InvalidInput, err.to_string()))?;
+        let request = self
+            .stream_client
+            .post(url.clone())
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body);
+        self.send_api(request, url, user_server, purpose, headers)
+            .await
+    }
+
+    /// Sends a GET request to a provider API (listing models) and reads the
+    /// body (at most `limit` bytes) whatever its status. Like
+    /// [`Net::post_json`], `url` may be on `user_server` and redirects are not
+    /// followed, because `headers` carry the key.
+    pub async fn get_api(
+        &self,
+        url: &Url,
+        user_server: Option<&Url>,
+        purpose: Purpose,
+        headers: &[(&str, &str)],
+        limit: usize,
+    ) -> AppResult<(StatusCode, Vec<u8>)> {
+        let request = self.client.get(url.clone());
+        let mut response = self
+            .send_api(request, url, user_server, purpose, headers)
+            .await?;
+        let status = response.status();
+        let body = response.bytes_limited(limit).await?;
+        Ok((status, body))
+    }
+
+    /// Checks the host, adds the (sensitive) headers and sends an API request,
+    /// refusing a redirect.
+    async fn send_api(
+        &self,
+        mut request: reqwest::RequestBuilder,
+        url: &Url,
+        user_server: Option<&Url>,
+        purpose: Purpose,
+        headers: &[(&str, &str)],
+    ) -> AppResult<Response> {
         let host = match user_server {
             Some(server) if same_server(url, server) => {
                 url.host_str().unwrap_or_default().to_owned()
             }
             _ => self.check(url)?,
         };
-        let body = serde_json::to_vec(body)
-            .map_err(|err| AppError::new(AppErrorCode::InvalidInput, err.to_string()))?;
-        let mut request = self
-            .client
-            .post(url.clone())
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .body(body);
         for (name, value) in headers {
             let mut value = HeaderValue::from_str(value).map_err(|_| {
                 AppError::new(AppErrorCode::InvalidInput, format!("invalid {name} header"))
@@ -300,14 +372,21 @@ impl Net {
             Ok(response) => response,
             Err(err) => {
                 self.log.record(&host, purpose, None, 0);
+                // The connection worked but the provider kept quiet: not the
+                // user's internet connection.
+                let code = if err.is_timeout() && !err.is_connect() {
+                    AppErrorCode::ProviderTimeout
+                } else {
+                    AppErrorCode::NetworkFailed
+                };
                 return Err(AppError::new(
-                    AppErrorCode::NetworkFailed,
+                    code,
                     format!("{host}: {}", without_url(&err)),
                 ));
             }
         };
         let status = response.status();
-        let mut response = Response {
+        let response = Response {
             inner: response,
             host,
             purpose,
@@ -320,8 +399,7 @@ impl Net {
                 format!("{}: answered with a redirect ({status})", response.host),
             ));
         }
-        let body = response.bytes_limited(limit).await?;
-        Ok((status, body))
+        Ok(response)
     }
 
     fn check(&self, url: &Url) -> AppResult<String> {
@@ -348,6 +426,18 @@ fn redirect_target(base: &Url, location: Option<&HeaderValue>) -> AppResult<Url>
 }
 
 /// A reqwest error message without the URL (it may carry a signed query).
+/// The HTTP client: no automatic redirects (each is checked against the
+/// allow-list), and `read_timeout` for each wait for data.
+fn build_client(read_timeout: Duration) -> AppResult<reqwest::Client> {
+    reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(concat!("Siyak/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(Duration::from_secs(15))
+        .read_timeout(read_timeout)
+        .build()
+        .map_err(|err| AppError::new(AppErrorCode::NetworkFailed, err.to_string()))
+}
+
 fn without_url(err: &reqwest::Error) -> String {
     let mut message = err.to_string();
     if let Some(url) = err.url() {
