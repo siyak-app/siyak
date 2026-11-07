@@ -2,6 +2,7 @@ import { BookmarkIcon, NotebookPenIcon } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { isTrackOf, useAudioStore } from "@/features/audio/store";
 import { VerseArabic } from "@/features/word/VerseArabic";
 import type { TextDirection, VerseWithTranslations } from "@/lib/bindings";
 import { useUiStore } from "@/stores/ui";
@@ -30,6 +31,7 @@ export const VerseItem = memo(function VerseItem({
   bookmarked = false,
   noted = false,
   onBookmark,
+  onPlay,
 }: {
   verse: VerseWithTranslations;
   /** The shown translation packs by id. */
@@ -48,12 +50,19 @@ export const VerseItem = memo(function VerseItem({
   noted?: boolean;
   /** Toggles the verse's bookmark. */
   onBookmark?: (verse: VerseWithTranslations) => void;
+  /** Plays or pauses the verse's recitation; only with an installed reciter. */
+  onPlay?: (verse: VerseWithTranslations) => void;
 }) {
   const { t } = useTranslation();
   const mode = useUiStore((state) => state.preferences["reader.actions"]);
   const selected = useUiStore(
     (state) =>
       state.selectedVerse?.surah === verse.surah && state.selectedVerse.ayah === verse.ayah,
+  );
+  // The verse loaded in the player (not while its surah's basmala plays).
+  const current = useAudioStore((state) => isTrackOf(state.track, verse.surah, verse.ayah));
+  const playing = useAudioStore(
+    (state) => current && (state.status === "playing" || state.status === "loading"),
   );
   const titles = Object.fromEntries(Object.entries(packs).map(([id, pack]) => [id, pack.title]));
   const actions = (
@@ -65,6 +74,8 @@ export const VerseItem = memo(function VerseItem({
       onCompare={onCompare}
       bookmarked={bookmarked}
       onBookmark={onBookmark}
+      onPlay={onPlay}
+      playing={playing}
     />
   );
   return (
@@ -73,7 +84,9 @@ export const VerseItem = memo(function VerseItem({
       tabIndex={tabStop ? 0 : -1}
       data-highlighted={highlighted || undefined}
       data-selected={selected || undefined}
-      className="group/verse flex gap-4 rounded-lg border-b border-border px-2 py-6 outline-none focus-visible:ring-2 focus-visible:ring-ring data-highlighted:animate-verse-highlight data-selected:bg-muted/60"
+      data-playing={current || undefined}
+      aria-current={current || undefined}
+      className="group/verse flex gap-4 rounded-lg border-b border-border px-2 py-6 outline-none focus-visible:ring-2 focus-visible:ring-ring data-highlighted:animate-verse-highlight data-playing:bg-primary/5 data-playing:ring-1 data-playing:ring-primary/40 data-selected:bg-muted/60"
     >
       <div className="mt-2 flex shrink-0 flex-col items-center gap-1.5">
         <span

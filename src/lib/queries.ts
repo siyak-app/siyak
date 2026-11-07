@@ -14,6 +14,7 @@ import { serializeSetting, type SettingKey, type Settings } from "./settings";
 import {
   commands,
   type AiStatus,
+  type AudioPack,
   type ApiKeyStatus,
   type AppError,
   type AppErrorCode,
@@ -245,6 +246,8 @@ export const queryKeys = {
   models: (provider: ProviderId | null) => ["models", provider] as const,
   /** Key of {@link useCatalog}. */
   catalog: ["catalog"] as const,
+  /** Key of {@link useAudioPacks}. */
+  audioPacks: ["audio-packs"] as const,
   /** Key of {@link useNetworkLog}. */
   networkLog: ["network-log"] as const,
 };
@@ -355,6 +358,15 @@ export function useSetSettings() {
         ...serializeSettings(values),
       }));
     },
+  });
+}
+
+/** The installed audio packs (reciters), from `content.db`; no network. */
+export function useAudioPacks() {
+  return useQuery<AudioPack[]>({
+    queryKey: queryKeys.audioPacks,
+    queryFn: () => unwrap(commands.listAudioPacks()),
+    staleTime: Infinity,
   });
 }
 
@@ -1124,6 +1136,7 @@ export function invalidateContent(queryClient: ReturnType<typeof useQueryClient>
       queryKeys.translations,
       ["verses"] as const,
       queryKeys.tafsirs,
+      queryKeys.audioPacks,
       ["tafsir"] as const,
       ["tafsir-introduction"] as const,
       ["search"] as const,

@@ -50,6 +50,9 @@ pub struct Migration {
     pub name: &'static str,
     /// SQL executed as a batch.
     pub sql: &'static str,
+    /// Run with foreign keys off, for a migration that rebuilds a table other tables
+    /// reference (dropping it would cascade). The foreign keys are checked before commit.
+    pub foreign_keys_off: bool,
 }
 
 /// Opens (creating if needed) a database file with the connection settings
@@ -105,15 +108,56 @@ pub fn migrate(conn: &mut Connection, migrations: &[Migration]) -> AppResult<usi
             format!("{:04}_{}: {err}", m.version, m.name),
         )
     };
-    let tx = conn.transaction().map_err(|err| failed(last, err))?;
+    // `PRAGMA foreign_keys` is a no-op inside a transaction, so it is switched around it.
+    let keys_off = todo.iter().any(|m| m.foreign_keys_off);
+    let keys_were_on: bool = conn
+        .pragma_query_value(None, "foreign_keys", |row| row.get(0))
+        .map_err(|err| failed(last, err))?;
+    if keys_off && keys_were_on {
+        conn.pragma_update(None, "foreign_keys", false)
+            .map_err(|err| failed(last, err))?;
+    }
+    let result = apply(conn, todo, keys_off);
+    if keys_off && keys_were_on {
+        conn.pragma_update(None, "foreign_keys", true)
+            .map_err(|err| failed(last, err))?;
+    }
+    result.map_err(|(m, err)| failed(m, err))?;
+    Ok(todo.len())
+}
+
+/// Runs `todo` and sets `user_version` in one transaction; with `check_keys`, fails
+/// before committing if any foreign key is broken.
+fn apply<'m>(
+    conn: &mut Connection,
+    todo: &'m [Migration],
+    check_keys: bool,
+) -> Result<(), (&'m Migration, rusqlite::Error)> {
+    let Some(last) = todo.last() else {
+        return Ok(());
+    };
+    let tx = conn.transaction().map_err(|err| (last, err))?;
     for m in todo {
-        tx.execute_batch(m.sql).map_err(|err| failed(m, err))?;
+        tx.execute_batch(m.sql).map_err(|err| (m, err))?;
+    }
+    if check_keys {
+        let broken: i64 = tx
+            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })
+            .map_err(|err| (last, err))?;
+        if broken > 0 {
+            let err = rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT_FOREIGNKEY),
+                Some(format!("{broken} broken foreign key(s) after migrating")),
+            );
+            return Err((last, err));
+        }
     }
     // `user_version` is part of the database header and is covered by the transaction.
     tx.pragma_update(None, "user_version", last.version)
-        .map_err(|err| failed(last, err))?;
-    tx.commit().map_err(|err| failed(last, err))?;
-    Ok(todo.len())
+        .map_err(|err| (last, err))?;
+    tx.commit().map_err(|err| (last, err))
 }
 
 /// Structural description of a database schema, independent of DDL formatting:
@@ -208,11 +252,13 @@ mod tests {
             version: 1,
             name: "one",
             sql: "CREATE TABLE a (x INTEGER);",
+            foreign_keys_off: false,
         },
         Migration {
             version: 2,
             name: "two",
             sql: "CREATE TABLE b (x INTEGER);",
+            foreign_keys_off: false,
         },
     ];
 
@@ -244,6 +290,7 @@ mod tests {
                 version: 2,
                 name: "broken",
                 sql: "CREATE TABLE oops (;",
+                foreign_keys_off: false,
             },
         ];
         let mut conn = Connection::open_in_memory().unwrap();
@@ -258,6 +305,70 @@ mod tests {
             )
             .unwrap();
         assert_eq!(tables, 0);
+    }
+
+    /// A table rebuild with foreign keys off keeps the rows that reference it, and
+    /// the connection's foreign keys are on again afterwards.
+    #[test]
+    fn rebuild_with_foreign_keys_off_keeps_child_rows() {
+        let parent = Migration {
+            version: 1,
+            name: "parent",
+            sql: "CREATE TABLE p (id INTEGER PRIMARY KEY);
+                  CREATE TABLE c (p INTEGER REFERENCES p(id) ON DELETE CASCADE);
+                  INSERT INTO p VALUES (1); INSERT INTO c VALUES (1);",
+            foreign_keys_off: false,
+        };
+        let rebuild = Migration {
+            version: 2,
+            name: "rebuild",
+            sql: "CREATE TABLE p2 (id INTEGER PRIMARY KEY, x TEXT);
+                  INSERT INTO p2 (id) SELECT id FROM p;
+                  DROP TABLE p; ALTER TABLE p2 RENAME TO p;",
+            foreign_keys_off: true,
+        };
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate(&mut conn, &[parent]).unwrap();
+        migrate(&mut conn, &[parent, rebuild]).unwrap();
+        let children: i64 = conn
+            .query_row("SELECT count(*) FROM c", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(children, 1);
+        let keys: bool = conn
+            .pragma_query_value(None, "foreign_keys", |r| r.get(0))
+            .unwrap();
+        assert!(keys);
+    }
+
+    /// A rebuild that leaves a reference dangling is rolled back.
+    #[test]
+    fn rebuild_that_breaks_a_foreign_key_rolls_back() {
+        let parent = Migration {
+            version: 1,
+            name: "parent",
+            sql: "CREATE TABLE p (id INTEGER PRIMARY KEY);
+                  CREATE TABLE c (p INTEGER REFERENCES p(id));
+                  INSERT INTO p VALUES (1); INSERT INTO c VALUES (1);",
+            foreign_keys_off: false,
+        };
+        let lossy = Migration {
+            version: 2,
+            name: "lossy",
+            sql: "CREATE TABLE p2 (id INTEGER PRIMARY KEY);
+                  DROP TABLE p; ALTER TABLE p2 RENAME TO p;",
+            foreign_keys_off: true,
+        };
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate(&mut conn, &[parent]).unwrap();
+        let err = migrate(&mut conn, &[parent, lossy]).unwrap_err();
+        assert_eq!(err.code, AppErrorCode::MigrationFailed);
+        assert_eq!(schema_version(&conn).unwrap(), 1);
+        let parents: i64 = conn
+            .query_row("SELECT count(*) FROM p", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(parents, 1);
     }
 
     #[test]

@@ -4,7 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, type Mock, vi } 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import i18n from "@/i18n";
 import { useAnnouncement } from "@/lib/announce";
-import type { Surah, TranslationInfo, VerseWithTranslations } from "@/lib/bindings";
+import { useAudioStore } from "@/features/audio/store";
+import type { AudioPack, Surah, TranslationInfo, VerseWithTranslations } from "@/lib/bindings";
 import { DEFAULT_PREFERENCES, useUiStore } from "@/stores/ui";
 import { stubLayout } from "@/test/layout";
 
@@ -74,6 +75,7 @@ const navigate = vi.fn();
 const toggleBookmark = vi.fn();
 let bookmarks: { verse: { id: number } }[] = [];
 let notes: { verse_from: number; verse_to: number }[] = [];
+let audioPacks: AudioPack[] = [];
 vi.mock("@tanstack/react-router", () => ({
   useParams: () => current,
   useNavigate: () => navigate,
@@ -104,6 +106,7 @@ vi.mock("@/lib/queries", () => ({
   useNotes: () => ({ data: notes }),
   useToggleBookmark: () => ({ mutate: toggleBookmark }),
   useSurahs: () => ({ data: Object.values(SURAHS) }),
+  useAudioPacks: () => ({ data: audioPacks }),
   fetchCitation: vi.fn(),
   appErrorCode: () => undefined,
 }));
@@ -394,6 +397,47 @@ describe("ReaderView", () => {
         collapsed: false,
         tab: "notes",
       });
+    });
+
+    it("offers recitation only with a reciter, plays with p and marks the verse", () => {
+      useAudioStore.getState().stop();
+      show(1);
+      expect(screen.queryByRole("button", { name: "Listen" })).toBeNull();
+      const first = screen.getByRole("article", { name: "Verse 1:1" });
+      first.focus();
+      fireEvent.keyDown(first, { key: "p" });
+      expect(useAudioStore.getState().track).toBeNull();
+    });
+
+    it("plays a verse from its button and with p, and marks the verse being recited", () => {
+      audioPacks = [
+        {
+          id: "audio.test",
+          title: "Test Reciter",
+          titles: { tr: "Test Kari", en: "Test Reciter" },
+          style: "murattal",
+          attribution: null,
+        },
+      ];
+      useAudioStore.getState().stop();
+      show(1);
+      const first = screen.getByRole("article", { name: "Verse 1:1" });
+      fireEvent.click(within(first).getByRole("button", { name: "Listen" }));
+      // al-Fatiha 1:1 is the basmala itself: none is played before it.
+      expect(useAudioStore.getState().track).toEqual({ surah: 1, ayah: 1, basmala: false });
+
+      const third = screen.getByRole("article", { name: "Verse 1:3" });
+      third.focus();
+      fireEvent.keyDown(third, { key: "p" });
+      expect(useAudioStore.getState().track).toEqual({ surah: 1, ayah: 3, basmala: false });
+      expect(third).toHaveAttribute("aria-current", "true");
+      expect(within(third).getByRole("button", { name: "Pause recitation" })).toBeInTheDocument();
+
+      // p again pauses the verse that is playing.
+      fireEvent.keyDown(third, { key: "p" });
+      expect(useAudioStore.getState().status).toBe("paused");
+      useAudioStore.getState().stop();
+      audioPacks = [];
     });
 
     it("marks verses with a bookmark or a note", () => {

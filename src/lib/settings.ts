@@ -103,7 +103,21 @@ export interface Settings {
   "ai.monthly_limit_usd": number | null;
   /** Tafsir packs whose commentary goes into chat, at most 3 (spec §10). */
   "chat.tafsirs": string[];
+  /** Audio pack (reciter) of the player; `null` for the first installed (ADR 0014). */
+  "audio.reciter": string | null;
+  /** After a verse, play the next one until the end of the surah. */
+  "audio.autoplay": boolean;
+  /** Repeat the playing verse or the whole surah. */
+  "audio.repeat": AudioRepeat;
+  /** Scroll the reader to the playing verse. */
+  "audio.follow": boolean;
 }
+
+/** Repeat modes of the recitation player. */
+export const AUDIO_REPEAT = ["off", "verse", "surah"] as const;
+
+/** A repeat mode of the recitation player. */
+export type AudioRepeat = (typeof AUDIO_REPEAT)[number];
 
 /** Most chat tafsirs (spec §10). */
 export const MAX_CHAT_TAFSIRS = 3;
@@ -239,6 +253,13 @@ export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
       value.length <= MAX_CHAT_TAFSIRS &&
       value.every((id) => typeof id === "string"),
   },
+  "audio.reciter": {
+    default: null,
+    validate: nullable((value): value is string => typeof value === "string" && value !== ""),
+  },
+  "audio.autoplay": { default: true, validate: isBoolean },
+  "audio.repeat": { default: "off", validate: isOneOf(AUDIO_REPEAT) },
+  "audio.follow": { default: true, validate: isBoolean },
   "ai.arabic_sources": {
     default: {},
     validate: (value): value is Record<string, boolean> =>

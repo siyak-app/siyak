@@ -15,6 +15,8 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { playOrToggle, useAudioStore } from "@/features/audio/store";
+import { useReciter } from "@/features/audio/useReciter";
 import { announce } from "@/lib/announce";
 import type { VerseWithTranslations } from "@/lib/bindings";
 import {
@@ -143,6 +145,30 @@ function useVerseMarks(items: readonly VerseWithTranslations[]) {
   return { bookmarked, noted };
 }
 
+/** Plays or pauses a verse's recitation. Stable, as verses are memoized. */
+function playVerse(verse: VerseWithTranslations) {
+  playOrToggle(verse.surah, verse.ayah);
+}
+
+/**
+ * Keeps the verse being recited in view while `audio.follow` is on, if it is in
+ * this surah. Only scrolls when the verse is out of view.
+ */
+function useFollowRecitation(
+  surah: number,
+  virtualizer: Virtualizer<HTMLDivElement, Element>,
+  items: readonly VerseWithTranslations[],
+) {
+  const track = useAudioStore((state) => state.track);
+  const follow = useUiStore((state) => state.preferences["audio.follow"]);
+  const ayah = track?.surah === surah && !track.basmala ? track.ayah : null;
+  useEffect(() => {
+    if (!follow || ayah === null) return;
+    const index = items.findIndex((verse) => verse.ayah === ayah);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: "auto" });
+  }, [follow, ayah, items, virtualizer]);
+}
+
 /** Opens a verse on the compare screen. Stable, as verses are memoized. */
 function useCompareVerse() {
   const navigate = useNavigate();
@@ -162,7 +188,8 @@ function useCompareVerse() {
  * ↑/↓ move between verses, Home/End jump to the first or last, scrolling
  * the virtualized list as needed; Enter or a click opens the verse in the
  * context panel, `t` opens it on the Tafsir tab, `w` on the Word tab and `c`
- * on the compare screen; `b` toggles its bookmark and `n` starts a note. Keys and clicks on a verse's buttons and words keep
+ * on the compare screen; `b` toggles its bookmark, `n` starts a note and `p` plays
+ * or pauses its recitation (with a reciter installed). Keys and clicks on a verse's buttons and words keep
  * their usual meaning, and a click that ends a text selection selects nothing, so text
  * can still be selected and copied.
  */
@@ -170,6 +197,7 @@ function useVerseFocus(
   listRef: RefObject<HTMLDivElement | null>,
   virtualizer: Virtualizer<HTMLDivElement, Element>,
   items: readonly VerseWithTranslations[],
+  canPlay: boolean,
 ) {
   const [focusIndex, setFocusIndex] = useState(0);
   const pendingFocus = useRef<number | null>(null);
@@ -211,6 +239,7 @@ function useVerseFocus(
     else if (event.key === "c") compareVerse(verse);
     else if (event.key === "b") bookmarkVerse(verse);
     else if (event.key === "n") openNoteEditor({ surah: verse.surah, ayah: verse.ayah });
+    else if (event.key === "p" && canPlay) playVerse(verse);
     else return;
     event.preventDefault();
   };
@@ -318,7 +347,9 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
     scrollMargin: listOffset,
   });
 
-  const focus = useVerseFocus(listRef, virtualizer, items);
+  const canPlay = useReciter().active !== null;
+  const focus = useVerseFocus(listRef, virtualizer, items, canPlay);
+  useFollowRecitation(surah, virtualizer, items);
   const { setFocusIndex } = focus;
 
   // A deep link scrolls to its verse and highlights it briefly; otherwise the
@@ -404,6 +435,7 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
                   bookmarked={bookmarked.has(verse.id)}
                   noted={noted.has(verse.id)}
                   onBookmark={bookmarkVerse}
+                  onPlay={canPlay ? playVerse : undefined}
                 />
               </div>
             );

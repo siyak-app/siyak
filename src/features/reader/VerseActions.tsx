@@ -8,6 +8,8 @@ import {
   LanguagesIcon,
   type LucideIcon,
   NotebookPenIcon,
+  PauseIcon,
+  PlayIcon,
   QuoteIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -53,6 +55,8 @@ export function VerseActions({
   onCompare,
   bookmarked = false,
   onBookmark,
+  onPlay,
+  playing = false,
 }: {
   verse: VerseWithTranslations;
   /** The surah's name in the interface language, for the reference. */
@@ -66,6 +70,10 @@ export function VerseActions({
   bookmarked?: boolean;
   /** Toggles the verse's bookmark. */
   onBookmark?: (verse: VerseWithTranslations) => void;
+  /** Plays the verse's recitation, or pauses it; only with an installed reciter. */
+  onPlay?: (verse: VerseWithTranslations) => void;
+  /** Whether this verse's recitation is playing. */
+  playing?: boolean;
 }) {
   const { t } = useTranslation();
   const citationAction = useUiStore((state) => state.preferences["reader.citation_action"]);
@@ -83,6 +91,17 @@ export function VerseActions({
   }, [copied]);
 
   const actions: Action[] = [];
+  if (onPlay) {
+    actions.push({
+      id: "play",
+      icon: playing ? PauseIcon : PlayIcon,
+      label: t(playing ? "verse_actions.pause" : "verse_actions.play"),
+      active: playing,
+      run: () => {
+        onPlay(verse);
+      },
+    });
+  }
   if (onBookmark) {
     actions.push({
       id: "bookmark",

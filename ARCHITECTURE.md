@@ -23,6 +23,7 @@ rules must not be broken. The full design, including features that are not built
 │                       related (cross-references)            │
 │ commands/keys ──▶ secrets (OS keychain)                     │
 │ commands/{ai,chat} ──▶ llm (providers, cost, tafsir, chat)  │
+│ siyak-audio: scheme ──▶ audio (verse files of audio packs)  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -212,6 +213,7 @@ These hold in every change; a pull request that weakens one needs an ADR.
 | core refresh                       | `src-tauri/src/db/content.rs` (`refresh_core`)                                                                               |
 | CI                                 | `.github/workflows/ci.yml`                                                                                                   |
 | the website                        | `website/src/content/docs/{en,tr}/`                                                                                          |
+| recitation (audio packs, player)   | `src-tauri/src/audio.rs`, `src/features/audio/`                                                                              |
 
 ## Semantic layer (M7)
 
@@ -299,3 +301,27 @@ server-sent events through `net.rs`, with no provider SDK (ADR 0013).
   panel's Chat tab share `src/features/chat/ChatConversation.tsx`. Settings → AI
   (`src/features/settings/AiSettings.tsx`, `SpendingSettings.tsx`) picks the provider, the models,
   the Arabic-sources flag, the chat tafsirs and the monthly limit.
+
+## Recitation (ADR 0014)
+
+Verse-by-verse recitation comes from audio packs (`audio.<reciter>`), one per reciter: archive packs
+whose files are one mp3 per verse, `packs/<id>/audio/SSSAAA.mp3`, plus `audio/LICENSE`.
+
+- `audio.rs` holds the layout (the 6,236 member names, `AYAH_COUNTS`, verse id ↔ surah and ayah),
+  checks a pack's `meta` (`Reciter`), lists the installed reciters (`list_audio_packs`) and answers
+  the `siyak-audio:` scheme registered in `lib.rs`: `/<pack id>/<verse id>.mp3`, only for installed
+  packs of type `audio`, with byte ranges. The path on disk is built from the parsed pack id and
+  verse number, never taken from the request. The CSP allows the scheme as `media-src`; the
+  webview still has no file system access.
+- `packs/install.rs` extracts audio packs like model packs; `extract_archive` looks member names up
+  in sets, since an audio pack has 6,238 of them. Files-only packs (model, audio) install under any
+  content schema up to the current one (`schema_supported`).
+- Content schema 3 (`0003_audio.sql`) rebuilds `packs` to allow the type. It runs with foreign keys
+  off (`Migration::foreign_keys_off`), and the runner checks the foreign keys before it commits.
+- The interface: `src/features/audio/playback.ts` decides what plays next (basmala before the first
+  verse of a surah except 1 and 9, autoplay, repeat) and builds the scheme address;
+  `store.ts` holds the track and status; `AudioPlayer` (mounted once in the app shell) owns the
+  `<audio>` element and preloads the next verse; `AudioBar` is the bar below the content while a
+  verse is loaded. The reader adds a Listen action and the `p` key, marks the verse being recited
+  and scrolls to it (`audio.follow`). Settings → Display & behaviour has the Recitation section
+  (`audio.reciter`, `audio.autoplay`, `audio.follow`; `audio.repeat` is set from the bar).

@@ -34,6 +34,7 @@ const saved: Partial<Settings>[] = [];
 
 vi.mock("@/lib/queries", () => ({
   useTranslations: () => ({ data: PACKS, isPending: false }),
+  useAudioPacks: () => ({ data: [] }),
   useSetSettings: () => ({
     mutate: (values: Partial<Settings>, options: { onSuccess: () => void }) => {
       saved.push(values);

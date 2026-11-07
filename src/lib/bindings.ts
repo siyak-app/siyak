@@ -50,6 +50,8 @@ export const commands = {
 	 *  commentary of the given tafsirs, for the compare screen.
 	 */
 	getCompare: (from: number, to: number, translationIds: string[], tafsirIds: string[]) => typedError<Compare, AppError>(__TAURI_INVOKE("get_compare", { from, to, translationIds, tafsirIds })),
+	/**  Lists the installed audio packs (reciters). */
+	listAudioPacks: () => typedError<AudioPack[], AppError>(__TAURI_INVOKE("list_audio_packs")),
 	/**  The installed morphology pack, if any. */
 	getMorphologyPack: () => typedError<{
 	/**  Pack id, e.g. `morphology.qac`. */
@@ -421,6 +423,20 @@ export type AppErrorCode =
  *  (spec §8); `get_ai_status` says what is missing.
  */
 "ai_unavailable";
+
+/**  An installed audio pack, as the reader's player lists it. */
+export type AudioPack = {
+	/**  Pack id, e.g. `audio.alafasy`. */
+	id: string,
+	/**  Title as published (`packs.title`). */
+	title: string,
+	/**  Title in the interface languages. */
+	titles: LocalizedTitle,
+	/**  `murattal`, `mujawwad` or `muallim`, if the pack says. */
+	style: string | null,
+	/**  Attribution shown with the player (spec §6.5). */
+	attribution: string | null,
+};
 
 /**  A bookmark with its verse. */
 export type BookmarkedVerse = {

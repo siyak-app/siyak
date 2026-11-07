@@ -42,6 +42,11 @@ pub(crate) fn content_db(path: &Path) -> Connection {
     conn
 }
 
+/// The content schema version test packs are built for.
+pub(crate) fn current_schema() -> i64 {
+    i64::from(super::install::schema_version())
+}
+
 /// Writes `pack_info`.
 pub(crate) fn pack_info(conn: &Connection, id: &str, kind: &str, version: &str, schema: i64) {
     conn.execute_batch(
@@ -64,7 +69,7 @@ pub(crate) fn translation_db(
     rows: &[(i64, &str)],
 ) -> Connection {
     let conn = Connection::open(path).unwrap();
-    pack_info(&conn, id, "translation", version, 2);
+    pack_info(&conn, id, "translation", version, current_schema());
     conn.execute_batch(
         "CREATE TABLE translations (pack_id TEXT NOT NULL, verse_id INTEGER NOT NULL,
            text TEXT NOT NULL, PRIMARY KEY (pack_id, verse_id)) WITHOUT ROWID",
@@ -91,7 +96,7 @@ pub(crate) fn tafsir_db(
     passages: &[Passage<'_>],
 ) -> Connection {
     let conn = Connection::open(path).unwrap();
-    pack_info(&conn, id, "tafsir", version, 2);
+    pack_info(&conn, id, "tafsir", version, current_schema());
     conn.execute_batch(
         "CREATE TABLE tafsir (id INTEGER PRIMARY KEY, pack_id TEXT NOT NULL,
            verse_from INTEGER NOT NULL, verse_to INTEGER NOT NULL,
@@ -122,7 +127,7 @@ pub(crate) fn tafsir_db(
 /// A morphology pack database: two words of verse 1 with one segment each.
 pub(crate) fn morphology_db(path: &Path, id: &str, version: &str, root: &str) -> Connection {
     let conn = Connection::open(path).unwrap();
-    pack_info(&conn, id, "morphology", version, 2);
+    pack_info(&conn, id, "morphology", version, current_schema());
     conn.execute_batch(&format!(
         "CREATE TABLE words (id INTEGER PRIMARY KEY, verse_id INTEGER NOT NULL,
            position INTEGER NOT NULL, text_ar TEXT NOT NULL, translit TEXT, gloss_en TEXT);

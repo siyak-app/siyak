@@ -4,6 +4,7 @@
 //! access live entirely in this crate (spec §3). See `ARCHITECTURE.md` for the
 //! module map.
 
+pub mod audio;
 pub mod collections;
 pub mod commands;
 pub mod db;
@@ -59,6 +60,9 @@ pub struct AppState {
     keys: Arc<dyn KeyStore>,
     llm: Llm,
     pricing: PricingStore,
+    /// `<app_data>/packs`, where audio packs keep their verse files (empty when the
+    /// data directory is unknown).
+    packs_dir: PathBuf,
 }
 
 impl AppState {
@@ -108,6 +112,26 @@ impl AppState {
             .await
     }
 
+    /// Answers a `siyak-audio:` request from the files of an installed audio pack.
+    pub fn audio_response(
+        &self,
+        path: &str,
+        range: Option<&str>,
+    ) -> tauri::http::Response<std::borrow::Cow<'static, [u8]>> {
+        let installed = |pack_id: &str| {
+            let Ok(conn) = self.content() else {
+                return false;
+            };
+            conn.query_row(
+                "SELECT 1 FROM packs WHERE id = ?1 AND type = 'audio'",
+                [pack_id],
+                |_| Ok(()),
+            )
+            .is_ok()
+        };
+        audio::respond(&self.packs_dir, installed, path, range)
+    }
+
     /// Locks the `content.db` connection.
     pub fn content(&self) -> AppResult<MutexGuard<'_, Connection>> {
         lock(&self.databases()?.content)
@@ -153,6 +177,26 @@ pub fn run() {
         // The dialogs are opened from Rust; the webview has no permission for them (spec §14.3).
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
+        // Verse recitations of installed audio packs (ADR 0014); the CSP allows it as media-src.
+        .register_asynchronous_uri_scheme_protocol(audio::SCHEME, |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            let path = request.uri().path().to_owned();
+            let range = request
+                .headers()
+                .get(tauri::http::header::RANGE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            tauri::async_runtime::spawn_blocking(move || {
+                let response = match app.try_state::<AppState>() {
+                    Some(state) => state.audio_response(&path, range.as_deref()),
+                    None => tauri::http::Response::builder()
+                        .status(tauri::http::StatusCode::SERVICE_UNAVAILABLE)
+                        .body(std::borrow::Cow::Borrowed(&[][..]))
+                        .unwrap_or_default(),
+                };
+                responder.respond(response);
+            });
+        })
         .setup(|app| {
             let state = open_state(app);
             if let Err(err) = &state.databases {
@@ -186,6 +230,7 @@ fn open_state(app: &tauri::App) -> AppState {
                 keys: Arc::new(NoKeyStore),
                 llm: Llm::new(Arc::new(NoKeyStore), None),
                 pricing: PricingStore::new(Path::new("")),
+                packs_dir: PathBuf::new(),
             };
         }
     };
@@ -231,6 +276,7 @@ fn open_state(app: &tauri::App) -> AppState {
         llm: Llm::new(Arc::clone(&keys), providers),
         keys,
         pricing: PricingStore::new(&data_dir),
+        packs_dir: packs::install::packs_dir(&data_dir),
     }
 }
 

@@ -10,6 +10,7 @@ import { CONTEXT_TABS, type ExperienceProfile } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
 import { CheckField, RadioField } from "./fields";
+import { RecitationSettings } from "./RecitationSettings";
 
 const PROFILES: readonly ExperienceProfile[] = ["reader", "researcher"];
 
@@ -63,6 +64,8 @@ export function DisplaySettings() {
         <p className="text-xs text-muted-foreground">{t("reader.translations_picker_hint")}</p>
         <TranslationChooser />
       </section>
+
+      <RecitationSettings />
 
       <RadioField
         legend={t("settings.verse_actions")}

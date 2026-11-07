@@ -41,6 +41,9 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
   libssl-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
+Recitations (audio packs) play through GStreamer on Linux: install its MP3 decoder too
+(`gstreamer1.0-plugins-good` on Debian/Ubuntu, `gstreamer1-plugins-good` on Fedora).
+
 Fedora:
 
 ```sh

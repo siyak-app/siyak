@@ -36,6 +36,10 @@ const SAMPLE: Settings = {
   "ai.arabic_sources": { "openai_compatible/qwen3": true },
   "ai.monthly_limit_usd": 5,
   "chat.tafsirs": ["ar.jalalayn"],
+  "audio.reciter": "audio.alafasy",
+  "audio.autoplay": false,
+  "audio.repeat": "surah",
+  "audio.follow": false,
 };
 
 describe("settings", () => {
@@ -58,6 +62,8 @@ describe("settings", () => {
     );
     expect(parseSetting("reader.last_position", '{"surah":0,"ayah":1}')).toBeNull();
     expect(parseSetting("experience_profile", '"expert"')).toBeNull();
+    expect(parseSetting("audio.repeat", '"forever"')).toBe("off");
+    expect(parseSetting("audio.reciter", '""')).toBeNull();
     expect(parseSetting("search.mode_chips", '"yes"')).toBe(false);
     expect(parseSetting("ui.theme", "{")).toBe("system");
     expect(parseSetting("ai.provider", '"voyage"')).toBeNull();

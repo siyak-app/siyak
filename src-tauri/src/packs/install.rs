@@ -16,7 +16,7 @@
 //! undone. A crash between the two is repaired on the next start by
 //! [`cleanup`], which compares each directory's `pack.json` with `packs.version`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -29,6 +29,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::download::Progress;
 use super::manifest::{PackEntry, PackKind, Phase};
+use crate::audio;
 use crate::db::content::{MIGRATIONS as CONTENT_MIGRATIONS, seed_marker};
 use crate::embed::index::decode_vector;
 use crate::embed::space::VectorPackSpec;
@@ -65,8 +66,9 @@ pub fn pack_tables(kind: PackKind) -> &'static [(&'static str, &'static [&'stati
             ),
         ],
         PackKind::Vectors => &[("vectors", &["verse_id", "embedding"])],
-        // The model's files are archive members; its database holds only pack_info.
-        PackKind::Model => &[],
+        // The model's and the recitation's files are archive members; their
+        // databases hold only pack_info.
+        PackKind::Model | PackKind::Audio => &[],
     }
 }
 
@@ -101,6 +103,7 @@ pub fn archive_layout(kind: PackKind) -> Option<(&'static str, &'static [&'stati
                 "model/tokenizer.json",
             ],
         )),
+        PackKind::Audio => Some((audio::DB_MEMBER, audio::archive_members())),
         PackKind::Translation | PackKind::Tafsir | PackKind::Vectors => None,
     }
 }
@@ -110,6 +113,7 @@ pub fn notice_member(kind: PackKind) -> Option<&'static str> {
     match kind {
         PackKind::Morphology => Some("qac/NOTICE"),
         PackKind::Model => Some("model/LICENSE"),
+        PackKind::Audio => Some(audio::LICENSE_MEMBER),
         PackKind::Translation | PackKind::Tafsir | PackKind::Vectors => None,
     }
 }
@@ -120,6 +124,17 @@ const MORPHOLOGY_ORDER: &[&str] = &["roots", "lemmas", "words", "word_segments"]
 /// The content schema version packs must be built for (pack-format §2).
 pub fn schema_version() -> u32 {
     CONTENT_MIGRATIONS.len() as u32
+}
+
+/// Whether a pack of `kind` built for `schema` installs here: the current schema,
+/// or for packs without content tables (model, audio) any schema up to it.
+pub fn schema_supported(kind: PackKind, schema: i64) -> bool {
+    let current = i64::from(schema_version());
+    if kind.is_files_only() {
+        (1..=current).contains(&schema)
+    } else {
+        schema == current
+    }
 }
 
 /// Marker file in an archive pack's directory: which version the files belong to.
@@ -325,7 +340,7 @@ fn check_verses_exist(conn: &Connection, entry: &PackEntry, kind: PackKind) -> A
         PackKind::Tafsir => &[("tafsir", "verse_from"), ("tafsir", "verse_to")],
         PackKind::Morphology => &[("words", "verse_id")],
         PackKind::Vectors => &[("vectors", "verse_id")],
-        PackKind::Model => &[],
+        PackKind::Model | PackKind::Audio => &[],
     };
     for (table, column) in references {
         let missing = conn
@@ -457,7 +472,7 @@ fn check_pack_info(conn: &Connection, entry: &PackEntry, kind: PackKind) -> AppR
     let Value::Integer(schema) = row[3] else {
         return Err(invalid(entry, "pack_info.schema_version is not an integer"));
     };
-    if schema != i64::from(schema_version()) {
+    if !schema_supported(kind, schema) {
         return Err(AppError::new(
             AppErrorCode::PackSchemaUnsupported,
             format!(
@@ -583,7 +598,7 @@ fn copy_rows(tx: &Transaction<'_>, pack_id: &str, kind: PackKind) -> AppResult<O
             Ok(None)
         }
         // Only the packs row and the files.
-        PackKind::Model => Ok(None),
+        PackKind::Model | PackKind::Audio => Ok(None),
     }
 }
 
@@ -739,8 +754,8 @@ pub fn uninstall(conn: &mut Connection, data_dir: &Path, pack_id: &str) -> AppRe
             }
         }
         // Tafsir rows and paragraphs and the vectors of a vector pack go with
-        // the packs row (ON DELETE CASCADE); a model pack has only files.
-        Some(PackKind::Tafsir | PackKind::Vectors | PackKind::Model) | None => {}
+        // the packs row (ON DELETE CASCADE); model and audio packs have only files.
+        Some(PackKind::Tafsir | PackKind::Vectors | PackKind::Model | PackKind::Audio) | None => {}
     }
     tx.execute("DELETE FROM packs WHERE id = ?1", [pack_id])?;
     tx.commit()?;
@@ -1022,13 +1037,15 @@ fn extract_archive(
         }
     };
     let mut archive = tar::Archive::new(reader);
-    let mut seen: Vec<&str> = Vec::new();
+    // An audio pack has 6,238 members: look names up in sets, not lists.
+    let names: HashSet<&str> = expected.iter().copied().collect();
+    let mut seen: HashSet<&str> = HashSet::with_capacity(expected.len());
     for member in archive.entries().map_err(wrap)? {
         let mut member = member.map_err(wrap)?;
         let raw = member.path_bytes().into_owned();
         let name = std::str::from_utf8(&raw)
             .ok()
-            .and_then(|n| expected.iter().copied().find(|e| *e == n))
+            .and_then(|n| names.get(n).copied())
             .ok_or_else(|| {
                 bad(format!(
                     "unexpected member {:?}",
@@ -1038,10 +1055,9 @@ fn extract_archive(
         if !member.header().entry_type().is_file() {
             return Err(bad(format!("member {name:?} is not a regular file")));
         }
-        if seen.contains(&name) {
+        if !seen.insert(name) {
             return Err(bad(format!("member {name:?} appears twice")));
         }
-        seen.push(name);
         let to = dest.join(name);
         if let Some(parent) = to.parent() {
             fs::create_dir_all(parent).map_err(io_failed)?;
@@ -1957,7 +1973,7 @@ mod tests {
             let db = self.path(&format!("{id}-{version}.sqlite"));
             let _ = fs::remove_file(&db);
             let conn = Connection::open(&db).unwrap();
-            pack_info(&conn, id, "vectors", version, 2);
+            pack_info(&conn, id, "vectors", version, current_schema());
             // No primary key, so duplicates can be written.
             conn.execute_batch("CREATE TABLE vectors (verse_id INTEGER NOT NULL, embedding BLOB)")
                 .unwrap();
@@ -2085,7 +2101,7 @@ mod tests {
         let mut env = Env::new();
         let db = env.path("model.sqlite");
         let conn = Connection::open(&db).unwrap();
-        pack_info(&conn, "model.e5-small", "model", "1.0.0", 2);
+        pack_info(&conn, "model.e5-small", "model", "1.0.0", current_schema());
         drop(conn);
         let archive = env.path("model.e5-small.tar.zst");
         tar_zst(
@@ -2121,6 +2137,134 @@ mod tests {
             env.count("SELECT count(*) FROM packs WHERE id = 'model.e5-small'"),
             0
         );
+    }
+
+    /// An audio pack archive with every member, minus `skip`, plus `extra`.
+    fn audio_pack(env: &Env, schema: i64, skip: &str, extra: &[&str]) -> (PathBuf, PackEntry) {
+        let id = "audio.test";
+        let db = env.path("audio.sqlite");
+        let _ = fs::remove_file(&db);
+        let conn = Connection::open(&db).unwrap();
+        pack_info(&conn, id, "audio", "1.0.0", schema);
+        drop(conn);
+        let db_bytes = fs::read(&db).unwrap();
+        let mut members: Vec<Member<'_>> = crate::audio::archive_members()
+            .iter()
+            .filter(|name| **name != skip)
+            .map(|name| match *name {
+                crate::audio::DB_MEMBER => Member::file(name, &db_bytes),
+                crate::audio::LICENSE_MEMBER => Member::file(name, b"Recitation: Test"),
+                _ => Member::file(name, name.as_bytes()),
+            })
+            .collect();
+        members.extend(extra.iter().map(|name| Member::file(name, b"x")));
+        let archive = env.path("audio.test.tar.zst");
+        tar_zst(&archive, &members);
+        let mut entry = entry_for(&archive, id, "audio", "1.0.0", 64 << 20);
+        entry.meta = Some(
+            serde_json::json!({
+                "reciter": { "tr": "Test Kari", "en": "Test Reciter" },
+                "style": "murattal",
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        );
+        (archive, entry)
+    }
+
+    /// A real audio pack built by `siyak-data build-audio`, installed and served
+    /// through the `siyak-audio:` handler. Ignored: it reads about a gigabyte.
+    /// Run with `cargo test -- --ignored installs_and_serves_a_real_audio_pack`.
+    #[test]
+    #[ignore = "needs ../siyak-data/dist/audio.alafasy.tar.zst"]
+    fn installs_and_serves_a_real_audio_pack() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let archive = root.join("../../siyak-data/dist/audio.alafasy.tar.zst");
+        let installed_size = frame_content_size(&archive).unwrap().unwrap();
+        let mut entry = entry_for(&archive, "audio.alafasy", "audio", "1.0.0", installed_size);
+        entry.meta = Some(
+            serde_json::json!({
+                "reciter": { "tr": "Mişari Raşid el-Afasi", "en": "Mishari Rashid al-Afasy" },
+                "style": "murattal",
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+        );
+        let mut env = Env::new();
+        env.install(&archive, &entry).unwrap();
+        let packs = packs_dir(env.dir.path());
+        let response = crate::audio::respond(
+            &packs,
+            |id| id == "audio.alafasy",
+            "/audio.alafasy/262.mp3",
+            Some("bytes=0-3"),
+        );
+        assert_eq!(response.status(), tauri::http::StatusCode::PARTIAL_CONTENT);
+        let total = fs::metadata(packs.join("audio.alafasy/audio/002255.mp3"))
+            .unwrap()
+            .len();
+        assert_eq!(
+            response.headers()[tauri::http::header::CONTENT_RANGE],
+            format!("bytes 0-3/{total}").as_str()
+        );
+        // An MPEG frame (or an ID3 tag) starts the file.
+        let head = response.body();
+        assert!(head.starts_with(b"ID3") || (head[0] == 0xFF && head[1] & 0xE0 == 0xE0));
+        let license = fs::read_to_string(packs.join("audio.alafasy/audio/LICENSE")).unwrap();
+        assert!(license.contains("Quran.com"));
+    }
+
+    #[test]
+    fn installs_an_audio_pack_as_files_and_removes_it() {
+        let mut env = Env::new();
+        // Files-only packs install under an older content schema too.
+        let (archive, entry) = audio_pack(&env, 2, "", &[]);
+        env.install(&archive, &entry).unwrap();
+        let dir = packs_dir(env.dir.path()).join("audio.test");
+        assert_eq!(
+            fs::read(dir.join("audio/002255.mp3")).unwrap(),
+            b"audio/002255.mp3"
+        );
+        assert!(dir.join("audio/114006.mp3").is_file());
+        assert_eq!(
+            fs::read(dir.join("audio/LICENSE")).unwrap(),
+            b"Recitation: Test"
+        );
+        assert!(!dir.join("audio.sqlite").exists());
+        assert_eq!(
+            env.count("SELECT count(*) FROM packs WHERE id = 'audio.test' AND type = 'audio'"),
+            1
+        );
+
+        let data_dir = env.dir.path().to_owned();
+        uninstall(&mut env.conn, &data_dir, "audio.test").unwrap();
+        assert!(!dir.exists());
+        assert_eq!(env.count("SELECT count(*) FROM packs"), 1);
+    }
+
+    #[test]
+    fn refuses_audio_packs_with_missing_or_extra_files() {
+        let mut env = Env::new();
+        let (archive, entry) = audio_pack(&env, current_schema(), "audio/002255.mp3", &[]);
+        let err = env.install(&archive, &entry).unwrap_err();
+        assert_eq!(err.code, AppErrorCode::PackInvalid);
+        assert!(err.message.contains("002255"), "{}", err.message);
+
+        for extra in ["audio/115001.mp3", "audio/../x.mp3", "audio/001001.wav"] {
+            let (archive, entry) = audio_pack(&env, current_schema(), "", &[extra]);
+            let err = env.install(&archive, &entry).unwrap_err();
+            assert_eq!(err.code, AppErrorCode::PackInvalid, "{extra}");
+        }
+        let (archive, entry) = audio_pack(&env, current_schema() + 1, "", &[]);
+        let err = env.install(&archive, &entry).unwrap_err();
+        assert_eq!(err.code, AppErrorCode::PackSchemaUnsupported);
+        assert_eq!(
+            env.count("SELECT count(*) FROM packs WHERE type = 'audio'"),
+            0
+        );
+        assert!(!packs_dir(env.dir.path()).join("audio.test").exists());
     }
 
     #[test]

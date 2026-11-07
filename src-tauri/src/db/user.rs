@@ -23,11 +23,13 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 1,
         name: "initial",
         sql: include_str!("../../migrations/user/0001_initial.sql"),
+        foreign_keys_off: false,
     },
     Migration {
         version: 2,
         name: "packs",
         sql: include_str!("../../migrations/user/0002_packs.sql"),
+        foreign_keys_off: false,
     },
 ];
 

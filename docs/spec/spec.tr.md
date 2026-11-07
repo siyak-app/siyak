@@ -20,7 +20,7 @@ Uygulamanın backend'i yoktur; her şey kullanıcının bilgisayarında çalış
 1. **Kaynağa sadakat:** Her metnin orijinali her zaman bir tık uzaktadır. Makine çıktıları (çeviri, AI cevabı) açıkça etiketlenir ve kaynağıyla yan yana gösterilir.
 2. **Anahtarsız tam değer:** Okuma, karşılaştırma, kök analizi, arama ve notlar API anahtarı olmadan çalışır. AI özellikleri ek katmandır.
 3. **Doğrulanabilirlik:** Kod, veri pipeline'ı ve kaynak lisansları açıktır; binary'nin koddan üretildiği kanıtlanabilir.
-4. **Lisans önceliklidir:** Redistribution hakkı teyit edilmemiş içerik dağıtılmaz.
+4. **Lisans önceliklidir:** Redistribution hakkı teyit edilmemiş içerik dağıtılmaz. Kayda geçmiş tek istisna tilavet paketleridir (ADR 0014): atıfla yayımlanır, hak sahibi isterse kaldırılır.
 5. **Herkes için sade, isteyene derin:** Aynı arayüz hem okuyucuya hem araştırmacıya hizmet eder. Ekran sade açılır; derinlik kullanıcı istedikçe ortaya çıkar (kademeli açılım, §13.2). Ayrı "basit/uzman" modları yoktur.
 6. **Katkıya açık:** Kod okunabilir, kararlar kayıtlı, dokümantasyon iki dilli; kod yazmayanların da katkı verebileceği yollar vardır (§16).
 
@@ -37,11 +37,12 @@ Uygulamanın backend'i yoktur; her şey kullanıcının bilgisayarında çalış
 | Koleksiyonlar ve notlar | Yer imi, ayete bağlı notlar, ayetleri araştırma konularına göre gruplayan koleksiyonlar |
 | Dışa aktarma | Koleksiyon/not → Markdown; ayet ve meal/tefsir için akademik atıf metni; JSON yedekleme |
 | AI sohbet (BYOK) | RAG sohbet: Anthropic, OpenAI, Google Gemini, OpenAI-uyumlu endpoint (Ollama, LM Studio, OpenRouter vb.) |
-| Paket yöneticisi | Meal/tefsir/morfoloji/vektör/model paketlerini indirme, güncelleme, kaldırma |
+| Tilavet | Ses paketlerinden ayet ayet tilavet (14 kari, Quran.com): ayet çalma, sure sonuna kadar devam, tekrar, okunan ayeti takip (ADR 0014) |
+| Paket yöneticisi | Meal/tefsir/morfoloji/vektör/model/ses paketlerini indirme, güncelleme, kaldırma |
 | Arayüz dili | Türkçe + İngilizce |
 
 ### v1 dışında
-Ses/tilavet, hadis, cihazlar arası senkronizasyon, mobil sürüm, topluluk çeviri katkıları (§9.5), önceden çevrilmiş tefsir paketleri.
+Hadis, cihazlar arası senkronizasyon, mobil sürüm, topluluk çeviri katkıları (§9.5), önceden çevrilmiş tefsir paketleri.
 
 ### Hedef platformlar
 Windows, macOS, Linux.
@@ -253,7 +254,7 @@ CREATE TABLE verses (
 CREATE TABLE packs (
   id            TEXT PRIMARY KEY,              -- örn. 'en.pickthall'
   type          TEXT NOT NULL CHECK (type IN
-                  ('translation','tafsir','morphology','vectors','model')),
+                  ('translation','tafsir','morphology','vectors','model','audio')),
   lang          TEXT,
   title         TEXT NOT NULL,
   author        TEXT,
@@ -542,6 +543,7 @@ Her iki DB için `PRAGMA user_version` tabanlı, sıralı SQL migration'lar. `us
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; QAC için ayrıca orijinal dosya ve `NOTICE` (§5.3.1) |
 | `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` vektör uzayını ve backend'i belirtir (aşağıda) |
 | `model` | `.tar.zst` | `model.sqlite` (yalnızca `pack_info`), `model/model.onnx`, `model/tokenizer.json`, `model/LICENSE` (modelin lisansı, Hakkında → Kaynaklar'da gösterilir); modelin ayarları `meta`'dadır. Yalnızca `local` backend'li vektör paketleri için |
+| `audio` | `.tar.zst` | `audio.sqlite` (yalnızca `pack_info`), `audio/LICENSE` ve her ayet için bir mp3, `audio/SSSAAA.mp3` (6.236 dosya, mono, 64 kbit/s); `meta` kariyi (`reciter {tr,en}`), üslubu (`style`: `murattal`, `mujawwad`, `muallim`) ve kaynağı belirtir. Bakımcı tarafından bir kez üretilip sabitlenir (ADR 0014) |
 
 **Vektör paketi meta verisi** (ADR 0012). Vektör paketi kendi vektör uzayını tanımlar: backend önekiyle kanonik `embedding_model` (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` ve `normalized`. `backend` sorguların nerede embed edileceğini söyler:
 - `local`: `model_pack` model paketini belirtir; bu paket `requires` içinde de yer alır. `embedding_model` ve `dim` değerleri eşleşmelidir.
@@ -638,10 +640,13 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
 **Güncelleme:** Aynı akışla yeniden kurulum. Tefsir güncellenirse `tafsir_translations` içindeki eski `pack_version` kayıtları "kaynak güncellendi" etiketiyle gösterilir; kullanıcı yeniden çevirebilir.
 **Kaldırma:** `bundled = 0` olan paketler kaldırılabilir; ardından `VACUUM` önerilir.
 
+**Paketlerin içerik şeması:** Veritabanında tablo taşıyan bir paket, uygulamanın güncel içerik şeması için üretilmiş olmalıdır (`pack_info.schema_version`). Model ve ses paketleri yalnızca dosya taşır; güncel şemaya kadar her şemada kurulur.
+
 ### 6.5 Lisans
 - Her paketin `license`, `attribution` ve kaynak linki "Hakkında → Kaynaklar" ekranında listelenir. Paket ekranında indirmeden önce de gösterilir.
 - Kaynağın gerektirdiği atıflar (ör. Tanzil CC BY 3.0) her zaman görünür olur.
 - Kod lisansı (MIT/Apache) veri paketlerinin lisansını değiştirmez. Daha kısıtlayıcı lisanslı paketler (örn. QAC morfoloji paketi: değiştirilmeme ve araştırma amaçlı kullanım şartları) ayrı paket olarak dağıtılır ve paket ekranında belirgin şekilde işaretlenir. Manifest'e `license_terms` alanı (kısa şart listesi, TR/EN) eklenir; paket ekranı bunu indirmeden önce gösterir.
+- Tilavet paketleri (ADR 0014), dağıtımı hak sahipleriyle netleştirilmemiş kayıtlar taşır. `license_terms` bunu indirmeden önce söyler, `audio/LICENSE` Hakkında → Kaynaklar'da gösterilir ve hak sahibi isterse paket bir sonraki veri sürümünde manifest'ten çıkarılır.
 
 ---
 
@@ -990,6 +995,7 @@ Referans mockup: "Okuma Ekranı Mockup" canvas'ı (sade ve araştırma varsayıl
 - Tauri v2 capabilities: webview'e yalnızca uygulama komutları açılır; `fs`, `http`, `shell` plugin izinleri verilmez.
 - Sıkı CSP: `default-src 'self'`; harici script yok.
 - Paketler sha256 ile, güncellemeler Tauri updater imzasıyla doğrulanır.
+- Tilavetler webview'a yalnızca `siyak-audio:` şemasıyla ulaşır (CSP'de `media-src`): çekirdek, kurulu ses paketlerinin ayet dosyalarını her yolu kendisi kurarak ve bayt aralıklarıyla sunar (ADR 0014).
 - Paket `.sqlite` dosyaları güvenilmeyen girdi olarak ele alınır: yalnızca beklenen tablo/kolonlardan kopyalanır; trigger, view veya SQL çalıştırılmaz.
 - Markdown (notlar, sohbet) HTML render kapalı gösterilir.
 

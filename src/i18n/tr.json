@@ -60,7 +60,24 @@
     "bookmarked": "Yer imi var",
     "has_note": "Notu var",
     "note": "Not",
-    "copy_citation": "Atıf metnini kopyala"
+    "copy_citation": "Atıf metnini kopyala",
+    "play": "Dinle",
+    "pause": "Tilaveti duraklat"
+  },
+  "audio": {
+    "player": "Tilavet",
+    "play": "Oynat",
+    "pause": "Duraklat",
+    "previous": "Önceki ayet",
+    "next": "Sonraki ayet",
+    "stop": "Durdur ve kapat",
+    "reciter": "Kari",
+    "repeat_off": "Tekrar: kapalı",
+    "repeat_verse": "Tekrar: bu ayet",
+    "repeat_surah": "Tekrar: bu sure",
+    "now_playing": "{{name}} {{ayah}}",
+    "basmala_of": "{{name}} · Besmele",
+    "error": "Tilavet çalınamadı."
   },
   "context_panel": {
     "label": "Bağlam paneli",
@@ -180,7 +197,14 @@
     "server_save": "Kaydet",
     "active_pack": "Anlamsal arama paketi",
     "active_pack_hint": "Anlamına göre arama ve benzer ayetler bu paketi kullanır.",
-    "tab_ai": "Yapay zekâ"
+    "tab_ai": "Yapay zekâ",
+    "recitation": "Tilavet",
+    "recitation_hint": "Bir ayeti çal düğmesiyle ya da P tuşuyla dinleyin. Kariler paket olarak indirilir.",
+    "recitation_reciter": "Kari",
+    "recitation_none": "Henüz kari yüklü değil.",
+    "recitation_get": "Kari indir",
+    "recitation_autoplay": "Sonraki ayetle devam et",
+    "recitation_follow": "Okunan ayete kaydır"
   },
   "compare": {
     "loading": "Yükleniyor…",
@@ -433,7 +457,8 @@
     "vacuum_done": "Veritabanı sıkıştırıldı; {{size}} boşaldı.",
     "sources_description": "Kurulu her paket, lisansı ve kaynağının istediği atıf.",
     "announce_installed": "{{title}} kuruldu",
-    "announce_failed": "{{title}} kurulamadı"
+    "announce_failed": "{{title}} kurulamadı",
+    "kind_audio": "Tilavetler"
   },
   "errors": {
     "title": "Bir sorun oluştu",

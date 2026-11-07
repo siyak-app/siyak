@@ -60,7 +60,24 @@
     "bookmarked": "Bookmarked",
     "has_note": "Has a note",
     "note": "Note",
-    "copy_citation": "Copy citation"
+    "copy_citation": "Copy citation",
+    "play": "Listen",
+    "pause": "Pause recitation"
+  },
+  "audio": {
+    "player": "Recitation",
+    "play": "Play",
+    "pause": "Pause",
+    "previous": "Previous verse",
+    "next": "Next verse",
+    "stop": "Stop and close",
+    "reciter": "Reciter",
+    "repeat_off": "Repeat: off",
+    "repeat_verse": "Repeat: this verse",
+    "repeat_surah": "Repeat: this surah",
+    "now_playing": "{{name}} {{ayah}}",
+    "basmala_of": "{{name}} · Basmala",
+    "error": "The recitation could not be played."
   },
   "context_panel": {
     "label": "Context panel",
@@ -180,7 +197,14 @@
     "server_save": "Save",
     "active_pack": "Semantic search pack",
     "active_pack_hint": "Searching by meaning and similar verses use this pack.",
-    "tab_ai": "AI"
+    "tab_ai": "AI",
+    "recitation": "Recitation",
+    "recitation_hint": "Listen to a verse with the play button or the P key. Reciters are downloaded as packs.",
+    "recitation_reciter": "Reciter",
+    "recitation_none": "No reciter is installed yet.",
+    "recitation_get": "Download a reciter",
+    "recitation_autoplay": "Continue with the next verse",
+    "recitation_follow": "Scroll to the verse being recited"
   },
   "compare": {
     "loading": "Loading…",
@@ -433,7 +457,8 @@
     "vacuum_done": "Database compacted; {{size}} freed.",
     "sources_description": "Every installed pack with its license and the attribution its source requires.",
     "announce_installed": "{{title}} installed",
-    "announce_failed": "{{title}} could not be installed"
+    "announce_failed": "{{title}} could not be installed",
+    "kind_audio": "Recitations"
   },
   "errors": {
     "title": "Something went wrong",

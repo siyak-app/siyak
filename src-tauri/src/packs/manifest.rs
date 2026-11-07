@@ -56,6 +56,8 @@ pub enum PackKind {
     Vectors,
     /// An ONNX embedding model for local vector packs, shipped in an archive.
     Model,
+    /// One reciter's recitation, one mp3 per verse, shipped in an archive (ADR 0014).
+    Audio,
 }
 
 impl PackKind {
@@ -67,6 +69,7 @@ impl PackKind {
             "morphology" => Some(Self::Morphology),
             "vectors" => Some(Self::Vectors),
             "model" => Some(Self::Model),
+            "audio" => Some(Self::Audio),
             _ => None,
         }
     }
@@ -79,12 +82,19 @@ impl PackKind {
             Self::Morphology => "morphology",
             Self::Vectors => "vectors",
             Self::Model => "model",
+            Self::Audio => "audio",
         }
     }
 
     /// Whether packs of this kind are `.tar.zst` archives (pack-format §4.4).
     pub fn is_archive(self) -> bool {
-        matches!(self, Self::Morphology | Self::Model)
+        matches!(self, Self::Morphology | Self::Model | Self::Audio)
+    }
+
+    /// Whether the pack's database holds only `pack_info`: its content is files.
+    /// Such packs install under any content schema up to the current one.
+    pub fn is_files_only(self) -> bool {
+        matches!(self, Self::Model | Self::Audio)
     }
 
     /// The file name a pack of this kind is published under.
@@ -187,6 +197,7 @@ impl PackEntry {
                 .and_then(|spec| spec.check_requires(&self.requires))
                 .is_ok(),
             PackKind::Model => ModelPackSpec::from_meta(meta).is_ok(),
+            PackKind::Audio => crate::audio::Reciter::from_meta(meta).is_ok(),
             PackKind::Translation | PackKind::Tafsir | PackKind::Morphology => true,
         };
         valid.then_some(kind)
@@ -987,7 +998,7 @@ pub(crate) mod tests {
 
     /// A manifest entry for tests.
     pub(crate) fn entry(id: &str, kind: &str, version: &str) -> serde_json::Value {
-        let ext = if kind == "morphology" || kind == "model" {
+        let ext = if matches!(kind, "morphology" | "model" | "audio") {
             "tar"
         } else {
             "sqlite"

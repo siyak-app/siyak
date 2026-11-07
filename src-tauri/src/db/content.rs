@@ -51,11 +51,19 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 1,
         name: "initial",
         sql: include_str!("../../migrations/content/0001_initial.sql"),
+        foreign_keys_off: false,
     },
     Migration {
         version: 2,
         name: "schema_2",
         sql: include_str!("../../migrations/content/0002_schema_2.sql"),
+        foreign_keys_off: false,
+    },
+    Migration {
+        version: 3,
+        name: "audio",
+        sql: include_str!("../../migrations/content/0003_audio.sql"),
+        foreign_keys_off: true,
     },
 ];
 
@@ -526,7 +534,7 @@ pub fn list_translations(conn: &Connection) -> AppResult<Vec<TranslationInfo>> {
 
 /// Reads `title.tr` / `title.en` from a pack's `meta_json`. Missing or
 /// malformed metadata only loses the localized title, never the pack.
-fn localized_title(meta_json: Option<&str>) -> LocalizedTitle {
+pub(crate) fn localized_title(meta_json: Option<&str>) -> LocalizedTitle {
     let meta: serde_json::Value = meta_json
         .and_then(|json| serde_json::from_str(json).ok())
         .unwrap_or_default();
@@ -997,7 +1005,7 @@ mod tests {
         let mut conn = Connection::open_in_memory().unwrap();
         assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), MIGRATIONS.len());
         assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), 0);
-        assert_eq!(schema_version(&conn).unwrap(), 2);
+        assert_eq!(schema_version(&conn).unwrap(), 3);
         for table in [
             "surahs",
             "verses",
@@ -1027,6 +1035,47 @@ mod tests {
 
     /// A content.db created by M0 (schema 1) keeps its rows when it is
     /// migrated, including tafsir paragraphs, whose table is rebuilt.
+    /// Schema 3 rebuilds `packs` for audio packs (ADR 0014): installed packs and
+    /// the rows that reference them survive, and the cascade still works.
+    #[test]
+    fn schema_2_database_keeps_its_packs_when_packs_is_rebuilt() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        migrate(&mut conn, &MIGRATIONS[..2]).unwrap();
+        conn.execute_batch(
+            "INSERT INTO surahs VALUES (1, 'الفاتحة', 'Fâtiha', 'Al-Faatiha', 'meccan', 7, NULL);
+             INSERT INTO verses VALUES (1, 1, 1, 1, 'بِسْمِ', 'بسم');
+             INSERT INTO packs (id, type, title, version, license, installed_at, bundled)
+               VALUES ('tr.test', 'translation', 'Test', '1.0.0', 'PD', 'now', 1),
+                      ('ar.test', 'tafsir', 'Test', '1.0.0', 'PD', 'now', 0);
+             INSERT INTO translations VALUES ('tr.test', 1, 'Rahmân');
+             INSERT INTO tafsir (id, pack_id, verse_from, verse_to) VALUES (7, 'ar.test', 1, 1);
+             INSERT INTO tafsir_paragraphs (tafsir_id, idx, text) VALUES (7, 0, 'first');",
+        )
+        .unwrap();
+
+        assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), 1);
+        let count = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
+        assert_eq!(count("SELECT count(*) FROM packs"), 2);
+        assert_eq!(count("SELECT bundled FROM packs WHERE id = 'tr.test'"), 1);
+        assert_eq!(count("SELECT count(*) FROM translations"), 1);
+        assert_eq!(count("SELECT count(*) FROM tafsir_paragraphs"), 1);
+        let keys: bool = conn
+            .pragma_query_value(None, "foreign_keys", |r| r.get(0))
+            .unwrap();
+        assert!(keys, "foreign keys are on again after the migration");
+
+        conn.execute(
+            "INSERT INTO packs (id, type, title, version, license, installed_at)
+             VALUES ('audio.test', 'audio', 'Test', '1.0.0', 'x', 'now')",
+            [],
+        )
+        .unwrap();
+        conn.execute("DELETE FROM packs WHERE id = 'ar.test'", [])
+            .unwrap();
+        assert_eq!(count("SELECT count(*) FROM tafsir_paragraphs"), 0);
+    }
+
     #[test]
     fn schema_1_database_migrates_with_its_data() {
         let mut conn = Connection::open_in_memory().unwrap();
@@ -1041,7 +1090,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(migrate(&mut conn, MIGRATIONS).unwrap(), 1);
+        assert_eq!(
+            migrate(&mut conn, MIGRATIONS).unwrap(),
+            MIGRATIONS.len() - 1
+        );
         let paragraphs: Vec<(i64, String, Option<String>)> = conn
             .prepare(
                 "SELECT idx, text, part FROM tafsir_paragraphs WHERE tafsir_id = 7 ORDER BY idx",

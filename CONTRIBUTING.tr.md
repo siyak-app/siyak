@@ -43,6 +43,9 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
   libssl-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
+Linux'ta tilavetler (ses paketleri) GStreamer ile çalınır; MP3 çözücüsünü de kurun
+(Debian/Ubuntu'da `gstreamer1.0-plugins-good`, Fedora'da `gstreamer1-plugins-good`).
+
 Fedora:
 
 ```sh

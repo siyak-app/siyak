@@ -19,3 +19,4 @@ architectural change, open a pull request that adds `NNNN-short-title.md` based 
 | [0011](0011-core-refresh-strategy.md)             | Refresh the core data in place, in one transaction                            |
 | [0012](0012-local-and-api-embedders.md)           | Embed queries locally by default, or with an embedding API                    |
 | [0013](0013-providers-over-http-and-sse.md)       | Talk to AI providers over plain HTTP and server-sent events                   |
+| [0014](0014-recitation-audio-packs.md)            | Ship verse-by-verse recitations as audio packs from Quran.com                 |

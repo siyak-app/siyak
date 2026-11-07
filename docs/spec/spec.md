@@ -19,7 +19,7 @@ The application has no backend; everything runs on the user's computer. All data
 1. **Faithfulness to sources:** The original of every text is always one click away. Machine output (translations, AI answers) is clearly labelled and shown next to its source.
 2. **Full value without an API key:** Reading, comparison, root analysis, search and notes work without any API key. AI features are an additional layer.
 3. **Verifiability:** The code, the data pipeline and the source licenses are open; it can be proven that the binary was built from the code.
-4. **Licensing comes first:** Content whose redistribution rights have not been confirmed is not distributed.
+4. **Licensing comes first:** Content whose redistribution rights have not been confirmed is not distributed. The one recorded exception is the recitation packs (ADR 0014): published with attribution and removed at the rights holder's request.
 5. **Simple for everyone, deep on demand:** The same interface serves both readers and researchers. Screens open simple; depth appears as the user asks for it (progressive disclosure, §13.2). There are no separate "basic/expert" modes.
 6. **Open to contribution:** The code is readable, decisions are recorded, documentation is bilingual, and there are ways to contribute without writing code (§16).
 
@@ -36,11 +36,12 @@ The application has no backend; everything runs on the user's computer. All data
 | Collections and notes | Bookmarks, verse-linked notes, collections that group verses by research topic |
 | Export | Collection/notes → Markdown; academic citation text for verses and translations/tafsirs; JSON backup |
 | AI chat (BYOK) | RAG chat: Anthropic, OpenAI, Google Gemini, OpenAI-compatible endpoints (Ollama, LM Studio, OpenRouter, etc.) |
-| Pack manager | Download, update and remove translation/tafsir/morphology/vector/model packs |
+| Recitation | Verse-by-verse recitation from audio packs (14 reciters, Quran.com): play a verse, continue to the end of the surah, repeat, follow the recited verse (ADR 0014) |
+| Pack manager | Download, update and remove translation/tafsir/morphology/vector/model/audio packs |
 | UI languages | Turkish + English |
 
 ### Out of scope for v1
-Audio/recitation, hadith, cross-device sync, mobile version, community translation contributions (§9.5), pre-translated tafsir packs.
+Hadith, cross-device sync, mobile version, community translation contributions (§9.5), pre-translated tafsir packs.
 
 ### Target platforms
 Windows, macOS, Linux.
@@ -252,7 +253,7 @@ CREATE TABLE verses (
 CREATE TABLE packs (
   id            TEXT PRIMARY KEY,              -- e.g. 'en.pickthall'
   type          TEXT NOT NULL CHECK (type IN
-                  ('translation','tafsir','morphology','vectors','model')),
+                  ('translation','tafsir','morphology','vectors','model','audio')),
   lang          TEXT,
   title         TEXT NOT NULL,
   author        TEXT,
@@ -541,6 +542,7 @@ Ordered SQL migrations based on `PRAGMA user_version` for both databases. `user.
 | `morphology` | `.tar.zst` (`.sqlite` + `qac/`) | `words`, `roots`, `lemmas`, `word_segments`; for QAC also the original file and `NOTICE` (§5.3.1) |
 | `vectors` | `.sqlite.zst` | `(verse_id INTEGER, embedding BLOB)`, little-endian float32; `meta` names the embedding space and backend (below) |
 | `model` | `.tar.zst` | `model.sqlite` (only `pack_info`), `model/model.onnx`, `model/tokenizer.json`, `model/LICENSE` (the model's license, shown on About → Sources); the model's settings are in `meta`. Only for vector packs with the `local` backend |
+| `audio` | `.tar.zst` | `audio.sqlite` (only `pack_info`), `audio/LICENSE` and one mp3 per verse, `audio/SSSAAA.mp3` (6,236 files, mono, 64 kbit/s); `meta` names the reciter (`reciter {tr,en}`), `style` (`murattal`, `mujawwad`, `muallim`) and the source. Built once by a maintainer and pinned (ADR 0014) |
 
 **Vector pack metadata** (ADR 0012). A vector pack defines its embedding space: `embedding_model`, canonical with a backend prefix (`local/…`, `openai/…`, `voyage/…`, `gemini/…`, `compat/…`), `dim` and `normalized`. `backend` says where queries are embedded:
 - `local`: `model_pack` names the model pack, which is also in `requires`. Its `embedding_model` and `dim` must match.
@@ -637,10 +639,13 @@ The primary address is independent of the GitHub organization and repository nam
 **Update:** a reinstall through the same flow. If a tafsir is updated, entries in `tafsir_translations` with the old `pack_version` are marked "source updated"; the user may translate again.
 **Removal:** packs with `bundled = 0` can be removed; a `VACUUM` is suggested afterwards.
 
+**Content schema of packs:** a pack whose database has tables must be built for the app's current content schema (`pack_info.schema_version`). Model and audio packs hold only files and install under any schema up to the current one.
+
 ### 6.5 Licensing
 - Every pack's `license`, `attribution` and source link are listed on the "About → Sources" screen, and are shown on the Packs screen before download.
 - Attributions required by a source (e.g. Tanzil, CC BY 3.0) are always visible.
 - The code license (MIT/Apache) does not change the license of data packs. Packs with more restrictive terms (e.g. the QAC morphology pack: no-modification and research-use terms) are distributed as separate packs and clearly marked on the Packs screen. The manifest has a `license_terms` field (a short list of terms, TR/EN) which the Packs screen shows before download.
+- Recitation packs (ADR 0014) carry recordings whose redistribution was not cleared with the rights holders. Their `license_terms` say so before download, `audio/LICENSE` is shown on About → Sources, and a pack is removed from the manifest in the next data release when a rights holder asks.
 
 ### 6.6 Tafsir packs: sources and selection
 
@@ -989,6 +994,7 @@ Reference mockup: the "Okuma Ekranı Mockup" canvas (reader and researcher defau
 - Tauri v2 capabilities: only the app's own commands are exposed to the webview; no `fs`, `http` or `shell` plugin permissions.
 - Strict CSP: `default-src 'self'`; no external scripts.
 - Packs are verified with sha256, updates with the Tauri updater signature.
+- Recitations reach the webview only through the `siyak-audio:` scheme (`media-src` in the CSP): the core serves the verse files of installed audio packs, building every path itself, with byte ranges (ADR 0014).
 - Pack `.sqlite` files are treated as untrusted input: data is copied only from the expected tables/columns; no triggers, views or SQL from a pack are ever executed.
 - Markdown (notes, chat) is rendered with HTML disabled.
 

@@ -43,4 +43,11 @@ export function jobFraction(job: JobView): number | null {
 }
 
 /** Order of the type groups on the Packs screen; other types come last. */
-export const KIND_ORDER = ["translation", "tafsir", "morphology", "vectors", "model"] as const;
+export const KIND_ORDER = [
+  "translation",
+  "tafsir",
+  "audio",
+  "morphology",
+  "vectors",
+  "model",
+] as const;

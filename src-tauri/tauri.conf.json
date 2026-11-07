@@ -21,8 +21,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost",
-      "devCsp": "default-src 'self'; connect-src ipc: http://ipc.localhost ws://localhost:1420"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; media-src siyak-audio: http://siyak-audio.localhost",
+      "devCsp": "default-src 'self'; connect-src ipc: http://ipc.localhost ws://localhost:1420; media-src siyak-audio: http://siyak-audio.localhost"
     }
   },
   "bundle": {

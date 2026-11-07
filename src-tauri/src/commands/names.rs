@@ -13,6 +13,7 @@ pub const COMMAND_NAMES: &[&str] = &[
     "get_tafsir",
     "get_tafsir_introduction",
     "get_compare",
+    "list_audio_packs",
     "get_morphology_pack",
     "get_verse_words",
     "get_word",
