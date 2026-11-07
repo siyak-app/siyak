@@ -126,15 +126,24 @@ pub fn schema_version() -> u32 {
     CONTENT_MIGRATIONS.len() as u32
 }
 
-/// Whether a pack of `kind` built for `schema` installs here: the current schema,
-/// or for packs without content tables (model, audio) any schema up to it.
-pub fn schema_supported(kind: PackKind, schema: i64) -> bool {
-    let current = i64::from(schema_version());
-    if kind.is_files_only() {
-        (1..=current).contains(&schema)
-    } else {
-        schema == current
+/// The oldest content schema a pack of `kind` may be built for: the one that
+/// last changed the tables the pack fills. A migration that changes a kind's
+/// tables raises its entry here; one that does not (schema 3 only widened the
+/// `packs.type` check) leaves packs built before it installable.
+fn oldest_schema(kind: PackKind) -> i64 {
+    match kind {
+        // No content tables: any schema up to the current one.
+        PackKind::Model | PackKind::Audio => 1,
+        // Schema 2 rebuilt tafsir_paragraphs and verses_fts.
+        PackKind::Translation | PackKind::Tafsir | PackKind::Morphology | PackKind::Vectors => 2,
     }
+}
+
+/// Whether a pack of `kind` built for `schema` installs here: any schema from
+/// [`oldest_schema`] up to the current one. The pack's tables are checked
+/// column by column anyway.
+pub fn schema_supported(kind: PackKind, schema: i64) -> bool {
+    (oldest_schema(kind)..=i64::from(schema_version())).contains(&schema)
 }
 
 /// Marker file in an archive pack's directory: which version the files belong to.
@@ -1676,6 +1685,32 @@ mod tests {
         conn.execute_batch(extra_sql).unwrap();
         drop(conn);
         env.finish(&db, "tr.bad", "translation", "1.0.0")
+    }
+
+    #[test]
+    fn installs_packs_built_before_a_schema_that_left_their_tables_alone() {
+        // Schema 3 changed only `packs`; packs built for schema 2 still install.
+        let mut env = Env::new();
+        let (file, entry) = malicious_translation(&env, "UPDATE pack_info SET schema_version = 2;");
+        env.install(&file, &entry).unwrap();
+        assert_eq!(
+            env.count("SELECT count(*) FROM translations WHERE pack_id = 'tr.bad'"),
+            1
+        );
+        let (file, entry) = malicious_translation(
+            &env,
+            &format!(
+                "UPDATE pack_info SET schema_version = {};",
+                current_schema() + 1
+            ),
+        );
+        assert_eq!(
+            env.install(&file, &entry).unwrap_err().code,
+            AppErrorCode::PackSchemaUnsupported
+        );
+        assert!(schema_supported(PackKind::Audio, 1));
+        assert!(!schema_supported(PackKind::Tafsir, 1));
+        assert!(schema_supported(PackKind::Vectors, 2));
     }
 
     #[test]

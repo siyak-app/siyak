@@ -624,7 +624,7 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
 }
 ```
 
-**Bundles:** Kullanıcıya teker teker paket seçtirmek yerine tek tuşla kurulan setler. Sade kullanıcı ilk açılışta "Önerilen paketler" kartını görür ve toplam boyutla birlikte tek tuşla kurar. "Vektör paketi", "model paketi" gibi kavramlarla karşılaşmaz; paketleri tek tek seçmek isteyenler için Paketler ekranı her paketi türüne göre listeler. API vektör paketleri hiçbir bundle'a girmez, çünkü kullanıcının kendi anahtarını ister. Paket ve bundle başlıkları `{ "tr", "en" }` nesnesi olarak verilebilir.
+**Bundles:** Kullanıcıya teker teker paket seçtirmek yerine tek tuşla kurulan setler. Sade kullanıcı ilk açılışta "Önerilen paketler" kartını görür ve toplam boyutla birlikte tek tuşla kurar. "Vektör paketi", "model paketi" gibi kavramlarla karşılaşmaz; paketleri tek tek seçmek isteyenler için Paketler ekranı paketleri tür tür listeler (mealler, tefsirler, kelime analizi, anlamına göre arama, tilavetler). Model paketinin kendi satırı yoktur: onu gerektiren vektör paketinin parçasıdır; vektör paketi modelin boyutunu gösterir, modeli kurar ve kurulu hiçbir paket ona ihtiyaç duymadığında kaldırır. API vektör paketleri hiçbir bundle'a girmez, çünkü kullanıcının kendi anahtarını ister. Paket ve bundle başlıkları `{ "tr", "en" }` nesnesi olarak verilebilir.
 
 ### 6.4 Kurulum akışı
 1. Manifest'i çek: açılışta ve paket ekranında, 1 saat cache'li. Ağ yoksa son başarılı manifest kullanılır.
@@ -640,10 +640,10 @@ Birincil adres GitHub'daki organizasyon/repo adından bağımsızdır; ileride y
 **Güncelleme:** Aynı akışla yeniden kurulum. Tefsir güncellenirse `tafsir_translations` içindeki eski `pack_version` kayıtları "kaynak güncellendi" etiketiyle gösterilir; kullanıcı yeniden çevirebilir.
 **Kaldırma:** `bundled = 0` olan paketler kaldırılabilir; ardından `VACUUM` önerilir.
 
-**Paketlerin içerik şeması:** Veritabanında tablo taşıyan bir paket, uygulamanın güncel içerik şeması için üretilmiş olmalıdır (`pack_info.schema_version`). Model ve ses paketleri yalnızca dosya taşır; güncel şemaya kadar her şemada kurulur.
+**Paketlerin içerik şeması:** Bir paket, türünün en eski şemasından güncel şemaya kadar her içerik şemasında (`pack_info.schema_version`) kurulur. Bir türün en eski şeması, doldurduğu tabloları son değiştiren şemadır: yalnızca dosya taşıyan model ve ses paketleri için 1; çeviri, tefsir, morfoloji ve vektör paketleri için 2.
 
 ### 6.5 Lisans
-- Her paketin `license`, `attribution` ve kaynak linki "Hakkında → Kaynaklar" ekranında listelenir. Paket ekranında indirmeden önce de gösterilir.
+- Her paketin `license`, `attribution` ve kaynak linki "Hakkında → Kaynaklar" ekranında listelenir. Paket ekranında her paketin Ayrıntılar bölümündedir; `license_terms` taşıyan bir paket İndir'e basılınca, hiçbir şey indirilmeden önce bunları şartlarıyla birlikte gösterir.
 - Kaynağın gerektirdiği atıflar (ör. Tanzil CC BY 3.0) her zaman görünür olur.
 - Kod lisansı (MIT/Apache) veri paketlerinin lisansını değiştirmez. Daha kısıtlayıcı lisanslı paketler (örn. QAC morfoloji paketi: değiştirilmeme ve araştırma amaçlı kullanım şartları) ayrı paket olarak dağıtılır ve paket ekranında belirgin şekilde işaretlenir. Manifest'e `license_terms` alanı (kısa şart listesi, TR/EN) eklenir; paket ekranı bunu indirmeden önce gösterir.
 - Tilavet paketleri (ADR 0014), dağıtımı hak sahipleriyle netleştirilmemiş kayıtlar taşır. `license_terms` bunu indirmeden önce söyler, `audio/LICENSE` Hakkında → Kaynaklar'da gösterilir ve hak sahibi isterse paket bir sonraki veri sürümünde manifest'ten çıkarılır.
@@ -931,7 +931,9 @@ Tek bir arayüz, üç bölme:
 
 Paneller daraltılabilir ve yeniden boyutlandırılabilir; düzen tercihi `settings`'te saklanır.
 
-**Deneyim profili.** İlk açılışta tek soru sorulur: "Uygulamayı nasıl kullanmak istersiniz? Okumak ve anlamak / Araştırma yapmak". Cevap `settings.experience_profile` (`reader` | `researcher`) olarak saklanır ve **yalnızca varsayılanları** belirler. Hiçbir özellik kilitlenmez; her varsayılan Ayarlar'dan tek tek değiştirilebilir.
+**Deneyim profili.** İlk açılışta tek soru sorulur: "Uygulamayı nasıl kullanmak istersiniz? Okumak ve anlamak / Araştırma yapmak". Cevap `settings.experience_profile` (`reader` | `researcher`) olarak saklanır ve **yalnızca varsayılanları** belirler. Hiçbir özellik kilitlenmez. Okuma ve araştırma uygulamanın ana modlarıdır: üst çubuktaki bir anahtar ikisi arasında her an geçiş yapar ve modun aşağıdaki varsayılanlarını uygular; kullanıcının seçtiği mealler korunur. Ayarlar'da yalnızca iki modda farklılaşmayan şeyler bulunur.
+
+**Okuma modu** her ayeti bir kart olarak gösterir: ayet numarası sekiz köşeli yıldızın içinde, Arapça ortada, mealler kapalı. Karta tıklamak (ya da üzerindeyken Enter/Boşluk) kısa bir animasyonla meallerini açar; sure başlığındaki bir düğme hepsini birden açar ya da kapatır. Üstteki ince bir çubuk surede ne kadar ilerlendiğini gösterir. Araştırma modu her zaman açık listeyi korur.
 
 | Varsayılan (`settings` anahtarı) | `reader` | `researcher` |
 |---|---|---|
@@ -958,8 +960,8 @@ Referans mockup: "Okuma Ekranı Mockup" canvas'ı (sade ve araştırma varsayıl
 5. **İlk açılış:** Deneyim profili sorusu, ardından "Önerilen paketler" kartı (§6.3 bundles).
 6. **Koleksiyonlar:** Liste + detay; sürükle-bırak sıralama; dışa aktarma.
 7. **Sohbet:** Oturumlar, mesajlar, tıklanabilir atıflar, "kullanılan kaynaklar".
-8. **Paketler:** Tipe göre gruplu; boyut, lisans, sürüm, ilerleme.
-9. **Ayarlar:** Görünüm (tema, fontlar, boyutlar), dil, AI (sağlayıcılar, model rolleri, yetenek bayrakları, harcama), Gizlilik (ağ günlüğü), Hakkında → Kaynaklar.
+8. **Paketler:** Yanda tür menüsü (Önerilen, mealler, tefsirler, kelime analizi, anlamına göre arama, tilavetler, Kaynaklar); mealler ve tefsirler dile göre gruplu, ada ya da yazara göre aranabilir ve yalnızca kurulu olanlara süzülebilir. Satırda başlık, kısa açıklama, boyut ve tek bir eylem bulunur; lisans, atıf, sürüm, kaynak linki ve kaldırma Ayrıntılar'dadır. Paket id'leri hiç gösterilmez.
+9. **Ayarlar:** Görünüm (tema — yerleşik açık, koyu ve sepya ile popüler editör temalarından uyarlanmış, her biri WCAG AA'yı karşılayan paletler; Arapça ve meal yazı tipleri, hepsi uygulamayla gelir; boyutlar), Okuma (mealler, kıraat, teknik terimler, atıf stili), dil, AI (sağlayıcılar, model rolleri, yetenek bayrakları, harcama), Gizlilik (ağ günlüğü), Hakkında → Kaynaklar.
 
 ### 13.4 Tipografi ve yön
 - Fontlar gömülüdür, CDN kullanılmaz. Arapça varsayılan font: Amiri Quran (SIL OFL). Alternatif fontların lisansı ayrıca teyit edilir.

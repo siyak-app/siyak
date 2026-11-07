@@ -66,6 +66,10 @@ const runs: TafsirJobVariables[] = [];
 const refreshed: string[] = [];
 let finishRun: () => void;
 
+vi.mock("@/features/ai/LlmPicker", () => ({
+  LlmPicker: ({ role }: { role: string }) => <p>{role} model picker</p>,
+}));
+
 vi.mock("@/lib/queries", () => ({
   useAiStatus: () => ({ data: status }),
   useTafsirTranslations: () => ({ data: saved, isError: false }),
@@ -119,8 +123,9 @@ describe("MachineTafsir", () => {
     expect(screen.getByText("الفقرة الأولى")).toBeInTheDocument();
   });
 
-  it("shows the estimated cost on each action", () => {
+  it("shows the model that writes and the estimated cost on each action", () => {
     render(<MachineTafsir tafsir={TAFSIR} passage={PASSAGE} />);
+    expect(screen.getByText("translation model picker")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Summarize (≈ 0.3 ¢)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Translate (cost unknown)" })).toBeInTheDocument();
   });

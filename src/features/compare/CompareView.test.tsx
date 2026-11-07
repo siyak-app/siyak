@@ -41,6 +41,10 @@ const JALALAYN: TafsirInfo = {
   has_introduction: false,
 };
 
+vi.mock("@/features/ai/LlmPicker", () => ({
+  LlmPicker: ({ role }: { role: string }) => <p>{role} model picker</p>,
+}));
+
 vi.mock("@/lib/queries", () => ({
   useAiStatus: () => ({ data: { state: "no_provider" } }),
   useTafsirTranslations: () => ({ data: [], isError: false }),

@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
+import { EmbeddingPicker } from "@/features/ai/EmbeddingPicker";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -232,6 +233,7 @@ function MeaningResults({ q }: { q: string }) {
   const provider = status.data.provider;
   return (
     <div className="grid gap-3">
+      <EmbeddingPicker compact />
       <p className="text-sm text-muted-foreground">
         {t("search.meaning_hint")}
         {provider && ` ${t("semantic.remote", { provider: PROVIDER_NAMES[provider] })}`}

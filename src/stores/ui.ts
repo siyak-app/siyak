@@ -23,6 +23,21 @@ export const SETTINGS_TABS = [
 /** A tab of the Settings dialog. */
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
+/** Sections of the Packs dialog, in menu order; `sources` is About → Sources. */
+export const PACK_CATEGORIES = [
+  "recommended",
+  "translation",
+  "tafsir",
+  "morphology",
+  "vectors",
+  "audio",
+  "other",
+  "sources",
+] as const;
+
+/** A section of the Packs dialog. */
+export type PackCategory = (typeof PACK_CATEGORIES)[number];
+
 /**
  * UI preferences: the settings of `@/lib/settings`, keyed by their `user.db`
  * setting key so that persisting a change is a single `set_setting` call.
@@ -52,6 +67,8 @@ interface UiState {
   selectedWord: number | null;
   /** Whether the Packs dialog is open; other screens may open it. Not persisted. */
   packsDialogOpen: boolean;
+  /** The section the Packs dialog opens on, `null` for the default. Not persisted. */
+  packsCategory: PackCategory | null;
   /** The open tab of the Settings dialog, `null` if it is closed. Not persisted. */
   settingsTab: SettingsTab | null;
   /** What the "Add to collection" dialog is adding, if it is open. Not persisted. */
@@ -65,7 +82,7 @@ interface UiState {
   setPreferences: (values: Partial<UiPreferences>) => void;
   selectVerse: (verse: VersePosition | null) => void;
   selectWord: (verse: VersePosition, wordId: number) => void;
-  setPacksDialogOpen: (open: boolean) => void;
+  setPacksDialogOpen: (open: boolean, category?: PackCategory) => void;
   setSettingsTab: (tab: SettingsTab | null) => void;
   openCollectionPicker: (item: ItemRef | null) => void;
   setNoteFocusPending: (pending: boolean) => void;
@@ -82,6 +99,7 @@ export const useUiStore = create<UiState>()((set) => ({
   selectedVerse: null,
   selectedWord: null,
   packsDialogOpen: false,
+  packsCategory: null,
   settingsTab: null,
   collectionPicker: null,
   noteFocusPending: false,
@@ -105,8 +123,8 @@ export const useUiStore = create<UiState>()((set) => ({
   selectWord: (verse, wordId) => {
     set({ selectedVerse: verse, selectedWord: wordId });
   },
-  setPacksDialogOpen: (open) => {
-    set({ packsDialogOpen: open });
+  setPacksDialogOpen: (open, category) => {
+    set({ packsDialogOpen: open, packsCategory: category ?? null });
   },
   setSettingsTab: (tab) => {
     set({ settingsTab: tab });

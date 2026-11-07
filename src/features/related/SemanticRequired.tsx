@@ -64,7 +64,7 @@ export function SemanticRequired({
           variant="outline"
           size="sm"
           onClick={() => {
-            setPacksDialogOpen(true);
+            setPacksDialogOpen(true, "vectors");
           }}
         >
           {t("semantic.open_packs")}

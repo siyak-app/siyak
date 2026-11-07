@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
+import { cn } from "cn";
 import {
   useCallback,
   type FocusEvent,
@@ -186,8 +187,9 @@ function useCompareVerse() {
 /**
  * Keyboard navigation of the verse list (one tab stop, roving focus):
  * ↑/↓ move between verses, Home/End jump to the first or last, scrolling
- * the virtualized list as needed; Enter or a click opens the verse in the
- * context panel, `t` opens it on the Tafsir tab, `w` on the Word tab and `c`
+ * the virtualized list as needed; Enter or a click activates the verse
+ * (`activate`: opens it in the context panel, or in reading mode opens or
+ * closes its card, as does Space), `t` opens it on the Tafsir tab, `w` on the Word tab and `c`
  * on the compare screen; `b` toggles its bookmark, `n` starts a note and `p` plays
  * or pauses its recitation (with a reciter installed). Keys and clicks on a verse's buttons and words keep
  * their usual meaning, and a click that ends a text selection selects nothing, so text
@@ -198,6 +200,8 @@ function useVerseFocus(
   virtualizer: Virtualizer<HTMLDivElement, Element>,
   items: readonly VerseWithTranslations[],
   canPlay: boolean,
+  activate: (verse: VerseWithTranslations) => void,
+  cards: boolean,
 ) {
   const [focusIndex, setFocusIndex] = useState(0);
   const pendingFocus = useRef<number | null>(null);
@@ -233,7 +237,7 @@ function useVerseFocus(
     else if (event.key === "ArrowUp") moveTo(index - 1);
     else if (event.key === "Home") moveTo(0);
     else if (event.key === "End") moveTo(items.length - 1);
-    else if (event.key === "Enter") openInPanel(verse);
+    else if (event.key === "Enter" || (event.key === " " && cards)) activate(verse);
     else if (event.key === "t") openInPanel(verse, "tafsir");
     else if (event.key === "w") openInPanel(verse, "word");
     else if (event.key === "c") compareVerse(verse);
@@ -249,7 +253,7 @@ function useVerseFocus(
     if (target.closest("button, a, input, [data-word]") || hasTextSelection()) return;
     const index = Number(target.closest<HTMLElement>("[data-index]")?.dataset.index);
     const verse = items[index];
-    if (verse) openInPanel(verse);
+    if (verse) activate(verse);
   };
 
   const onFocus = (event: FocusEvent<HTMLElement>) => {
@@ -316,6 +320,27 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
   const verses = useVerses(surah, selected);
   const items = useMemo(() => verses.data ?? [], [verses.data]);
   const { bookmarked, noted } = useVerseMarks(items);
+  // Reading mode shows verses as cards whose translations open on demand.
+  const cards = useUiStore((state) => state.preferences.experience_profile) !== "researcher";
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set());
+  const toggleVerse = useCallback((verse: VerseWithTranslations) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(verse.id)) next.add(verse.id);
+      return next;
+    });
+  }, []);
+  const activate = useCallback(
+    (verse: VerseWithTranslations) => {
+      if (!cards) {
+        openInPanel(verse);
+        return;
+      }
+      useUiStore.getState().selectVerse({ surah: verse.surah, ayah: verse.ayah });
+      toggleVerse(verse);
+    },
+    [cards, toggleVerse],
+  );
 
   const shown = useMemo(() => {
     const byId = new Map((installed.data ?? []).map((pack) => [pack.id, pack]));
@@ -341,14 +366,20 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => estimateVerseHeight(items[index]),
+    estimateSize: (index) => {
+      const verse = items[index];
+      return estimateVerseHeight(verse, {
+        card: cards,
+        collapsed: cards && verse !== undefined && !expanded.has(verse.id),
+      });
+    },
     getItemKey: (index) => items[index]?.id ?? index,
     overscan: OVERSCAN,
     scrollMargin: listOffset,
   });
 
   const canPlay = useReciter().active !== null;
-  const focus = useVerseFocus(listRef, virtualizer, items, canPlay);
+  const focus = useVerseFocus(listRef, virtualizer, items, canPlay, activate, cards);
   useFollowRecitation(surah, virtualizer, items);
   const { setFocusIndex } = focus;
 
@@ -363,6 +394,9 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
     setFocusIndex(index);
     if (ayah === undefined) return;
     setHighlighted(ayah);
+    // A linked verse opens with its translations.
+    const linked = items[index];
+    if (linked) setExpanded((current) => new Set(current).add(linked.id));
     const timer = setTimeout(() => {
       setHighlighted(null);
     }, HIGHLIGHT_MS);
@@ -382,13 +416,47 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
   useReadingPosition(surah, scrollRef, virtualizer, items);
 
   const name = info.data ? surahName(info.data, language) : String(surah);
+  const allExpanded = items.length > 0 && items.every((verse) => expanded.has(verse.id));
+  const progress = items.length > 0 ? ((topIndex(virtualizer) ?? 0) + 1) / items.length : 0;
   const noSuchVerse = ayah !== undefined && info.data !== undefined && ayah > info.data.ayah_count;
 
   return (
-    <div ref={scrollRef} data-reader-scroll className="relative h-full overflow-y-auto">
+    <div
+      ref={scrollRef}
+      data-reader-scroll
+      className={cn(
+        "relative h-full overflow-y-auto",
+        cards && "bg-linear-to-b from-primary/6 to-transparent to-50%",
+      )}
+    >
+      {cards && items.length > 0 && (
+        <div aria-hidden className="sticky top-0 z-10 h-1 bg-primary/10">
+          <div
+            className="h-full rounded-e-full bg-primary/70 transition-[width] duration-300"
+            style={{ width: `${String(progress * 100)}%` }}
+          />
+        </div>
+      )}
       <div className="mx-auto max-w-3xl px-8 pt-8 pb-16">
         <div ref={headerRef}>
-          {info.data && <SurahHeader surah={info.data} translations={shown} />}
+          {info.data && (
+            <SurahHeader
+              surah={info.data}
+              translations={shown}
+              expandAll={
+                cards && shown.length > 0
+                  ? {
+                      expanded: allExpanded,
+                      onToggle: () => {
+                        setExpanded(
+                          allExpanded ? new Set() : new Set(items.map((verse) => verse.id)),
+                        );
+                      },
+                    }
+                  : undefined
+              }
+            />
+          )}
           {info.isError && <ErrorMessage error={info.error} />}
           {noSuchVerse && (
             <p role="status" className="py-3 text-muted-foreground">
@@ -429,6 +497,9 @@ function SurahReader({ surah, ayah }: { surah: number; ayah: number | undefined 
                   verse={verse}
                   packs={packs}
                   surahName={name}
+                  variant={cards ? "card" : "list"}
+                  expanded={expanded.has(verse.id)}
+                  onToggle={toggleVerse}
                   highlighted={verse.ayah === highlighted}
                   tabStop={row.index === focus.tabStop}
                   onCompare={compareVerse}

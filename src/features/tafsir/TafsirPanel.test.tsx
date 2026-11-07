@@ -40,6 +40,10 @@ let tafsirs: TafsirInfo[];
 let passage: TafsirPassage | null;
 const requested: [number, string][] = [];
 
+vi.mock("@/features/ai/LlmPicker", () => ({
+  LlmPicker: ({ role }: { role: string }) => <p>{role} model picker</p>,
+}));
+
 vi.mock("@/lib/queries", () => ({
   useTafsirs: () => ({ data: tafsirs, isPending: false, isError: false }),
   useSurahs: () => ({

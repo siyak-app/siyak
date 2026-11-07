@@ -7,6 +7,7 @@ use serde::Serialize;
 use specta::Type;
 use tauri::State;
 use tauri::ipc::Channel;
+use tokio_util::sync::CancellationToken;
 
 use crate::AppState;
 use crate::db::user;
@@ -17,7 +18,7 @@ use crate::llm::chat::{
     ChatSession, ChatSessionSummary, Context, QUERY_ESTIMATE_TOKENS, TOP_K,
 };
 use crate::llm::cost::{CostEstimate, Feature, estimate_prompt, estimate_tokens, record_usage};
-use crate::llm::{AiConfig, Finish, LlmRequest, Message, ModelRole, Role, Usage};
+use crate::llm::{AiConfig, Finish, LlmRequest, Message, Model, ModelRole, Role, Usage};
 use crate::net::Purpose;
 use crate::packs::manifest::installed_packs;
 
@@ -42,6 +43,49 @@ fn answer_language(language: &str) -> &'static str {
     } else {
         "English"
     }
+}
+
+/// Has the chat model rewrite `message`, with the end of `history`, into one
+/// descriptive search query (spec §10.1) and logs its cost as chat use.
+/// `Ok(None)` if the request was cancelled; `Ok(Some(None))` if the reply
+/// held no usable query, in which case the message itself is searched.
+pub(crate) async fn write_search_query(
+    state: &AppState,
+    model: &Model,
+    history: &[Message],
+    message: &str,
+    token: &CancellationToken,
+) -> AppResult<Option<Option<String>>> {
+    let request = chat::search_query_request(&model.model, history, message);
+    let reply = Mutex::new(String::new());
+    let collect = |piece: &str| {
+        reply
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_str(piece);
+    };
+    let completion = model.provider.stream(&request, &collect, token).await?;
+    let reply = reply
+        .into_inner()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if completion.finish == Finish::Cancelled {
+        return Ok(None);
+    }
+    let usage = completion.usage.unwrap_or_else(|| Usage {
+        input_tokens: estimate_prompt(&request.system, &[&request.messages[0].content]),
+        output_tokens: estimate_tokens(&reply),
+    });
+    let provider = model.provider.id();
+    let cost = state.pricing().await.cost(provider, &model.model, usage);
+    record_usage(
+        &*state.user()?,
+        Feature::Chat,
+        provider,
+        &model.model,
+        usage,
+        cost,
+    )?;
+    Ok(Some(chat::parse_search_query(&reply)))
 }
 
 /// Answers `message` from the retrieved verses and tafsir, streaming the text
@@ -79,44 +123,15 @@ pub async fn chat_send(
     let embedder = tokio::task::block_in_place(|| state.semantic().embedder(&packs, &settings))?;
     let running = state.llm().start(&request_id);
     let provider = model.provider.id();
-    let search_query = {
-        let request = chat::search_query_request(&model.model, &messages, &message);
-        let reply = Mutex::new(String::new());
-        let collect = |piece: &str| {
-            reply
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push_str(piece);
-        };
-        let completion = model
-            .provider
-            .stream(&request, &collect, running.token())
-            .await?;
-        let reply = reply
-            .into_inner()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if completion.finish == Finish::Cancelled {
-            return Ok(ChatReply {
-                session_id,
-                question: None,
-                answer: None,
-                finish: Finish::Cancelled,
-            });
-        }
-        let usage = completion.usage.unwrap_or_else(|| Usage {
-            input_tokens: estimate_prompt(&request.system, &[&request.messages[0].content]),
-            output_tokens: estimate_tokens(&reply),
+    let Some(search_query) =
+        write_search_query(&state, &model, &messages, &message, running.token()).await?
+    else {
+        return Ok(ChatReply {
+            session_id,
+            question: None,
+            answer: None,
+            finish: Finish::Cancelled,
         });
-        let cost = state.pricing().await.cost(provider, &model.model, usage);
-        record_usage(
-            &*state.user()?,
-            Feature::Chat,
-            provider,
-            &model.model,
-            usage,
-            cost,
-        )?;
-        chat::parse_search_query(&reply)
     };
     let question = embedder
         .embed(

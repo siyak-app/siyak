@@ -14,28 +14,10 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     Client, Completion, Finish, Flow, LlmFuture, LlmProvider, LlmRequest, ModelInfo, TextSink,
-    Usage, count, endpoint, event_json, read_events, stream_error,
+    Usage, count, endpoint, event_json, is_chat_model, read_events, stream_error,
 };
 use crate::error::AppResult;
 use crate::secrets::ProviderId;
-
-/// Parts of model ids that are not chat models (embeddings, speech, images,
-/// moderation); filtered out of OpenAI's own list only.
-const NOT_CHAT: &[&str] = &[
-    "embedding",
-    "tts",
-    "whisper",
-    "transcribe",
-    "dall-e",
-    "image",
-    "audio",
-    "realtime",
-    "moderation",
-    "davinci",
-    "babbage",
-    "sora",
-    "search",
-];
 
 /// OpenAI's API, or a server that speaks it.
 pub struct OpenAi {
@@ -150,7 +132,7 @@ impl OpenAi {
             .into_iter()
             .flatten()
             .filter_map(|m| m["id"].as_str())
-            .filter(|id| compatible || !NOT_CHAT.iter().any(|part| id.contains(part)))
+            .filter(|id| is_chat_model(id, compatible))
             .map(|id| ModelInfo {
                 id: id.to_owned(),
                 name: None,

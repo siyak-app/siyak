@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::db::content::LocalizedTitle;
-use crate::embed::space::{ModelPackSpec, VectorPackSpec};
+use crate::embed::space::{ApiProvider, Backend, ModelPackSpec, VectorPackSpec};
 use crate::error::{AppError, AppErrorCode, AppResult};
 use crate::net::{Net, Purpose};
 
@@ -89,12 +89,6 @@ impl PackKind {
     /// Whether packs of this kind are `.tar.zst` archives (pack-format §4.4).
     pub fn is_archive(self) -> bool {
         matches!(self, Self::Morphology | Self::Model | Self::Audio)
-    }
-
-    /// Whether the pack's database holds only `pack_info`: its content is files.
-    /// Such packs install under any content schema up to the current one.
-    pub fn is_files_only(self) -> bool {
-        matches!(self, Self::Model | Self::Audio)
     }
 
     /// The file name a pack of this kind is published under.
@@ -771,6 +765,56 @@ pub struct PackView {
     pub requires: Vec<String>,
     /// The running or queued job for this pack.
     pub job: Option<JobView>,
+    /// Where a vector pack embeds queries; `None` for other packs.
+    pub embedding: Option<PackEmbedding>,
+    /// An audio pack's recitation style (`murattal`, `mujawwad` or `muallim`);
+    /// `None` for other packs.
+    pub style: Option<String>,
+}
+
+/// The embedding model behind a vector pack, for display.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+pub struct PackEmbedding {
+    /// The API that embeds queries; `None` when they are embedded on this computer.
+    pub provider: Option<ApiProvider>,
+    /// The model: the API's model id, or the local model's name.
+    pub model: String,
+}
+
+/// The embedding model of a `vectors` pack with valid metadata.
+fn pack_embedding(kind: &str, meta: &serde_json::Value) -> Option<PackEmbedding> {
+    if PackKind::parse(kind) != Some(PackKind::Vectors) {
+        return None;
+    }
+    let spec = VectorPackSpec::from_meta(meta.as_object()?).ok()?;
+    let name = |model: &str| {
+        model
+            .split_once('/')
+            .map_or(model, |(_, name)| name)
+            .to_owned()
+    };
+    Some(match spec.backend {
+        Backend::Api {
+            provider, model, ..
+        } => PackEmbedding {
+            provider: Some(provider),
+            model,
+        },
+        Backend::Local { .. } | Backend::Dev => PackEmbedding {
+            provider: None,
+            model: name(&spec.space.model),
+        },
+    })
+}
+
+/// The recitation style of an `audio` pack with valid metadata.
+fn pack_audio_style(kind: &str, meta: &serde_json::Value) -> Option<String> {
+    if PackKind::parse(kind) != Some(PackKind::Audio) {
+        return None;
+    }
+    crate::audio::Reciter::from_meta(meta.as_object()?)
+        .ok()
+        .map(|reciter| reciter.style)
 }
 
 /// One bundle of the Packs screen and of the first-launch card.
@@ -851,6 +895,7 @@ pub fn catalog(input: &CatalogInput<'_>) -> Catalog {
         let local = installed.get(entry.id.as_str());
         let newer = local.is_some_and(|l| is_newer(&entry.version, &l.version));
         let supported = entry.pack_kind().is_some();
+        let entry_meta = entry.meta.clone().map(serde_json::Value::Object);
         packs.push(PackView {
             id: entry.id.clone(),
             kind: entry.kind.clone(),
@@ -894,6 +939,12 @@ pub fn catalog(input: &CatalogInput<'_>) -> Catalog {
                 .filter(|m| *m != entry.id),
             requires: entry.requires.clone(),
             job: input.jobs.get(&entry.id).cloned(),
+            embedding: entry_meta
+                .as_ref()
+                .and_then(|meta| pack_embedding(&entry.kind, meta)),
+            style: entry_meta
+                .as_ref()
+                .and_then(|meta| pack_audio_style(&entry.kind, meta)),
         });
     }
     for local in input.installed {
@@ -935,6 +986,8 @@ pub fn catalog(input: &CatalogInput<'_>) -> Catalog {
             replaces: None,
             requires: Vec::new(),
             job: input.jobs.get(&local.id).cloned(),
+            embedding: pack_embedding(&local.kind, &meta),
+            style: pack_audio_style(&local.kind, &meta),
         });
     }
 
@@ -1123,10 +1176,61 @@ pub(crate) mod tests {
         for id in ["vectors.a", "vectors.b", "model.c"] {
             assert_eq!(kind(id), None, "{id}");
         }
+        let embedding = |id: &str| {
+            let meta = manifest.pack(id).unwrap().meta.clone().unwrap_or_default();
+            pack_embedding(&manifest.pack(id).unwrap().kind, &meta.into())
+        };
+        assert_eq!(
+            embedding("vectors.voyage"),
+            Some(PackEmbedding {
+                provider: Some(ApiProvider::Voyage),
+                model: "voyage-4".into()
+            })
+        );
+        assert_eq!(
+            embedding("vectors.e5"),
+            Some(PackEmbedding {
+                provider: None,
+                model: "e5-small".into()
+            })
+        );
+        assert_eq!(embedding("model.e5"), None);
+        assert_eq!(embedding("vectors.b"), None);
         assert_eq!(PackKind::Model.file_name("model.e5"), "model.e5.tar.zst");
         assert_eq!(
             PackKind::Vectors.file_name("vectors.e5"),
             "vectors.e5.sqlite.zst"
+        );
+    }
+
+    #[test]
+    fn audio_packs_show_their_recitation_style() {
+        let reciter = serde_json::json!({ "tr": "Hâfız", "en": "Hafiz" });
+        let style = |kind: &str, meta: serde_json::Value| pack_audio_style(kind, &meta);
+        assert_eq!(
+            style(
+                "audio",
+                serde_json::json!({ "reciter": reciter, "style": "mujawwad" })
+            ),
+            Some("mujawwad".into())
+        );
+        assert_eq!(
+            style(
+                "audio",
+                serde_json::json!({ "reciter": reciter, "style": "fast" })
+            ),
+            None
+        );
+        assert_eq!(
+            style("audio", serde_json::json!({ "style": "murattal" })),
+            None
+        );
+        assert_eq!(
+            style(
+                "tafsir",
+                serde_json::json!({ "reciter": reciter, "style": "murattal" })
+            ),
+            None
         );
     }
 

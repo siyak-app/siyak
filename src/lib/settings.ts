@@ -13,8 +13,74 @@
 /** Interface language preference; `system` follows the operating system. */
 export type LanguagePreference = "system" | "tr" | "en";
 
-/** Colour theme preference; `system` follows the operating system. */
-export type ThemePreference = "system" | "light" | "dark" | "sepia";
+/**
+ * Colour themes: the built-in light, dark and sepia, then palettes after
+ * popular editor themes, light ones first. Each is a `[data-theme]` block of
+ * `styles.css`.
+ */
+export const THEMES = [
+  "light",
+  "dark",
+  "sepia",
+  "github-light",
+  "solarized-light",
+  "gruvbox-light",
+  "catppuccin-latte",
+  "github-dark",
+  "one-dark",
+  "solarized-dark",
+  "nord",
+  "dracula",
+  "gruvbox-dark",
+  "catppuccin-mocha",
+  "tokyo-night",
+  "rose-pine",
+] as const;
+
+/** A colour theme. */
+export type Theme = (typeof THEMES)[number];
+
+/** Themes with light text on a dark background; they also get the `dark` class. */
+export const DARK_THEMES: ReadonlySet<Theme> = new Set([
+  "dark",
+  "github-dark",
+  "one-dark",
+  "solarized-dark",
+  "nord",
+  "dracula",
+  "gruvbox-dark",
+  "catppuccin-mocha",
+  "tokyo-night",
+  "rose-pine",
+]);
+
+/** Colour theme preference; `system` follows the operating system (light or dark). */
+export type ThemePreference = "system" | Theme;
+
+/** Typefaces of the Arabic text, all bundled (spec §13.4). */
+export const ARABIC_FONTS = [
+  "amiri-quran",
+  "amiri",
+  "scheherazade-new",
+  "noto-naskh-arabic",
+  "noto-kufi-arabic",
+] as const;
+
+/** A typeface of the Arabic text. */
+export type ArabicFont = (typeof ARABIC_FONTS)[number];
+
+/** Typefaces of translations; `system` is the interface font. */
+export const TRANSLATION_FONTS = [
+  "system",
+  "inter",
+  "literata",
+  "noto-serif",
+  "lora",
+  "source-serif",
+] as const;
+
+/** A typeface of translations. */
+export type TranslationFont = (typeof TRANSLATION_FONTS)[number];
 
 /** The first-launch answer that sets the defaults below (spec §13.2). */
 export type ExperienceProfile = "reader" | "researcher";
@@ -82,6 +148,8 @@ export interface Settings {
   "reader.citation_style": string;
   "typography.arabic": Typography;
   "typography.translation": Typography;
+  "typography.arabic_font": ArabicFont;
+  "typography.translation_font": TranslationFont;
   /** Where the reader was last, opened on the next launch. */
   "reader.last_position": VersePosition | null;
   /** Id of the active vector pack; `null` for the first installed (spec §7.4). */
@@ -103,6 +171,8 @@ export interface Settings {
   "ai.monthly_limit_usd": number | null;
   /** Tafsir packs whose commentary goes into chat, at most 3 (spec §10). */
   "chat.tafsirs": string[];
+  /** Find screen: the chat model rewrites the question into a search sentence first. */
+  "find.rewrite": boolean;
   /** Audio pack (reciter) of the player; `null` for the first installed (ADR 0014). */
   "audio.reciter": string | null;
   /** After a verse, play the next one until the end of the surah. */
@@ -174,7 +244,7 @@ const nullable =
 /** Validator and default of every setting. */
 export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
   "ui.language": { default: "system", validate: isOneOf(["system", "tr", "en"]) },
-  "ui.theme": { default: "system", validate: isOneOf(["system", "light", "dark", "sepia"]) },
+  "ui.theme": { default: "system", validate: isOneOf(["system", ...THEMES]) },
   "layout.left_pane": { default: { size: 260, collapsed: false }, validate: isPane },
   "layout.right_panel": {
     default: { size: 340, collapsed: false, tab: "tafsir" },
@@ -216,6 +286,8 @@ export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
     default: { size: 16, line_height: 1.7 },
     validate: isTypography(TYPOGRAPHY_LIMITS.translation),
   },
+  "typography.arabic_font": { default: "amiri-quran", validate: isOneOf(ARABIC_FONTS) },
+  "typography.translation_font": { default: "system", validate: isOneOf(TRANSLATION_FONTS) },
   "reader.last_position": {
     default: null,
     validate: nullable(
@@ -253,6 +325,7 @@ export const SETTINGS: { [K in SettingKey]: SettingSpec<Settings[K]> } = {
       value.length <= MAX_CHAT_TAFSIRS &&
       value.every((id) => typeof id === "string"),
   },
+  "find.rewrite": { default: true, validate: isBoolean },
   "audio.reciter": {
     default: null,
     validate: nullable((value): value is string => typeof value === "string" && value !== ""),

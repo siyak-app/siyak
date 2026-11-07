@@ -623,7 +623,7 @@ The primary address is independent of the GitHub organization and repository nam
 }
 ```
 
-**Bundles:** sets installed with one click instead of making users pick packs one by one. A casual user sees a "Recommended packs" card on first launch and installs it with one click, with the total size shown. They never meet concepts like "vector pack" or "model pack"; the Packs screen lists every pack by kind for those who pick them one by one. API vector packs are never in a bundle, since they need the user's own key. Pack and bundle titles may be given as `{ "tr", "en" }` objects.
+**Bundles:** sets installed with one click instead of making users pick packs one by one. A casual user sees a "Recommended packs" card on first launch and installs it with one click, with the total size shown. They never meet concepts like "vector pack" or "model pack"; the Packs screen lists the packs one type at a time (translations, tafsirs, word analysis, search by meaning, recitations) for those who pick them one by one. A model pack has no row of its own: it is part of the vector pack that needs it, which shows the model's size, installs it and removes it once no installed pack needs it. API vector packs are never in a bundle, since they need the user's own key. Pack and bundle titles may be given as `{ "tr", "en" }` objects.
 
 ### 6.4 Installation flow
 1. Fetch the manifest: on launch and on the Packs screen, cached for 1 hour. Without network, the last successful manifest is used.
@@ -639,10 +639,10 @@ The primary address is independent of the GitHub organization and repository nam
 **Update:** a reinstall through the same flow. If a tafsir is updated, entries in `tafsir_translations` with the old `pack_version` are marked "source updated"; the user may translate again.
 **Removal:** packs with `bundled = 0` can be removed; a `VACUUM` is suggested afterwards.
 
-**Content schema of packs:** a pack whose database has tables must be built for the app's current content schema (`pack_info.schema_version`). Model and audio packs hold only files and install under any schema up to the current one.
+**Content schema of packs:** a pack installs under any content schema (`pack_info.schema_version`) from the oldest one of its type up to the current one. The oldest schema of a type is the one that last changed the tables it fills: model and audio packs hold only files and go back to schema 1; translation, tafsir, morphology and vector packs to schema 2.
 
 ### 6.5 Licensing
-- Every pack's `license`, `attribution` and source link are listed on the "About → Sources" screen, and are shown on the Packs screen before download.
+- Every pack's `license`, `attribution` and source link are listed on the "About → Sources" screen. On the Packs screen they are under each pack's Details, and a pack with `license_terms` shows them, with its terms, when Download is pressed and before anything is downloaded.
 - Attributions required by a source (e.g. Tanzil, CC BY 3.0) are always visible.
 - The code license (MIT/Apache) does not change the license of data packs. Packs with more restrictive terms (e.g. the QAC morphology pack: no-modification and research-use terms) are distributed as separate packs and clearly marked on the Packs screen. The manifest has a `license_terms` field (a short list of terms, TR/EN) which the Packs screen shows before download.
 - Recitation packs (ADR 0014) carry recordings whose redistribution was not cleared with the rights holders. Their `license_terms` say so before download, `audio/LICENSE` is shown on About → Sources, and a pack is removed from the manifest in the next data release when a rights holder asks.
@@ -930,7 +930,9 @@ One interface, three panes:
 
 Panes are collapsible and resizable; the layout is persisted in `settings`.
 
-**Experience profile.** On first launch a single question is asked: "How would you like to use the app? Read and understand / Do research". The answer is stored as `settings.experience_profile` (`reader` | `researcher`) and **only sets defaults**. No feature is locked; every default can be changed individually in Settings.
+**Experience profile.** On first launch a single question is asked: "How would you like to use the app? Read and understand / Do research". The answer is stored as `settings.experience_profile` (`reader` | `researcher`) and **only sets defaults**. No feature is locked. Reading and research are the app's main modes: a switch in the top bar changes between them at any time and applies the mode's defaults below, keeping the translations the user has chosen. Settings holds only what does not differ between the modes.
+
+**Reading mode** shows each verse as a card: the verse number in an eight-pointed star, the Arabic centred, and the translations closed. Clicking a card (or Enter/Space on it) opens its translations with a short animation; a button in the surah header opens or closes all of them. A thin bar at the top shows how far into the surah the reader is. Research mode keeps the always-open list.
 
 | Default (`settings` key) | `reader` | `researcher` |
 |---|---|---|
@@ -957,8 +959,8 @@ Reference mockup: the "Okuma Ekranı Mockup" canvas (reader and researcher defau
 5. **First launch:** experience profile question, then the "Recommended packs" card (§6.3 bundles).
 6. **Collections:** list + detail; drag-and-drop ordering; export.
 7. **Chat:** sessions, messages, clickable citations, "sources used".
-8. **Packs:** grouped by type; size, license, version, progress.
-9. **Settings:** appearance (theme, fonts, sizes), language, AI (providers, model roles, capability flags, spending), privacy (network log), About → Sources.
+8. **Packs:** a side menu of types (Recommended, translations, tafsirs, word analysis, search by meaning, recitations, Sources); translations and tafsirs grouped by language, searchable by title or author and filterable to installed packs. A row shows the title, a short description, the size and one action; license, attribution, version, source link and removal are under Details. Pack ids are never shown.
+9. **Settings:** appearance (theme — built-in light, dark and sepia plus palettes after popular editor themes, each meeting WCAG AA; Arabic and translation typefaces, all bundled; sizes), reading (translations, recitation, technical terms, citation style), language, AI (providers, model roles, capability flags, spending), privacy (network log), About → Sources.
 
 ### 13.4 Typography and direction
 - Fonts are bundled; no CDN. Default Arabic font: Amiri Quran (SIL OFL). Licenses of alternative fonts are verified separately.

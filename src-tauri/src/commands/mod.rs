@@ -51,6 +51,7 @@ pub fn builder() -> Builder<tauri::Wry> {
             search::search_text,
             semantic::get_semantic_status,
             semantic::search_meaning,
+            semantic::find_verses,
             semantic::related_by_meaning,
             semantic::related_by_roots,
             keys::get_api_keys,

@@ -30,6 +30,14 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
+vi.mock("@/features/ai/LlmPicker", () => ({
+  LlmPicker: () => <p>answer model picker</p>,
+}));
+
+vi.mock("@/features/ai/EmbeddingPicker", () => ({
+  EmbeddingPicker: () => <p>search model picker</p>,
+}));
+
 vi.mock("@/features/related/SemanticRequired", () => ({
   SemanticRequired: () => <p>needs the semantic pack</p>,
 }));
@@ -203,12 +211,20 @@ describe("ChatConversation", () => {
 
   it("says what is missing and keeps the composer off", () => {
     ai = { state: "no_provider" };
-    const { unmount } = render(<ChatConversation sessionId={null} onSession={vi.fn()} />);
-    expect(screen.getByText("Chat needs an AI provider and model.")).toBeInTheDocument();
+    let view = render(<ChatConversation sessionId={null} onSession={vi.fn()} />);
+    // The provider and model are chosen right above the composer.
+    expect(screen.getByText("answer model picker")).toBeInTheDocument();
+    expect(screen.getByText("search model picker")).toBeInTheDocument();
+    expect(screen.getByText("Choose a provider and an answer model above.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open settings" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("Your question")).toBeDisabled();
+    view.unmount();
+
+    ai = { state: "key_missing", provider: "anthropic" };
+    view = render(<ChatConversation sessionId={null} onSession={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
-    expect(useUiStore.getState().settingsTab).toBe("ai");
-    unmount();
+    expect(useUiStore.getState().settingsTab).toBe("providers");
+    view.unmount();
 
     ai = READY;
     semantic = { state: "no_vector_pack" };

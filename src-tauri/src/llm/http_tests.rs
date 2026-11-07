@@ -132,10 +132,13 @@ async fn server(seen: Seen) -> String {
         } else if uri.path().starts_with("/gemini") {
             json!({"models":[
                 {"name":"models/gemini-pro","displayName":"Gemini Pro","supportedGenerationMethods":["generateContent"]},
-                {"name":"models/gemini-embedding","supportedGenerationMethods":["embedContent"]}
+                {"name":"models/gemini-embedding","supportedGenerationMethods":["embedContent"]},
+                {"name":"models/gemini-2.5-flash-native-audio","supportedGenerationMethods":["generateContent"]},
+                {"name":"models/gemini-2.5-flash-image","supportedGenerationMethods":["generateContent"]},
+                {"name":"models/veo-3","supportedGenerationMethods":["generateContent"]}
             ]})
         } else {
-            json!({"data":[{"id":"gpt-x"},{"id":"text-embedding-3-small"},{"id":"llama3"}]})
+            json!({"data":[{"id":"gpt-x"},{"id":"text-embedding-3-small"},{"id":"gpt-4o-mini-tts"},{"id":"gpt-realtime"},{"id":"llama3"},{"id":"nomic-embed-text"}]})
         }
         .to_string()
     }
@@ -288,8 +291,9 @@ async fn compatible_server_needs_no_key_and_gets_max_tokens() {
     assert_eq!(body["max_tokens"], 100);
     assert!(body.get("max_completion_tokens").is_none());
     let models = provider.list_models().await.unwrap();
-    // A compatible server's list is not filtered.
-    assert_eq!(models.len(), 3);
+    // A compatible server's list loses only clear non-chat models.
+    let ids: Vec<_> = models.into_iter().map(|m| m.id).collect();
+    assert_eq!(ids, ["gpt-realtime", "gpt-x", "llama3"]);
     assert_eq!(log.0.lock().unwrap()[0].0, "127.0.0.1");
 }
 

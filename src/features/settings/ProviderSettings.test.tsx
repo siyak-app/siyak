@@ -2,14 +2,13 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
-import type { ApiKeyStatus, PackView, SemanticStatus } from "@/lib/bindings";
+import type { ApiKeyStatus, SemanticStatus } from "@/lib/bindings";
 import { DEFAULT_PREFERENCES, useUiStore } from "@/stores/ui";
 
 import { ProviderSettings } from "./ProviderSettings";
 
 let keys: ApiKeyStatus[];
 let status: SemanticStatus;
-let packs: Partial<PackView>[];
 const savedKeys: { provider: string; key: string }[] = [];
 const removed: string[] = [];
 const settings: { key: string; value: string | null }[] = [];
@@ -27,19 +26,8 @@ vi.mock("@/lib/queries", () => ({
   useDeleteApiKey: () => ({ mutate: succeed(removed), isPending: false, isError: false }),
   useSetSemanticSetting: () => ({ mutate: succeed(settings), isPending: false, isError: false }),
   useSemanticStatus: () => ({ data: status }),
-  useCatalog: () => ({ data: { packs } }),
   appErrorCode: () => undefined,
 }));
-
-function vectorPack(id: string, title: string): Partial<PackView> {
-  return {
-    id,
-    kind: "vectors",
-    installed: true,
-    title: { tr: null, en: title },
-    title_fallback: title,
-  };
-}
 
 function section(name: RegExp) {
   const found = screen.getByRole("heading", { name }).closest("section");
@@ -62,7 +50,6 @@ describe("ProviderSettings", () => {
       { provider: "openai_compatible", saved: false },
     ];
     status = { state: "ready", pack: "vectors.bge-m3", provider: null };
-    packs = [vectorPack("vectors.bge-m3", "BGE-M3")];
     savedKeys.length = 0;
     removed.length = 0;
     settings.length = 0;
@@ -79,6 +66,19 @@ describe("ProviderSettings", () => {
       within(section(/^OpenAI-compatible server/)).getByText("(key optional)"),
     ).toBeInTheDocument();
     expect(screen.getByText("Create a separate key for this app.")).toBeInTheDocument();
+  });
+
+  it("marks what each key is used for", () => {
+    render(<ProviderSettings />);
+    const anthropic = within(section(/^Anthropic$/));
+    expect(anthropic.getByText("LLM")).toBeInTheDocument();
+    expect(anthropic.queryByText("Embedding")).not.toBeInTheDocument();
+    const voyage = within(section(/^Voyage AI$/));
+    expect(voyage.getByText("Embedding")).toBeInTheDocument();
+    expect(voyage.queryByText("LLM")).not.toBeInTheDocument();
+    const openai = within(section(/^OpenAI$/));
+    expect(openai.getByText("LLM")).toBeInTheDocument();
+    expect(openai.getByText("Embedding")).toBeInTheDocument();
   });
 
   it("saves a key and clears the field", () => {
@@ -122,19 +122,5 @@ describe("ProviderSettings", () => {
     useUiStore.getState().setPreference("semantic.base_url", "http://192.168.1.5:11434/v1");
     render(<ProviderSettings />);
     expect(screen.getByText(/The server address cannot be used/)).toBeInTheDocument();
-  });
-
-  it("offers a choice of vector pack only when there is one", () => {
-    const { unmount } = render(<ProviderSettings />);
-    expect(screen.queryByText("Semantic search pack")).not.toBeInTheDocument();
-    unmount();
-
-    packs = [vectorPack("vectors.bge-m3", "BGE-M3"), vectorPack("vectors.openai", "OpenAI small")];
-    render(<ProviderSettings />);
-    const openai = screen.getByRole("radio", { name: "OpenAI small" });
-    expect(screen.getByRole("radio", { name: "BGE-M3" })).toBeChecked();
-    fireEvent.click(openai);
-    expect(settings).toEqual([{ key: "semantic.vector_pack", value: "vectors.openai" }]);
-    expect(useUiStore.getState().preferences["semantic.vector_pack"]).toBe("vectors.openai");
   });
 });

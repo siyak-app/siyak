@@ -5,22 +5,24 @@ import {
   type LucideIcon,
   MessagesSquareIcon,
   NotebookPenIcon,
+  TextSearchIcon,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 const ACTIVE_LINK_PROPS = { className: "bg-primary/10 hover:bg-primary/15" };
 
-/** The left pane's way to what the user has kept (spec §13.2). */
+/** The left pane's way to what the user has kept, and to Find and Chat (spec §13.2). */
 export function LibraryNav() {
   const { t } = useTranslation();
   const links: {
-    to: "/collections" | "/bookmarks" | "/notes" | "/chat";
+    to: "/collections" | "/bookmarks" | "/notes" | "/find" | "/chat";
     icon: LucideIcon;
     label: string;
   }[] = [
     { to: "/collections", icon: FolderIcon, label: t("navigation.collections") },
     { to: "/bookmarks", icon: BookmarkIcon, label: t("navigation.bookmarks") },
     { to: "/notes", icon: NotebookPenIcon, label: t("navigation.notes") },
+    { to: "/find", icon: TextSearchIcon, label: t("navigation.find") },
     { to: "/chat", icon: MessagesSquareIcon, label: t("navigation.chat") },
   ];
   return (

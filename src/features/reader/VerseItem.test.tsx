@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -39,5 +39,39 @@ describe("VerseItem", () => {
     rerender(<Parent tick={2} />);
     rerender(<Parent tick={3} />);
     expect(renders.count).toBe(initial);
+  });
+
+  it("hides a closed card's translation from assistive technology and opens it on demand", () => {
+    const onToggle = vi.fn();
+    const { rerender } = render(
+      <VerseItem
+        verse={VERSE}
+        packs={PACKS}
+        surahName="Al-Faatiha"
+        variant="card"
+        onToggle={onToggle}
+      />,
+      { wrapper: TooltipProvider },
+    );
+    const toggle = screen.getByRole("button", { name: "reader.show_translation" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("In the name of Allah").closest("[inert]")).not.toBeNull();
+    fireEvent.click(toggle);
+    expect(onToggle).toHaveBeenCalledWith(VERSE);
+    rerender(
+      <VerseItem
+        verse={VERSE}
+        packs={PACKS}
+        surahName="Al-Faatiha"
+        variant="card"
+        expanded
+        onToggle={onToggle}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "reader.hide_translation" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByText("In the name of Allah").closest("[inert]")).toBeNull();
   });
 });

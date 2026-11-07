@@ -57,6 +57,10 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
+vi.mock("@/features/ai/EmbeddingPicker", () => ({
+  EmbeddingPicker: () => <p>search model picker</p>,
+}));
+
 vi.mock("@/lib/queries", () => ({
   useMorphologyPack: () => ({ data: morphologyPack }),
   useSearchRoots: () => ({ data: rootSearch, isError: false }),

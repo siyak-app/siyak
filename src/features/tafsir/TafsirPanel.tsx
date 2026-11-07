@@ -57,7 +57,7 @@ export function TafsirPanel({ verse }: { verse: VersePosition | null }) {
           variant="outline"
           size="sm"
           onClick={() => {
-            setPacksDialogOpen(true);
+            setPacksDialogOpen(true, "tafsir");
           }}
         >
           {t("tafsir.open_packs")}

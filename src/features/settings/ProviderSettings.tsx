@@ -4,12 +4,11 @@ import { useTranslation } from "react-i18next";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { packTitle } from "@/features/packs/packFormat";
+import { type ModelKind, ModelKindBadge } from "@/features/ai/ModelKindBadge";
 import { PROVIDER_NAMES } from "@/features/related/providerNames";
 import type { ProviderId } from "@/lib/bindings";
 import {
   useApiKeys,
-  useCatalog,
   useDeleteApiKey,
   useSemanticStatus,
   useSetApiKey,
@@ -17,21 +16,20 @@ import {
 } from "@/lib/queries";
 import { useUiStore } from "@/stores/ui";
 
-import { RadioField } from "./fields";
-
-const PROVIDERS: readonly ProviderId[] = [
-  "anthropic",
-  "openai",
-  "voyage",
-  "gemini",
-  "openai_compatible",
+/** Each provider with what its key is used for: answers (LLM), search (embedding) or both. */
+const PROVIDERS: readonly { id: ProviderId; kinds: readonly ModelKind[] }[] = [
+  { id: "anthropic", kinds: ["llm"] },
+  { id: "openai", kinds: ["llm", "embedding"] },
+  { id: "voyage", kinds: ["embedding"] },
+  { id: "gemini", kinds: ["llm", "embedding"] },
+  { id: "openai_compatible", kinds: ["llm", "embedding"] },
 ];
 
 /**
- * Settings → Providers: API keys in the OS keychain, the address of an
- * OpenAI-compatible server and the active semantic search pack (spec §7.4, §8,
+ * Settings → Providers: API keys in the OS keychain, each marked with what it
+ * is used for, and the address of an OpenAI-compatible server (spec §7.4, §8,
  * §14.2). Keys never come back from the core; the screen only shows whether
- * each one is saved.
+ * each one is saved. The models themselves are chosen on the AI tab.
  */
 export function ProviderSettings() {
   const { t } = useTranslation();
@@ -48,20 +46,28 @@ export function ProviderSettings() {
         </ul>
       </section>
       {keys.isError && <ErrorMessage error={keys.error} />}
-      {PROVIDERS.map((provider) => (
+      {PROVIDERS.map(({ id, kinds }) => (
         <KeyField
-          key={provider}
-          provider={provider}
-          saved={keys.data?.find((status) => status.provider === provider)?.saved}
+          key={id}
+          provider={id}
+          kinds={kinds}
+          saved={keys.data?.find((status) => status.provider === id)?.saved}
         />
       ))}
       <ServerAddress />
-      <ActiveVectorPack />
     </div>
   );
 }
 
-function KeyField({ provider, saved }: { provider: ProviderId; saved: boolean | undefined }) {
+function KeyField({
+  provider,
+  kinds,
+  saved,
+}: {
+  provider: ProviderId;
+  kinds: readonly ModelKind[];
+  saved: boolean | undefined;
+}) {
   const { t } = useTranslation();
   const inputId = useId();
   const [value, setValue] = useState("");
@@ -86,14 +92,19 @@ function KeyField({ provider, saved }: { provider: ProviderId; saved: boolean | 
   return (
     <section className="grid gap-2" aria-labelledby={`${inputId}-title`}>
       <div className="flex items-baseline justify-between gap-2">
-        <h4 id={`${inputId}-title`} className="font-medium">
-          {name}
-          {optional && (
-            <span className="ms-1 font-normal text-muted-foreground">
-              {t("settings.key_optional")}
-            </span>
-          )}
-        </h4>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <h4 id={`${inputId}-title`} className="font-medium">
+            {name}
+            {optional && (
+              <span className="ms-1 font-normal text-muted-foreground">
+                {t("settings.key_optional")}
+              </span>
+            )}
+          </h4>
+          {kinds.map((kind) => (
+            <ModelKindBadge key={kind} kind={kind} />
+          ))}
+        </div>
         {saved !== undefined && (
           <span className="text-xs text-muted-foreground" role="status">
             {saved ? t("settings.key_saved") : t("settings.key_not_saved")}
@@ -196,44 +207,6 @@ function ServerAddress() {
       {status.data?.state === "base_url_invalid" && !changed && (
         <p className="text-xs text-destructive">{t("semantic.base_url_invalid")}</p>
       )}
-      {save.isError && <ErrorMessage error={save.error} />}
-    </section>
-  );
-}
-
-/** Which installed vector pack semantic search uses, when there is a choice. */
-function ActiveVectorPack() {
-  const { t, i18n } = useTranslation();
-  const catalog = useCatalog();
-  const chosen = useUiStore((state) => state.preferences["semantic.vector_pack"]);
-  const setPreference = useUiStore((state) => state.setPreference);
-  const save = useSetSemanticSetting();
-  const vectors =
-    catalog.data?.packs.filter((pack) => pack.kind === "vectors" && pack.installed) ?? [];
-  const first = vectors[0];
-  if (!first || vectors.length < 2) return null;
-  const active = vectors.find((pack) => pack.id === chosen) ?? first;
-  return (
-    <section className="grid gap-2">
-      <RadioField
-        legend={t("settings.active_pack")}
-        hint={t("settings.active_pack_hint")}
-        value={active.id}
-        options={vectors.map((pack) => ({
-          value: pack.id,
-          label: packTitle(pack.title, pack.title_fallback, i18n.resolvedLanguage),
-        }))}
-        onChange={(id) => {
-          save.mutate(
-            { key: "semantic.vector_pack", value: id },
-            {
-              onSuccess: () => {
-                setPreference("semantic.vector_pack", id);
-              },
-            },
-          );
-        }}
-      />
       {save.isError && <ErrorMessage error={save.error} />}
     </section>
   );

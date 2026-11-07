@@ -14,6 +14,8 @@ export default defineConfig({
   build: {
     // Assets are loaded from disk inside the app, never over the network.
     chunkSizeWarningLimit: 2000,
+    // Fonts stay files: the CSP (`default-src 'self'`) refuses `data:` fonts.
+    assetsInlineLimit: (file) => (/\.(woff2?|ttf)$/u.test(file) ? false : undefined),
   },
   // Keep Rust compiler errors visible in the terminal.
   clearScreen: false,

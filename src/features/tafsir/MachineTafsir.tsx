@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Button } from "@/components/ui/button";
 import { formatCost } from "@/features/ai/formatCost";
+import { LlmPicker } from "@/features/ai/LlmPicker";
 import { useStream } from "@/features/ai/useStream";
 import { PROVIDER_NAMES } from "@/features/related/providerNames";
 import type {
@@ -159,14 +160,18 @@ function WithMachineText({
   );
 }
 
-function Toolbar({
-  summary,
-  translate,
-  more,
-  busy,
-  onRun,
-  onStop,
-}: {
+/** The model that writes, and the buttons that start writing. */
+function Toolbar(props: ToolbarProps) {
+  if (!props.summary && !props.translate && !props.busy) return null;
+  return (
+    <div className="grid gap-2 rounded-md border bg-muted/30 p-2">
+      <LlmPicker role="translation" />
+      <Actions {...props} />
+    </div>
+  );
+}
+
+interface ToolbarProps {
   /** The summary job, if there is no summary yet. */
   summary: TafsirJobVariables | null;
   /** The next paragraph's translation job, if one is left. */
@@ -176,14 +181,15 @@ function Toolbar({
   busy: boolean;
   onRun: (variables: TafsirJobVariables) => void;
   onStop: () => void;
-}) {
+}
+
+function Actions({ summary, translate, more, busy, onRun, onStop }: ToolbarProps) {
   const { t } = useTranslation();
   const status = useAiStatus();
   const setSettingsTab = useUiStore((state) => state.setSettingsTab);
   const [setup, setSetup] = useState(false);
   const ready = status.data?.state === "ready";
 
-  if (!summary && !translate && !busy) return null;
   if (busy) {
     return (
       <div className="flex items-center gap-2" role="status">

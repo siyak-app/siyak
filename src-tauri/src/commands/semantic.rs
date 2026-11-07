@@ -1,12 +1,17 @@
 //! Semantic layer commands (spec §7.4, §7.6).
 
+use serde::Serialize;
+use specta::Type;
 use tauri::State;
 
 use crate::AppState;
+use crate::commands::chat::write_search_query;
 use crate::db::user;
 use crate::embed::TextKind;
 use crate::embed::service::SemanticStatus;
 use crate::error::AppResult;
+use crate::llm::ModelRole;
+use crate::llm::chat::check_message;
 use crate::packs::manifest::installed_packs;
 use crate::related::{MAX_RELATED, RelatedVerse, verse_cards};
 
@@ -30,7 +35,16 @@ pub async fn search_meaning(
     translation_id: Option<String>,
     limit: u32,
 ) -> AppResult<Vec<RelatedVerse>> {
-    let query = query.trim();
+    nearest_verses(&state, query.trim(), translation_id.as_deref(), limit).await
+}
+
+/// The verses closest in meaning to `query`, best first; nothing for an empty query.
+async fn nearest_verses(
+    state: &AppState,
+    query: &str,
+    translation_id: Option<&str>,
+    limit: u32,
+) -> AppResult<Vec<RelatedVerse>> {
     if query.is_empty() {
         return Ok(Vec::new());
     }
@@ -54,8 +68,64 @@ pub async fn search_meaning(
             .into_iter()
             .map(|n| (n.verse_id, Vec::new()))
             .collect(),
-        translation_id.as_deref(),
+        translation_id,
     )
+}
+
+/// What the Find screen found for a question.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+pub struct FoundVerses {
+    /// The search sentence the chat model wrote from the question, if it did.
+    pub search_query: Option<String>,
+    /// The verses closest in meaning, best first.
+    pub verses: Vec<RelatedVerse>,
+    /// Whether the rewrite was stopped; nothing was searched then.
+    pub cancelled: bool,
+}
+
+/// The verses closest in meaning to a question, with no answer written (the
+/// Find screen). With `rewrite`, the chat model first turns the question into
+/// a search sentence as in chat (spec §10.1), which needs the AI setup and is
+/// counted as chat use; `request_id` names that request for `cancel_generation`.
+#[tauri::command]
+#[specta::specta]
+pub async fn find_verses(
+    state: State<'_, AppState>,
+    request_id: String,
+    query: String,
+    rewrite: bool,
+    translation_id: Option<String>,
+    limit: u32,
+) -> AppResult<FoundVerses> {
+    let query = check_message(&query)?;
+    let search_query = if rewrite {
+        let settings = user::get_settings(&*state.user()?)?;
+        let model = state.llm().model(&settings, ModelRole::Chat)?;
+        let running = state.llm().start(&request_id);
+        let Some(written) = write_search_query(&state, &model, &[], query, running.token()).await?
+        else {
+            return Ok(FoundVerses {
+                search_query: None,
+                verses: Vec::new(),
+                cancelled: true,
+            });
+        };
+        written
+    } else {
+        None
+    };
+    let verses = nearest_verses(
+        &state,
+        search_query.as_deref().unwrap_or(query),
+        translation_id.as_deref(),
+        limit,
+    )
+    .await?;
+    Ok(FoundVerses {
+        search_query,
+        verses,
+        cancelled: false,
+    })
 }
 
 /// The verses closest in meaning to a verse, best first; the verse itself is

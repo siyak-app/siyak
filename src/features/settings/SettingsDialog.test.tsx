@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApplyTypography } from "@/app/preferences";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { PROFILE_KEYS } from "@/features/profile/profileDefaults";
 import i18n from "@/i18n";
 import type { TranslationInfo } from "@/lib/bindings";
 import type { Settings } from "@/lib/settings";
@@ -72,19 +71,42 @@ describe("SettingsDialog", () => {
   });
 
   describe("appearance", () => {
-    it("offers the sepia theme", () => {
+    it("chooses a theme from the theme card", () => {
       open();
-      fireEvent.click(screen.getByRole("radio", { name: "Sepia" }));
-      expect(preferences()["ui.theme"]).toBe("sepia");
+      const card = screen.getByRole("button", { name: "Colour theme" });
+      expect(card).toHaveTextContent("Same as the system");
+      expect(screen.queryByRole("radio", { name: "Nord" })).not.toBeInTheDocument();
+      fireEvent.click(card);
+      expect(screen.getByRole("radio", { name: "Sepia" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("radio", { name: "Nord" }));
+      expect(preferences()["ui.theme"]).toBe("nord");
+      // Choosing closes the list.
+      expect(screen.queryByRole("radio", { name: "Sepia" })).not.toBeInTheDocument();
+      expect(card).toHaveTextContent("Nord");
+    });
+
+    it("chooses the Arabic and translation typefaces", () => {
+      open();
+      const arabic = screen.getByRole("region", { name: "Arabic text" });
+      fireEvent.click(within(arabic).getByRole("button", { name: "Typeface" }));
+      fireEvent.click(within(arabic).getByRole("radio", { name: /Scheherazade New/ }));
+      const translation = screen.getByRole("region", { name: "Translations" });
+      fireEvent.click(within(translation).getByRole("button", { name: "Typeface" }));
+      fireEvent.click(within(translation).getByRole("radio", { name: "Literata" }));
+      expect(preferences()["typography.arabic_font"]).toBe("scheherazade-new");
+      expect(preferences()["typography.translation_font"]).toBe("literata");
+      fireEvent.click(screen.getByRole("button", { name: "Reset text settings" }));
+      expect(preferences()["typography.arabic_font"]).toBe("amiri-quran");
+      expect(preferences()["typography.translation_font"]).toBe("system");
     });
 
     it("adjusts Arabic and translation text separately", () => {
       open();
-      const arabic = screen.getByRole("group", { name: "Arabic text" });
+      const arabic = screen.getByRole("region", { name: "Arabic text" });
       fireEvent.change(within(arabic).getByRole("slider", { name: "Font size" }), {
         target: { value: "34" },
       });
-      const translation = screen.getByRole("group", { name: "Translations" });
+      const translation = screen.getByRole("region", { name: "Translations" });
       fireEvent.change(within(translation).getByRole("slider", { name: "Line spacing" }), {
         target: { value: "2" },
       });
@@ -94,7 +116,7 @@ describe("SettingsDialog", () => {
 
     it("keeps Arabic line spacing at 2.0 or more", () => {
       open();
-      const arabic = screen.getByRole("group", { name: "Arabic text" });
+      const arabic = screen.getByRole("region", { name: "Arabic text" });
       expect(within(arabic).getByRole("slider", { name: "Line spacing" })).toHaveAttribute(
         "min",
         "2",
@@ -102,49 +124,32 @@ describe("SettingsDialog", () => {
     });
   });
 
-  describe("display & behaviour", () => {
-    it("disables the settings of features that do not exist yet", () => {
-      const dialog = open("Display & behaviour");
-      expect(within(dialog).getAllByText("Available in a later version")).toHaveLength(2);
-      expect(screen.getByRole("radio", { name: "Shows a small card" })).toBeDisabled();
-      expect(screen.getByRole("radio", { name: "Dotted underline" })).toBeDisabled();
-      expect(screen.getByRole("checkbox", { name: "Show search mode chips" })).toBeEnabled();
-      expect(screen.getByRole("checkbox", { name: /Copy citation/ })).toBeEnabled();
-      expect(screen.getByRole("radio", { name: /Always visible/ })).toBeEnabled();
-    });
-
-    it("changes a single setting", () => {
-      open("Display & behaviour");
-      fireEvent.click(screen.getByRole("radio", { name: /Always visible/ }));
-      expect(preferences()["reader.actions"]).toBe("labeled");
-      const collapsed = preferences()["layout.right_panel"].collapsed;
-      fireEvent.click(screen.getByRole("checkbox", { name: "Show the side panel" }));
-      expect(preferences()["layout.right_panel"].collapsed).toBe(!collapsed);
+  describe("reading", () => {
+    it("leaves what the mode decides to the mode switch", () => {
+      const dialog = open("Reading");
+      expect(within(dialog).queryByText(/profile/i)).not.toBeInTheDocument();
+      expect(within(dialog).queryByRole("checkbox", { name: /side panel/ })).toBeNull();
+      expect(within(dialog).queryByRole("checkbox", { name: /search mode chips/ })).toBeNull();
+      expect(within(dialog).queryByText("Verse actions")).not.toBeInTheDocument();
     });
 
     it("shows technical terms the chosen way", () => {
-      open("Display & behaviour");
+      open("Reading");
       expect(screen.getByText("dictionary form")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Technical terms" }));
       fireEvent.click(screen.getByRole("radio", { name: /in brackets/ }));
       expect(screen.getByText("dictionary form (lemma)")).toBeInTheDocument();
     });
 
-    it("resets every profile setting to the researcher defaults", () => {
-      open("Display & behaviour");
-      fireEvent.click(screen.getByRole("button", { name: "Reset to “Do research” defaults" }));
-      expect(saved).toHaveLength(1);
-      expect(Object.keys(saved[0] ?? {}).sort()).toEqual([...PROFILE_KEYS].sort());
-      expect(preferences()).toMatchObject({
-        experience_profile: "researcher",
-        "reader.actions": "labeled",
-        "reader.translations": ["en.pickthall", "tr.test"],
-        "ui.technical_terms": "inline",
-      });
-      expect(screen.getByText("Current profile: Do research")).toBeInTheDocument();
+    it("chooses the citation style", () => {
+      open("Reading");
+      fireEvent.click(screen.getByRole("button", { name: "Citation style" }));
+      fireEvent.click(screen.getByRole("radio", { name: "APA" }));
+      expect(preferences()["reader.citation_style"]).toBe("apa");
     });
 
     it("lets translations be chosen here too", () => {
-      open("Display & behaviour");
+      open("Reading");
       fireEvent.click(screen.getByRole("checkbox", { name: /Türkçe deneme/ }));
       expect(preferences()["reader.translations"]).toEqual(["en.pickthall", "tr.test"]);
     });
@@ -152,6 +157,7 @@ describe("SettingsDialog", () => {
 
   it("switches the interface language", () => {
     open("Language");
+    fireEvent.click(screen.getByRole("button", { name: "Language" }));
     fireEvent.click(screen.getByRole("radio", { name: "Türkçe" }));
     expect(preferences()["ui.language"]).toBe("tr");
   });
@@ -160,12 +166,19 @@ describe("SettingsDialog", () => {
 describe("useApplyTypography", () => {
   it("sets the reader typography variables on <html>", () => {
     renderHook(() => {
-      useApplyTypography({ size: 32, line_height: 2.5 }, { size: 18, line_height: 1.8 });
+      useApplyTypography(
+        { size: 32, line_height: 2.5 },
+        { size: 18, line_height: 1.8 },
+        "scheherazade-new",
+        "literata",
+      );
     });
     const style = document.documentElement.style;
     expect(style.getPropertyValue("--arabic-size")).toBe("32px");
     expect(style.getPropertyValue("--arabic-line-height")).toBe("2.5");
     expect(style.getPropertyValue("--translation-size")).toBe("18px");
     expect(style.getPropertyValue("--translation-line-height")).toBe("1.8");
+    expect(style.getPropertyValue("--arabic-font")).toBe('"Scheherazade New", serif');
+    expect(style.getPropertyValue("--translation-font")).toBe('"Literata", serif');
   });
 });

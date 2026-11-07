@@ -33,6 +33,7 @@ import {
   type ConcordanceTarget,
   type CostEstimate,
   type CoreStatus,
+  type FoundVerses,
   type ImportMode,
   type ImportReport,
   type ItemRef,
@@ -126,6 +127,23 @@ export interface SearchTextVariables {
 }
 
 /** Variables of {@link useSearchMeaning}. */
+/** Variables of {@link useFindVerses}. */
+export interface FindVariables {
+  /** The question as typed. */
+  query: string;
+  /** Whether the chat model first rewrites it into a search sentence. */
+  rewrite: boolean;
+  /** The translation to show with each verse. */
+  translationId: string | null;
+  /** Most verses to return. */
+  limit: number;
+  /**
+   * What the results depend on besides the query: the active vector pack and,
+   * with `rewrite`, the chat model. Only part of the key, never sent.
+   */
+  models: string;
+}
+
 export interface MeaningVariables {
   /** The query as typed. */
   query: string;
@@ -218,6 +236,8 @@ export const queryKeys = {
   semanticStatus: ["semantic-status"] as const,
   /** Key of {@link useSearchMeaning}. */
   searchMeaning: (variables: MeaningVariables) => ["search-meaning", variables] as const,
+  /** Key of {@link useFindVerses}. */
+  findVerses: (variables: FindVariables) => ["find-verses", variables] as const,
   /** Key of {@link useRelatedByMeaning}. */
   relatedByMeaning: (verseId: number | null, translationId: string | null) =>
     ["related-by-meaning", verseId, translationId] as const,
@@ -539,6 +559,28 @@ export function useSearchMeaning(variables: MeaningVariables, enabled = true) {
       const before = previousQuery?.queryKey[1] as MeaningVariables | undefined;
       return before?.query === query ? previous : undefined;
     },
+  });
+}
+
+/**
+ * The verses found for a question on the Find screen, without an answer. A
+ * rewrite is a paid request, so results are kept until the query or a model
+ * changes; cancelling the query (Stop, or leaving) stops the rewrite.
+ */
+export function useFindVerses(variables: FindVariables, enabled = true) {
+  const { query, rewrite, translationId, limit } = variables;
+  return useQuery<FoundVerses>({
+    queryKey: queryKeys.findVerses(variables),
+    queryFn: ({ signal }) => {
+      const requestId = crypto.randomUUID();
+      signal.addEventListener("abort", () => {
+        void cancelGeneration(requestId);
+      });
+      return unwrap(commands.findVerses(requestId, query, rewrite, translationId, limit));
+    },
+    staleTime: Infinity,
+    retry: false,
+    enabled: enabled && query.trim() !== "",
   });
 }
 

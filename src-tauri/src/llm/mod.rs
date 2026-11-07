@@ -146,6 +146,51 @@ pub struct ModelInfo {
     pub name: Option<String>,
 }
 
+/// Parts of model ids that are not text-generation models: embeddings,
+/// speech, images, video, music, live audio, moderation, and models served
+/// only by other APIs (search, computer use, Codex).
+const NOT_CHAT: &[&str] = &[
+    "embed",
+    "tts",
+    "whisper",
+    "transcribe",
+    "dall-e",
+    "image",
+    "imagen",
+    "audio",
+    "realtime",
+    "live",
+    "moderation",
+    "davinci",
+    "babbage",
+    "sora",
+    "veo",
+    "lyria",
+    "search",
+    "computer-use",
+    "robotics",
+    "aqa",
+    "deep-research",
+    "codex",
+];
+
+/// Parts of model ids that are surely not chat models on any server; the
+/// only filter applied to an OpenAI-compatible server's list.
+const NOT_CHAT_ANYWHERE: &[&str] = &["embed", "tts", "whisper"];
+
+/// Whether a provider's model `id` writes text, so it belongs in the chat
+/// and translation model lists. `compatible` servers name models freely and
+/// are filtered only by the clearest markers.
+pub(crate) fn is_chat_model(id: &str, compatible: bool) -> bool {
+    let id = id.to_ascii_lowercase();
+    let markers = if compatible {
+        NOT_CHAT_ANYWHERE
+    } else {
+        NOT_CHAT
+    };
+    !markers.iter().any(|part| id.contains(part))
+}
+
 /// A boxed future: async trait methods cannot be called through `dyn`.
 pub type LlmFuture<'a, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 'a>>;
 

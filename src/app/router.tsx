@@ -12,6 +12,8 @@ import { ChatView } from "@/features/chat/ChatView";
 import { CollectionView } from "@/features/collections/CollectionView";
 import { CollectionsView } from "@/features/collections/CollectionsView";
 import { CompareView } from "@/features/compare/CompareView";
+import { parseFindParams } from "@/features/find/findParams";
+import { FindView } from "@/features/find/FindView";
 import { NotesView } from "@/features/notes/NotesView";
 import { ReaderView } from "@/features/reader/ReaderView";
 import { SurahNotFound } from "@/features/reader/SurahNotFound";
@@ -109,6 +111,17 @@ export const searchRoute = createRoute({
   component: function SearchRoute() {
     const { q, mode } = searchRoute.useSearch();
     return <SearchView q={q} mode={mode} />;
+  },
+});
+
+/** `/find?q=…`: verses for a question, found by meaning without an answer. */
+export const findRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/find",
+  validateSearch: parseFindParams,
+  component: function FindRoute() {
+    const { q } = findRoute.useSearch();
+    return <FindView key={q} q={q} />;
   },
 });
 
@@ -211,6 +224,7 @@ export const router = createRouter({
     readVerseRoute,
     compareRoute,
     searchRoute,
+    findRoute,
     concordanceRoute,
     bookmarksRoute,
     notesRoute,

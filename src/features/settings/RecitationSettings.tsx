@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { reciterTitle, useReciter } from "@/features/audio/useReciter";
 import { useUiStore } from "@/stores/ui";
 
-import { CheckField, RadioField } from "./fields";
+import { CheckField, SelectCard, SettingsSection } from "./fields";
 
 /**
  * Recitation (ADR 0014): the default reciter among the installed audio packs,
@@ -20,14 +20,10 @@ export function RecitationSettings() {
   const { packs, active } = useReciter();
 
   return (
-    <section className="grid gap-3" aria-labelledby="settings-recitation-heading">
-      <h3 id="settings-recitation-heading" className="text-sm font-semibold">
-        {t("settings.recitation")}
-      </h3>
-      <p className="text-xs text-muted-foreground">{t("settings.recitation_hint")}</p>
+    <SettingsSection title={t("settings.recitation")} description={t("settings.recitation_hint")}>
       {active ? (
-        <RadioField
-          legend={t("settings.recitation_reciter")}
+        <SelectCard
+          label={t("settings.recitation_reciter")}
           value={active.id}
           options={packs.map((pack) => ({
             value: pack.id,
@@ -45,7 +41,7 @@ export function RecitationSettings() {
             size="sm"
             onClick={() => {
               setSettingsTab(null);
-              setPacksDialogOpen(true);
+              setPacksDialogOpen(true, "audio");
             }}
           >
             {t("settings.recitation_get")}
@@ -66,6 +62,6 @@ export function RecitationSettings() {
           setPreference("audio.follow", value);
         }}
       />
-    </section>
+    </SettingsSection>
   );
 }

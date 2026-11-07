@@ -26,8 +26,10 @@ function PreferencesGate({ children }: { children: ReactNode }) {
   useApplyLanguage(language);
   const arabic = useUiStore((state) => state.preferences["typography.arabic"]);
   const translation = useUiStore((state) => state.preferences["typography.translation"]);
+  const arabicFont = useUiStore((state) => state.preferences["typography.arabic_font"]);
+  const translationFont = useUiStore((state) => state.preferences["typography.translation_font"]);
   useApplyTheme(theme);
-  useApplyTypography(arabic, translation);
+  useApplyTypography(arabic, translation, arabicFont, translationFont);
   // Pane sizes are only read on mount, so wait for the stored layout.
   return hydrated ? children : null;
 }

@@ -23,6 +23,7 @@ pub const COMMAND_NAMES: &[&str] = &[
     "search_text",
     "get_semantic_status",
     "search_meaning",
+    "find_verses",
     "related_by_meaning",
     "related_by_roots",
     "get_api_keys",

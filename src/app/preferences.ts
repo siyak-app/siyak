@@ -4,7 +4,14 @@ import { useTranslation } from "react-i18next";
 
 import { systemLanguage } from "@/i18n";
 import { queryKeys, useSetSetting, useSettings } from "@/lib/queries";
-import { serializeSetting, type Typography } from "@/lib/settings";
+import { ARABIC_FONT_FACES, TRANSLATION_FONT_FACES } from "@/lib/fonts";
+import {
+  type ArabicFont,
+  DARK_THEMES,
+  serializeSetting,
+  type TranslationFont,
+  type Typography,
+} from "@/lib/settings";
 import {
   preferencesFromSettings,
   useUiStore,
@@ -77,16 +84,17 @@ export function useApplyLanguage(preference: UiPreferences["ui.language"]): void
 }
 
 /**
- * Sets the theme class on `<html>` (`dark` or `sepia`; none for light),
- * following the OS unless overridden.
+ * Sets the theme on `<html>`: `data-theme` picks the palette (`system`
+ * resolves to light or dark from the OS) and dark palettes also get the
+ * `dark` class, which Tailwind's `dark:` variant follows.
  */
 export function useApplyTheme(preference: UiPreferences["ui.theme"]): void {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      const dark = preference === "dark" || (preference === "system" && media.matches);
-      document.documentElement.classList.toggle("dark", dark);
-      document.documentElement.classList.toggle("sepia", preference === "sepia");
+      const theme = preference === "system" ? (media.matches ? "dark" : "light") : preference;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.classList.toggle("dark", DARK_THEMES.has(theme));
     };
     apply();
     media.addEventListener("change", apply);
@@ -97,12 +105,19 @@ export function useApplyTheme(preference: UiPreferences["ui.theme"]): void {
 }
 
 /** Sets the reader typography variables on `<html>` (see `styles.css`). */
-export function useApplyTypography(arabic: Typography, translation: Typography): void {
+export function useApplyTypography(
+  arabic: Typography,
+  translation: Typography,
+  arabicFont: ArabicFont,
+  translationFont: TranslationFont,
+): void {
   useEffect(() => {
     const style = document.documentElement.style;
     style.setProperty("--arabic-size", `${String(arabic.size)}px`);
     style.setProperty("--arabic-line-height", String(arabic.line_height));
     style.setProperty("--translation-size", `${String(translation.size)}px`);
     style.setProperty("--translation-line-height", String(translation.line_height));
-  }, [arabic, translation]);
+    style.setProperty("--arabic-font", ARABIC_FONT_FACES[arabicFont].family);
+    style.setProperty("--translation-font", TRANSLATION_FONT_FACES[translationFont].family);
+  }, [arabic, translation, arabicFont, translationFont]);
 }

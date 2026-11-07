@@ -459,7 +459,8 @@ describe("ReaderView", () => {
       notes = [];
     });
 
-    it("opens the verse in the context panel on Enter", () => {
+    it("opens the verse in the context panel on Enter in research mode", () => {
+      useUiStore.getState().setPreference("experience_profile", "researcher");
       useUiStore.getState().setPreference("layout.right_panel", {
         ...DEFAULT_PREFERENCES["layout.right_panel"],
         collapsed: true,
@@ -472,6 +473,35 @@ describe("ReaderView", () => {
       expect(state.selectedVerse).toEqual({ surah: 1, ayah: 3 });
       expect(state.preferences["layout.right_panel"].collapsed).toBe(false);
       expect(verse).toHaveAttribute("data-selected", "true");
+    });
+
+    it("opens and closes a verse card's translation in reading mode", () => {
+      useUiStore.getState().setPreference("experience_profile", "reader");
+      useUiStore.getState().setPreference("layout.right_panel", {
+        ...DEFAULT_PREFERENCES["layout.right_panel"],
+        collapsed: true,
+      });
+      show(1);
+      const verse = screen.getByRole("article", { name: "Verse 1:3" });
+      const toggle = within(verse).getByRole("button", { name: "Show translation" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      fireEvent.click(within(verse).getByText("آية 3"));
+      expect(within(verse).getByRole("button", { name: "Hide" })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
+      expect(useUiStore.getState().selectedVerse).toEqual({ surah: 1, ayah: 3 });
+      // Reading stays in the reader: the side panel does not open.
+      expect(useUiStore.getState().preferences["layout.right_panel"].collapsed).toBe(true);
+      verse.focus();
+      fireEvent.keyDown(verse, { key: "Enter" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("opens a linked verse's translation in reading mode", () => {
+      show(1, ["en.pickthall"], 4);
+      const verse = screen.getByRole("article", { name: "Verse 1:4" });
+      expect(within(verse).getByRole("button", { name: "Hide" })).toBeInTheDocument();
     });
 
     it("selects a verse for the context panel on a click", () => {

@@ -7,23 +7,31 @@ import { useUiStore } from "@/stores/ui";
 import { profileDefaults } from "./profileDefaults";
 
 /**
- * Applies an experience profile: writes all of its defaults in one
- * `set_settings` call, then updates the UI store. Used by the first-launch
- * question and by the profile resets in Settings.
+ * Applies an experience profile: writes its defaults in one `set_settings`
+ * call, then updates the UI store. The first-launch question writes all of
+ * them; switching mode from the header (`keepTranslations`) leaves the
+ * translations the user has chosen alone.
  */
 export function useApplyProfile() {
   const { i18n } = useTranslation();
   const translations = useTranslations();
   const save = useSetSettings();
 
-  const apply = (profile: ExperienceProfile, onDone?: () => void) => {
+  const apply = (
+    profile: ExperienceProfile,
+    onDone?: () => void,
+    { keepTranslations = false }: { keepTranslations?: boolean } = {},
+  ) => {
     const { preferences, setPreferences } = useUiStore.getState();
-    const values = profileDefaults(
+    const defaults = profileDefaults(
       profile,
       translations.data ?? [],
       i18n.resolvedLanguage ?? "en",
       preferences["layout.right_panel"],
     );
+    const values = keepTranslations
+      ? { ...defaults, "reader.translations": preferences["reader.translations"] }
+      : defaults;
     save.mutate(values, {
       onSuccess: () => {
         setPreferences(values);

@@ -11,7 +11,7 @@ import {
 
 const SAMPLE: Settings = {
   "ui.language": "tr",
-  "ui.theme": "sepia",
+  "ui.theme": "nord",
   "layout.left_pane": { size: 300, collapsed: true },
   "layout.right_panel": { size: 320, collapsed: false, tab: "word" },
   experience_profile: "researcher",
@@ -27,6 +27,8 @@ const SAMPLE: Settings = {
   "reader.citation_style": "apa",
   "typography.arabic": { size: 32, line_height: 2.4 },
   "typography.translation": { size: 18, line_height: 1.8 },
+  "typography.arabic_font": "scheherazade-new",
+  "typography.translation_font": "literata",
   "reader.last_position": { surah: 2, ayah: 255 },
   "semantic.vector_pack": "vectors.bge-m3",
   "semantic.base_url": "http://localhost:11434/v1",
@@ -36,6 +38,7 @@ const SAMPLE: Settings = {
   "ai.arabic_sources": { "openai_compatible/qwen3": true },
   "ai.monthly_limit_usd": 5,
   "chat.tafsirs": ["ar.jalalayn"],
+  "find.rewrite": false,
   "audio.reciter": "audio.alafasy",
   "audio.autoplay": false,
   "audio.repeat": "surah",
@@ -66,6 +69,9 @@ describe("settings", () => {
     expect(parseSetting("audio.reciter", '""')).toBeNull();
     expect(parseSetting("search.mode_chips", '"yes"')).toBe(false);
     expect(parseSetting("ui.theme", "{")).toBe("system");
+    expect(parseSetting("ui.theme", '"monokai"')).toBe("system");
+    expect(parseSetting("typography.arabic_font", '"comic-sans"')).toBe("amiri-quran");
+    expect(parseSetting("typography.translation_font", "3")).toBe("system");
     expect(parseSetting("ai.provider", '"voyage"')).toBeNull();
     expect(parseSetting("ai.arabic_sources", '{"a/b":"yes"}')).toEqual({});
   });

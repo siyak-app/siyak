@@ -30,7 +30,7 @@ export function MorphologyRequired() {
         variant="outline"
         size="sm"
         onClick={() => {
-          setPacksDialogOpen(true);
+          setPacksDialogOpen(true, "morphology");
         }}
       >
         {t("word.open_packs")}

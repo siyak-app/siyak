@@ -1,41 +1,28 @@
-import { type SyntheticEvent, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EmbeddingPicker } from "@/features/ai/EmbeddingPicker";
+import { ModelInput, ModelSelect } from "@/features/ai/LlmPicker";
+import { aiBlocked, chooseProvider, useSaveAiSetting } from "@/features/ai/models";
+import { ModelKindBadge } from "@/features/ai/ModelKindBadge";
+import { packTitle } from "@/features/packs/packFormat";
 import { PROVIDER_NAMES } from "@/features/related/providerNames";
 import type { AiStatus } from "@/lib/bindings";
-import { packTitle } from "@/features/packs/packFormat";
-import {
-  type AiSettingKey,
-  useAiStatus,
-  useModels,
-  useSetAiSetting,
-  useTafsirs,
-} from "@/lib/queries";
-import { AI_PROVIDERS, type AiProvider, MAX_CHAT_TAFSIRS, type Settings } from "@/lib/settings";
+import { useAiStatus, useModels, useTafsirs } from "@/lib/queries";
+import { AI_PROVIDERS, type AiProvider, MAX_CHAT_TAFSIRS } from "@/lib/settings";
 import { useUiStore } from "@/stores/ui";
 
-import { CheckField, RadioField } from "./fields";
+import { CheckField, SelectCard, SettingsSection } from "./fields";
 import { SpendingSettings } from "./SpendingSettings";
 
 /** The value of the provider radio group that means "no AI". */
 const NONE = "none";
 
-/** The model select's value for "same as the chat model". */
-const SAME_AS_CHAT = "__same__";
-
 /**
- * Settings → AI: the provider of chat and tafsir summaries, the model of each
- * role and whether the chat model may read Arabic sources (spec §8). Keys and
+ * Settings → AI: the answer model (LLM) of chat and tafsir summaries with its
+ * provider, whether it may read Arabic sources (spec §8), and apart from it the
+ * search model (embedding) that finds verses by meaning (spec §7.4). Keys and
  * the server address are entered on the Providers tab.
  */
 export function AiSettings() {
@@ -46,44 +33,32 @@ export function AiSettings() {
 
   return (
     <div className="grid gap-6 text-sm">
-      <section className="grid gap-2">
-        <h3 className="font-medium">{t("ai_settings.title")}</h3>
-        <p className="text-muted-foreground">{t("ai_settings.hint")}</p>
-      </section>
-      <RadioField<AiProvider | typeof NONE>
-        legend={t("ai_settings.provider")}
-        value={provider ?? NONE}
-        options={[
-          { value: NONE, label: t("ai_settings.provider_none") },
-          ...AI_PROVIDERS.map((value) => ({ value, label: PROVIDER_NAMES[value] })),
-        ]}
-        onChange={(value) => {
-          const next = value === NONE ? null : value;
-          if (next === provider) return;
-          save("ai.provider", next);
-          // Models belong to a provider.
-          save("ai.chat_model", null);
-          save("ai.translation_model", null);
-        }}
-      />
-      {status.data && <StatusNote status={status.data} />}
-      {provider && <Models provider={provider} />}
-      {provider && <ChatTafsirs />}
-      {save.error && <ErrorMessage error={save.error} />}
+      <p className="text-muted-foreground">{t("ai_settings.hint")}</p>
+      <SettingsSection
+        title={t("models.answer_model")}
+        description={t("models.kind_llm_hint")}
+        action={<ModelKindBadge kind="llm" />}
+      >
+        <SelectCard<AiProvider | typeof NONE>
+          label={t("ai_settings.provider")}
+          value={provider ?? NONE}
+          options={[
+            { value: NONE, label: t("ai_settings.provider_none") },
+            ...AI_PROVIDERS.map((value) => ({ value, label: PROVIDER_NAMES[value] })),
+          ]}
+          onChange={(value) => {
+            chooseProvider(save, provider, value === NONE ? null : value);
+          }}
+        />
+        {status.data && <StatusNote status={status.data} />}
+        {provider && <Models provider={provider} />}
+        {provider && <ChatTafsirs />}
+        {save.error && <ErrorMessage error={save.error} />}
+      </SettingsSection>
+      <EmbeddingPicker />
       <SpendingSettings />
     </div>
   );
-}
-
-/** Saves an AI setting and mirrors it in the UI store. */
-function useSaveAiSetting() {
-  const setPreference = useUiStore((state) => state.setPreference);
-  const mutation = useSetAiSetting();
-  const save = <K extends AiSettingKey>(key: K, value: Settings[K]) => {
-    setPreference(key, value);
-    mutation.mutate({ key, value });
-  };
-  return Object.assign(save, { error: mutation.isError ? mutation.error : null });
 }
 
 /** What still has to be done before AI features work. */
@@ -136,10 +111,7 @@ function Models({ provider }: { provider: AiProvider }) {
   const translation = useUiStore((state) => state.preferences["ai.translation_model"]);
   const arabic = useUiStore((state) => state.preferences["ai.arabic_sources"]);
   const save = useSaveAiSetting();
-  const blocked =
-    status.data?.state === "key_missing" ||
-    status.data?.state === "base_url_missing" ||
-    status.data?.state === "base_url_invalid";
+  const blocked = aiBlocked(status.data);
   const models = useModels(provider, !blocked);
   const ids = models.data?.map((model) => model.id) ?? [];
   const names = new Map(models.data?.map((model) => [model.id, model.name ?? model.id]));
@@ -195,6 +167,7 @@ function Models({ provider }: { provider: AiProvider }) {
             names={names}
             loading={models.isPending}
             sameAsChat
+            chatModel={chat}
             onChange={(value) => {
               save("ai.translation_model", value);
             }}
@@ -212,117 +185,6 @@ function Models({ provider }: { provider: AiProvider }) {
         />
       )}
     </>
-  );
-}
-
-function ModelSelect({
-  label,
-  hint,
-  value,
-  ids,
-  names,
-  loading,
-  sameAsChat = false,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  value: string | null;
-  ids: string[];
-  names: Map<string, string>;
-  loading: boolean;
-  sameAsChat?: boolean;
-  onChange: (value: string | null) => void;
-}) {
-  const { t } = useTranslation();
-  const id = useId();
-  const hintId = useId();
-  // A chosen model the provider no longer lists stays selectable.
-  const options = value && !ids.includes(value) ? [value, ...ids] : ids;
-  return (
-    <div className="grid gap-1.5">
-      <label htmlFor={id} className="font-medium">
-        {label}
-      </label>
-      <Select
-        value={value ?? (sameAsChat ? SAME_AS_CHAT : "")}
-        disabled={loading}
-        onValueChange={(next) => {
-          onChange(next === SAME_AS_CHAT ? null : next);
-        }}
-      >
-        <SelectTrigger id={id} className="w-full" aria-describedby={hint ? hintId : undefined}>
-          <SelectValue
-            placeholder={loading ? t("ai_settings.models_loading") : t("ai_settings.choose_model")}
-          />
-        </SelectTrigger>
-        <SelectContent>
-          {sameAsChat && (
-            <SelectItem value={SAME_AS_CHAT}>{t("ai_settings.same_as_chat")}</SelectItem>
-          )}
-          {options.map((option) => (
-            <SelectItem key={option} value={option}>
-              {names.get(option) ?? option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {hint && (
-        <p id={hintId} className="text-xs text-muted-foreground">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** A model id typed by hand, when the provider's list cannot be loaded. */
-function ModelInput({
-  label,
-  hint,
-  value,
-  onSave,
-}: {
-  label: string;
-  hint?: string;
-  value: string | null;
-  onSave: (value: string | null) => void;
-}) {
-  const { t } = useTranslation();
-  const id = useId();
-  const hintId = useId();
-  const [text, setText] = useState(value ?? "");
-  const changed = text.trim() !== (value ?? "");
-  const submit = (event: SyntheticEvent) => {
-    event.preventDefault();
-    onSave(text.trim() || null);
-  };
-  return (
-    <form className="grid gap-1.5" onSubmit={submit}>
-      <label htmlFor={id} className="font-medium">
-        {label}
-      </label>
-      <div className="flex gap-2">
-        <Input
-          id={id}
-          autoComplete="off"
-          spellCheck={false}
-          aria-describedby={hint ? hintId : undefined}
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value);
-          }}
-        />
-        <Button type="submit" variant="outline" size="sm" disabled={!changed}>
-          {t("settings.key_save")}
-        </Button>
-      </div>
-      {hint && (
-        <p id={hintId} className="text-xs text-muted-foreground">
-          {hint}
-        </p>
-      )}
-    </form>
   );
 }
 

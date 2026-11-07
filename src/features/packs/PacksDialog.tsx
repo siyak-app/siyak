@@ -1,9 +1,10 @@
 import { PackageIcon, RefreshCwIcon } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Catalog, PackView } from "@/lib/bindings";
 import {
@@ -21,13 +23,23 @@ import {
   useRefreshCatalog,
   useVacuumContent,
 } from "@/lib/queries";
-import { useUiStore } from "@/stores/ui";
+import { PACK_CATEGORIES, type PackCategory, useUiStore } from "@/stores/ui";
 
 import { BundleCard } from "./BundleCard";
-import { formatBytes, KIND_ORDER, packTitle } from "./packFormat";
+import {
+  formatBytes,
+  groupByLanguage,
+  languageNames,
+  matchesQuery,
+  packCategory,
+  packTitle,
+} from "./packFormat";
 import { Badge, PackRow } from "./PackRow";
 
-/** The Packs screen (spec §13.3 item 8) with About → Sources, as a dialog. */
+/**
+ * The Packs screen (spec §13.3 item 8) with About → Sources, as a dialog: a
+ * menu of pack types on the side, the packs of the chosen type beside it.
+ */
 export function PacksDialog() {
   const { t } = useTranslation();
   const open = useUiStore((state) => state.packsDialogOpen);
@@ -39,7 +51,7 @@ export function PacksDialog() {
           <PackageIcon />
         </Button>
       </DialogTrigger>
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+      <DialogContent className="flex h-[85vh] flex-col sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{t("packs.title")}</DialogTitle>
           <DialogDescription>{t("packs.description")}</DialogDescription>
@@ -57,18 +69,110 @@ function PacksContent() {
     return <p className="text-sm text-muted-foreground">{t("packs.loading")}</p>;
   }
   if (catalog.isError) return <ErrorMessage error={catalog.error} />;
+  return <PacksBrowser catalog={catalog.data} />;
+}
+
+/** Recommended sets until something is installed, then the translations. */
+function defaultCategory(catalog: Catalog): PackCategory {
+  const started = catalog.packs.some((p) => p.installed && !p.bundled);
+  return catalog.bundles.length > 0 && !started ? "recommended" : "translation";
+}
+
+function PacksBrowser({ catalog }: { catalog: Catalog }) {
+  const { t, i18n } = useTranslation();
+  const requested = useUiStore((state) => state.packsCategory);
+  const [category, setCategory] = useState<PackCategory>(
+    () => requested ?? defaultCategory(catalog),
+  );
+  const vacuum = useVacuumContent();
+  const [removed, setRemoved] = useState(false);
+
+  const listed = new Map<PackCategory, PackView[]>(PACK_CATEGORIES.map((c) => [c, []]));
+  for (const pack of catalog.packs) {
+    const section = packCategory(pack, catalog);
+    if (section) listed.get(section)?.push(pack);
+  }
+  const shown = (section: PackCategory) => {
+    if (section === category || section === "sources" || section === "audio") return true;
+    if (section === "recommended") return catalog.bundles.length > 0;
+    return (listed.get(section)?.length ?? 0) > 0;
+  };
+  const onRemoved = () => {
+    vacuum.reset();
+    setRemoved(true);
+  };
+
   return (
-    <Tabs defaultValue="packs" className="min-h-0 flex-1">
-      <TabsList className="w-full">
-        <TabsTrigger value="packs">{t("packs.tab_packs")}</TabsTrigger>
-        <TabsTrigger value="sources">{t("packs.tab_sources")}</TabsTrigger>
+    <Tabs
+      orientation="vertical"
+      value={category}
+      onValueChange={(value) => {
+        setCategory(value as PackCategory);
+      }}
+      className="min-h-0 flex-1 gap-4"
+    >
+      <TabsList variant="line" className="w-56 shrink-0 self-start">
+        {PACK_CATEGORIES.filter(shown).map((section) => {
+          const installed = listed.get(section)?.filter((p) => p.installed).length ?? 0;
+          return (
+            <TabsTrigger
+              key={section}
+              value={section}
+              className={section === "sources" ? "mt-2 border-t pt-2" : undefined}
+            >
+              <span className="flex-1 text-start">{t(`packs.category_${section}`)}</span>
+              {section !== "sources" && installed > 0 && (
+                <span className="text-xs text-muted-foreground tabular-nums">{installed}</span>
+              )}
+            </TabsTrigger>
+          );
+        })}
       </TabsList>
-      <div className="-mx-1 min-h-0 overflow-y-auto px-1 pt-3">
-        <TabsContent value="packs">
-          <PacksTab catalog={catalog.data} />
+      <div className="-mx-1 grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-1">
+        <CatalogStatus catalog={catalog} />
+        {removed && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
+            <span className="flex-1">
+              {vacuum.data
+                ? t("packs.vacuum_done", {
+                    size: formatBytes(
+                      Math.max(0, (vacuum.data.before ?? 0) - (vacuum.data.after ?? 0)),
+                      i18n.resolvedLanguage,
+                    ),
+                  })
+                : t("packs.removed_vacuum")}
+            </span>
+            {!vacuum.data && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={vacuum.isPending}
+                onClick={() => {
+                  vacuum.mutate();
+                }}
+              >
+                {t("packs.vacuum")}
+              </Button>
+            )}
+          </div>
+        )}
+        <TabsContent value="recommended" className="grid content-start gap-2">
+          {catalog.bundles.map((bundle) => (
+            <BundleCard key={bundle.id} bundle={bundle} catalog={catalog} />
+          ))}
         </TabsContent>
+        {PACK_CATEGORIES.filter((c) => c !== "recommended" && c !== "sources").map((section) => (
+          <TabsContent key={section} value={section}>
+            <PackSection
+              section={section}
+              packs={listed.get(section) ?? []}
+              catalog={catalog}
+              onRemoved={onRemoved}
+            />
+          </TabsContent>
+        ))}
         <TabsContent value="sources">
-          <SourcesTab catalog={catalog.data} />
+          <SourcesTab catalog={catalog} />
         </TabsContent>
       </div>
     </Tabs>
@@ -121,85 +225,92 @@ function CatalogStatus({ catalog }: { catalog: Catalog }) {
   );
 }
 
-function PacksTab({ catalog }: { catalog: Catalog }) {
+/** Lists above this many packs can be searched and filtered. */
+const SEARCHABLE_FROM = 4;
+
+/**
+ * The packs of one type, translations and tafsirs grouped by language, with a
+ * search by title or author and an "installed only" filter for longer lists.
+ */
+function PackSection({
+  section,
+  packs,
+  catalog,
+  onRemoved,
+}: {
+  section: PackCategory;
+  packs: PackView[];
+  catalog: Catalog;
+  onRemoved: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage;
-  const vacuum = useVacuumContent();
-  const [removed, setRemoved] = useState(false);
+  const installedOnlyId = useId();
+  const [query, setQuery] = useState("");
+  const [installedOnly, setInstalledOnly] = useState(false);
 
-  const groups = new Map<string, PackView[]>();
-  for (const kind of KIND_ORDER) groups.set(kind, []);
-  for (const pack of catalog.packs) {
-    const kind = (KIND_ORDER as readonly string[]).includes(pack.kind) ? pack.kind : "other";
-    groups.set(kind, [...(groups.get(kind) ?? []), pack]);
+  if (packs.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {section === "audio" ? t("packs.audio_empty") : t("packs.no_results")}
+      </p>
+    );
   }
-  const titleOf = (id: string | null) => {
-    const pack = id === null ? undefined : catalog.packs.find((p) => p.id === id);
-    return pack ? packTitle(pack.title, pack.title_fallback, language) : id;
-  };
+  const visible = packs.filter(
+    (pack) => (!installedOnly || pack.installed) && matchesQuery(pack, query),
+  );
+  const names = languageNames(language);
+  const groups: [string | null, PackView[]][] =
+    section === "translation" || section === "tafsir"
+      ? groupByLanguage(visible, language)
+      : [[null, visible]];
+  const list = (items: PackView[]) => (
+    <ul className="grid gap-2">
+      {items.map((pack) => (
+        <PackRow key={pack.id} pack={pack} catalog={catalog} onRemoved={onRemoved} />
+      ))}
+    </ul>
+  );
 
   return (
-    <div className="grid gap-5">
-      <CatalogStatus catalog={catalog} />
-      {removed && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
-          <span className="flex-1">
-            {vacuum.data
-              ? t("packs.vacuum_done", {
-                  size: formatBytes(
-                    Math.max(0, (vacuum.data.before ?? 0) - (vacuum.data.after ?? 0)),
-                    language,
-                  ),
-                })
-              : t("packs.removed_vacuum")}
-          </span>
-          {!vacuum.data && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={vacuum.isPending}
-              onClick={() => {
-                vacuum.mutate();
+    <div className="grid gap-4">
+      {packs.length >= SEARCHABLE_FROM && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="search"
+            className="max-w-xs flex-1"
+            aria-label={t("packs.search_label")}
+            placeholder={t("packs.search_label")}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+            }}
+          />
+          <div className="flex items-center gap-2 text-sm">
+            <Checkbox
+              id={installedOnlyId}
+              checked={installedOnly}
+              onCheckedChange={(value) => {
+                setInstalledOnly(value === true);
               }}
-            >
-              {t("packs.vacuum")}
-            </Button>
-          )}
+            />
+            <label htmlFor={installedOnlyId}>{t("packs.installed_only")}</label>
+          </div>
         </div>
       )}
-      {catalog.bundles.length > 0 && (
-        <section className="grid gap-2">
-          <h3 className="text-sm font-medium">{t("packs.bundles")}</h3>
-          {catalog.bundles.map((bundle) => (
-            <BundleCard key={bundle.id} bundle={bundle} catalog={catalog} />
-          ))}
-        </section>
+      {visible.length === 0 && (
+        <p className="text-sm text-muted-foreground">{t("packs.no_results")}</p>
       )}
-      <section className="grid gap-4">
-        <h3 className="text-sm font-medium">{t("packs.individual")}</h3>
-        {[...groups].map(([kind, packs]) =>
-          packs.length === 0 ? null : (
-            <div key={kind} className="grid gap-2">
+      {groups.length === 1
+        ? list(groups[0]?.[1] ?? [])
+        : groups.map(([lang, items]) => (
+            <section key={lang ?? ""} className="grid gap-2">
               <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                {t(`packs.kind_${kind as (typeof KIND_ORDER)[number] | "other"}`)}
+                {names(lang) ?? t("packs.lang_unknown")}
               </h4>
-              <ul className="grid gap-2">
-                {packs.map((pack) => (
-                  <PackRow
-                    key={pack.id}
-                    pack={pack}
-                    replacedTitle={titleOf(pack.replaces)}
-                    onRemoved={() => {
-                      vacuum.reset();
-                      setRemoved(true);
-                    }}
-                  />
-                ))}
-              </ul>
-            </div>
-          ),
-        )}
-      </section>
+              {list(items)}
+            </section>
+          ))}
     </div>
   );
 }

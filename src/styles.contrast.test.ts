@@ -4,17 +4,19 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { THEMES } from "@/lib/settings";
 import { contrast, over, parseOklch, type Rgba } from "@/test/color";
 
 // Read from disk (Vitest runs from the repository root): Vitest does not load
 // CSS, not even with `?raw`.
 const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
 
-/** The custom properties declared directly in the first `selector { … }` block. */
+/** The custom properties declared directly in the first block whose selector list has `selector`. */
 function tokens(selector: string): Record<string, string> {
-  const start = css.indexOf(`${selector} {`);
+  const start = css.indexOf(selector);
   if (start < 0) throw new Error(`no ${selector} block in styles.css`);
-  const body = css.slice(start, css.indexOf("}", start));
+  const open = css.indexOf("{", start);
+  const body = css.slice(open, css.indexOf("}", open));
   return Object.fromEntries(
     [...body.matchAll(/--([\w-]+):\s*([^;]+);/gu)].map(([, name = "", value = ""]) => [
       name,
@@ -24,17 +26,16 @@ function tokens(selector: string): Record<string, string> {
 }
 
 const ROOT = tokens(":root");
-const THEMES = {
-  light: ROOT,
-  dark: { ...ROOT, ...tokens(".dark") },
-  sepia: { ...ROOT, ...tokens(".sepia") },
-};
+// Every theme falls back to the root tokens it does not set (e.g. the chart colours).
+const THEME_TOKENS = Object.fromEntries(
+  THEMES.map((theme) => [theme, { ...ROOT, ...tokens(`[data-theme="${theme}"]`) }]),
+);
 
 /** Text (WCAG 1.4.3) needs 4.5:1; focus rings and borders of controls (1.4.11) 3:1. */
 const TEXT = 4.5;
 const NON_TEXT = 3;
 
-describe.each(Object.entries(THEMES))("%s theme", (_name, theme) => {
+describe.each(Object.entries(THEME_TOKENS))("%s theme", (_name, theme) => {
   const color = (token: string): Rgba => {
     const value = theme[token];
     if (value === undefined) throw new Error(`--${token} is not defined`);

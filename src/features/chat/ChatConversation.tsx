@@ -6,7 +6,9 @@ import { useTranslation } from "react-i18next";
 import { ErrorMessage } from "@/components/ErrorMessage";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { EmbeddingPicker } from "@/features/ai/EmbeddingPicker";
 import { formatCost } from "@/features/ai/formatCost";
+import { LlmPicker } from "@/features/ai/LlmPicker";
 import { useStream } from "@/features/ai/useStream";
 import { PROVIDER_NAMES } from "@/features/related/providerNames";
 import { SemanticRequired } from "@/features/related/SemanticRequired";
@@ -36,8 +38,8 @@ const ESTIMATE_DELAY_MS = 400;
 
 /**
  * One chat session (spec §10, §13.3): its messages with clickable citations
- * and "sources used", the composer with the estimated cost, and the
- * persistent notice that answers are machine output. `sessionId` is `null`
+ * and "sources used", the answer and search models, the composer with the
+ * estimated cost, and the persistent notice that answers are machine output. `sessionId` is `null`
  * for a new chat; `onSession` learns the id once the first answer is saved.
  */
 export function ChatConversation({
@@ -120,6 +122,7 @@ export function ChatConversation({
         <div ref={end} />
       </div>
       {error !== null && <ErrorMessage error={error} />}
+      <ModelBar />
       {ai.data && ai.data.state !== "ready" && <AiRequired status={ai.data} />}
       {ai.data?.state === "ready" && semantic.data && semantic.data.state !== "ready" && (
         <SemanticRequired status={semantic.data} />
@@ -294,9 +297,29 @@ function SaveAnswer({
   );
 }
 
-function AiRequired({ status }: { status: Exclude<AiStatus, { state: "ready" }> }) {
+/** The answer model (LLM) and the search model (embedding) chat uses, changeable in place. */
+export function ModelBar() {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="group"
+      aria-label={t("models.bar_label")}
+      className="flex flex-wrap items-center gap-x-4 gap-y-1.5"
+    >
+      <LlmPicker />
+      <EmbeddingPicker compact />
+    </div>
+  );
+}
+
+/**
+ * What chat still needs from the AI setup. A provider and model are chosen in
+ * the {@link ModelBar}; a key or server address leads to Settings → Providers.
+ */
+export function AiRequired({ status }: { status: Exclude<AiStatus, { state: "ready" }> }) {
   const { t } = useTranslation();
   const setSettingsTab = useUiStore((state) => state.setSettingsTab);
+  const inPicker = status.state === "no_provider" || status.state === "no_model";
   const message =
     status.state === "key_missing"
       ? t("ai.key_missing", { provider: PROVIDER_NAMES[status.provider] })
@@ -305,19 +328,20 @@ function AiRequired({ status }: { status: Exclude<AiStatus, { state: "ready" }> 
         : status.state === "base_url_invalid"
           ? t("semantic.base_url_invalid")
           : t("chat.ai_required");
-  const tab = status.state === "no_provider" || status.state === "no_model" ? "ai" : "providers";
   return (
     <div className="grid justify-items-start gap-2 rounded-lg border p-3">
       <p className="text-sm">{message}</p>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          setSettingsTab(tab);
-        }}
-      >
-        {t("chat.open_settings")}
-      </Button>
+      {!inPicker && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSettingsTab("providers");
+          }}
+        >
+          {t("chat.open_settings")}
+        </Button>
+      )}
     </div>
   );
 }

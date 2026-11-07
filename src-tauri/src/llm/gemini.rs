@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::{
     Client, Completion, Finish, Flow, LlmFuture, LlmProvider, LlmRequest, ModelInfo, Role,
-    TextSink, Usage, count, endpoint, event_json, read_events, stream_error,
+    TextSink, Usage, count, endpoint, event_json, is_chat_model, read_events, stream_error,
 };
 use crate::error::AppResult;
 use crate::secrets::ProviderId;
@@ -122,12 +122,10 @@ impl Gemini {
             })
             .filter_map(|m| {
                 let id = m["name"].as_str()?.trim_start_matches("models/");
-                (!id.contains("embedding") && !id.contains("tts") && !id.contains("image")).then(
-                    || ModelInfo {
-                        id: id.to_owned(),
-                        name: m["displayName"].as_str().map(str::to_owned),
-                    },
-                )
+                is_chat_model(id, false).then(|| ModelInfo {
+                    id: id.to_owned(),
+                    name: m["displayName"].as_str().map(str::to_owned),
+                })
             })
             .collect();
         models.sort_by(|a, b| a.id.cmp(&b.id));

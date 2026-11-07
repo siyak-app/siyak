@@ -12,6 +12,10 @@ let models: { data?: ModelInfo[]; isError: boolean; isSuccess: boolean; error?: 
 const saved: { key: string; value: unknown }[] = [];
 const modelRequests: (string | null)[] = [];
 
+vi.mock("@/features/ai/EmbeddingPicker", () => ({
+  EmbeddingPicker: () => <p>search model picker</p>,
+}));
+
 vi.mock("@/lib/queries", () => ({
   useAiStatus: () => ({ data: status }),
   useModels: (provider: string | null, enabled: boolean) => {
@@ -51,7 +55,13 @@ describe("AiSettings", () => {
 
   it("starts with AI off and chooses a provider, clearing its models", () => {
     render(<AiSettings />);
+    const provider = screen.getByRole("button", { name: "Provider" });
+    expect(provider).toHaveTextContent("None (AI off)");
+    fireEvent.click(provider);
     expect(screen.getByRole("radio", { name: "None (AI off)" })).toBeChecked();
+    expect(screen.getByRole("heading", { name: "Answer model" })).toBeInTheDocument();
+    expect(screen.getByText("LLM")).toBeInTheDocument();
+    expect(screen.getByText("search model picker")).toBeInTheDocument();
     expect(screen.queryByText("Chat model")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: "Anthropic" }));
     expect(saved).toEqual([

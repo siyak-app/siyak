@@ -16,6 +16,7 @@ import { ContextPanel } from "@/features/context-panel/ContextPanel";
 import { OnboardingDialog } from "@/features/onboarding/OnboardingDialog";
 import { CoreRefreshBanner, DevDataBadge } from "@/features/core-status/CoreStatus";
 import { PacksDialog } from "@/features/packs/PacksDialog";
+import { ModeToggle } from "@/features/profile/ModeToggle";
 import { usePackEvents } from "@/features/packs/usePackEvents";
 import { SurahList } from "@/features/reader/SurahList";
 import { SearchBox } from "@/features/search/SearchBox";
@@ -96,7 +97,10 @@ export function AppShell() {
         >
           <PanelLeftIcon />
         </Button>
-        <span className="ms-1 flex-1 text-sm font-semibold">{t("app.name")}</span>
+        <span className="ms-1 text-sm font-semibold">{t("app.name")}</span>
+        <div className="flex flex-1 justify-center">
+          <ModeToggle />
+        </div>
         <DevDataBadge />
         <SearchBox />
         <CommandPalette />

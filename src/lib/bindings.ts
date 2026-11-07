@@ -91,6 +91,13 @@ export const commands = {
 	 */
 	searchMeaning: (query: string, translationId: string | null, limit: number) => typedError<RelatedVerse[], AppError>(__TAURI_INVOKE("search_meaning", { query, translationId, limit })),
 	/**
+	 *  The verses closest in meaning to a question, with no answer written (the
+	 *  Find screen). With `rewrite`, the chat model first turns the question into
+	 *  a search sentence as in chat (spec §10.1), which needs the AI setup and is
+	 *  counted as chat use; `request_id` names that request for `cancel_generation`.
+	 */
+	findVerses: (requestId: string, query: string, rewrite: boolean, translationId: string | null, limit: number) => typedError<FoundVerses, AppError>(__TAURI_INVOKE("find_verses", { requestId, query, rewrite, translationId, limit })),
+	/**
 	 *  The verses closest in meaning to a verse, best first; the verse itself is
 	 *  left out. Needs only the vector pack: verse vectors are compared, nothing
 	 *  is embedded.
@@ -749,6 +756,16 @@ export type Finish =
 /**  The user stopped it. */
 "cancelled";
 
+/**  What the Find screen found for a question. */
+export type FoundVerses = {
+	/**  The search sentence the chat model wrote from the question, if it did. */
+	search_query: string | null,
+	/**  The verses closest in meaning, best first. */
+	verses: RelatedVerse[],
+	/**  Whether the rewrite was stopped; nothing was searched then. */
+	cancelled: boolean,
+};
+
 /**  How an import treats what is already there. */
 export type ImportMode = 
 /**  Keep everything and add what is new. Importing the same file twice adds nothing. */
@@ -978,6 +995,14 @@ export type PackDone = {
 	replaced: string | null,
 };
 
+/**  The embedding model behind a vector pack, for display. */
+export type PackEmbedding = {
+	/**  The API that embeds queries; `None` when they are embedded on this computer. */
+	provider: ApiProvider | null,
+	/**  The model: the API's model id, or the local model's name. */
+	model: string,
+};
+
 /**  A job failed or was cancelled (`install_cancelled`). */
 export type PackFailed = {
 	/**  Pack id. */
@@ -1052,6 +1077,13 @@ export type PackView = {
 	requires: string[],
 	/**  The running or queued job for this pack. */
 	job: JobView | null,
+	/**  Where a vector pack embeds queries; `None` for other packs. */
+	embedding: PackEmbedding | null,
+	/**
+	 *  An audio pack's recitation style (`murattal`, `mujawwad` or `muallim`);
+	 *  `None` for other packs.
+	 */
+	style: string | null,
 };
 
 /**  Phases of a pack job. */

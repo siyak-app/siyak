@@ -35,6 +35,7 @@ const QAC = {
   replaces: null,
   requires: [],
   job: null,
+  embedding: null,
 } as unknown as PackView;
 
 const CATALOG = {
@@ -120,8 +121,10 @@ describe("OnboardingDialog", () => {
   it("installs the recommended packs once their terms are accepted", async () => {
     render(<OnboardingDialog />);
     fireEvent.click(screen.getByRole("button", { name: /Read and understand/ }));
+    expect(screen.getByRole("dialog")).not.toHaveTextContent("No modification");
+    fireEvent.click(screen.getByRole("button", { name: "Download (4.2 MB)" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("No modification");
-    const install = screen.getByRole("button", { name: "Install (4.2 MB)" });
+    const install = screen.getByRole("button", { name: "Accept and download" });
     expect(install).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: /I have read these terms/ }));
     fireEvent.click(install);
@@ -130,18 +133,19 @@ describe("OnboardingDialog", () => {
     });
   });
 
-  it("shows the license and terms even when they need no acknowledgement", () => {
+  it("shows the license and terms before download even when they need no acknowledgement", () => {
     catalog = {
       ...CATALOG,
       packs: [{ ...QAC, terms_ack_required: false }],
     };
     render(<OnboardingDialog />);
     fireEvent.click(screen.getByRole("button", { name: /Read and understand/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Download (4.2 MB)" }));
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("QAC terms of use");
     expect(dialog).toHaveTextContent("No modification");
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Install (4.2 MB)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Download (4.2 MB)" })).toBeEnabled();
   });
 
   it("heads the packs step with its own question", () => {
